@@ -11,22 +11,22 @@ begin 'update', sub {
     die 'no john' if !$john;
     
     my $xr = $john->{nest}{rat} = {};
-#    tied %$xr ? ok : not_ok;  #XXX
+#    ok(tied %$xr);
     
     $xr->{blat} = 69;
-#    $john->{nest}{rat}{blat} == 69 ? ok : not_ok; #XXX
+#    ok($john->{nest}{rat}{blat} == 69);
     
     delete $john->{nest}{rat}{blat};
     delete $john->{nest}{rat};
     delete $john->{nest};
     
-    defined $john->{nest} ? not_ok : ok;
+    ok(! defined $john->{nest});
 };
 
 sub zero {
     my $h = shift;
     $h->{''} = 'zero';
-    $h->{''} eq 'zero' ? ok:not_ok;
+    ok($h->{''} eq 'zero');
 }
 
 begin 'update', sub {

@@ -5,20 +5,32 @@ Tested Configurations:
    perl 5.004_04, 5.004_53-5.004_54
 
    Solaris 2.5.1
-     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1, 4.0.2
-     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0.0, 5.0.1
+     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1+
+     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0
 
    Digital Unix V4.0 (Alpha)
      Dec C++ Compiler / ObjectStore 5.0
 
 -------------------------------------------------------------------------
 
-./t/z_ospeek.t is very sensitive to the success of the other tests.
+- ./t/z_ospeek.t is very sensitive to the success of the other tests.
 
-'make test' twice!  Since the test database now has data, different
-code is exercised the second time.
+- 'make test', then save the output of 'ossize -c'.  Run 'make test'
+again and compare 'ossize -c' to the last snapshot.  The only thing
+that might be different is the addition of another empty segment (this
+is a known bug in safe references, example below).  If anything else
+changes, there is a serious refcnt bug!
 
-If you have a problem with objectstore::get_unassigned_address_space(), 
+Data segment 6:
+Size: 1024 bytes (1 Kbytes)
+ Singles   Arrays    Total   Obj Sz   Total Sz  Type
+       0        2      628        1        628  (unused space)
+       0        1       10       12        128  _Hash_table_entry<unsigned int,void*>
+       1        0        1       32         32  _Per_segment_data
+       1        0        1       20         20  _Per_segment_reference_db
+
+
+- If you have a problem with objectstore::get_unassigned_address_space(), 
 just delete the code chunk and keep going.  This API is only available
 with OS 5.0 service pack #2.
 

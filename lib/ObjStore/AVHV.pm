@@ -49,10 +49,8 @@ sub fetch_class_fields {
     if ($redo or $pfields->{__VERSION__} != $fields->{__VERSION__}) {
 
 	if ($redo or !$pfields->is_compatible($fields)) {
-	    use integer;
-	    # stomp it but avoid sending $fields through the stargate
-	    $pfields = $layouts->{$class} = bless({}, 'ObjStore::AVHV::Fields');
-	    for my $k (keys %$fields) { $pfields->{$k} = $fields->{$k} }
+	    $pfields = $layouts->{$class} =
+		bless($fields, 'ObjStore::AVHV::Fields');
 	    $pfields->{__CLASS__} = $class;
 	    $pfields->{__VERSION__} = $fields->{__VERSION__};
 	}
@@ -88,16 +86,16 @@ sub verify_class_fields {
 sub new {
     require 5.00452;
     my ($class, $where, $init) = @_;
-    $init ||= {};
     croak "$class->new(where, init)" if @_ < 2;
     my $fmap = fetch_class_fields($where->database_of, $class);
     my $o = $class->SUPER::new($where, $fmap->{__MAX__}+1);
     $o->[0] = $fmap;
-    while (my ($k,$v) = each %$init) {
-	croak "Bad key '$k' for $fmap" if !exists $fmap->{$k};
-	$o->{$k} = $v;
+    if ($init) {
+	while (my ($k,$v) = each %$init) {
+	    croak "Bad key '$k' for $fmap" if !exists $fmap->{$k};
+	    $o->{$k} = $v;
+	}
     }
-#    %$init = ();  # stargate convention
     $o;
 }
 
@@ -133,6 +131,7 @@ sub evolve {
 
 	$o->[0] = fetch_class_fields($o->database_of, ref $o);
     }
+    $fields->{__VERSION__} = $pfields->{__VERSION__};
 }
 
 #sub POSH_CD { my ($a, $f) = @_; $a->{$f}; }

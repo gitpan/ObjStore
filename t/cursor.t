@@ -28,7 +28,7 @@ sub chk1 {
 	    warn "$k[$x-1] != $x";
 	}
     }
-    $ok? ok : not_ok;
+    ok($ok);
     
     delete $ah->{3};
     @k = sort keys %$ah;
@@ -39,12 +39,12 @@ sub chk1 {
 	    warn "$k[$x] != $right";
 	}
     }
-    $ok? ok : not_ok;
+    ok($ok);
 }
 
 begin 'update', sub {
     my $john = $db->root('John');
-    $john ? ok : not_ok;
+    ok($john);
     
     for my $rep (keys %ObjStore::HV::REP) {
 	chk1($john, $rep);

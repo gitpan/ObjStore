@@ -218,6 +218,17 @@ OSSV *OSPV_hvarray::FETCHp(char *key)
 OSSV *OSPV_hvarray::traverse(char *keyish)
 { return FETCHp(keyish); }
 
+void OSPV_hvarray::XSHARE(int on)
+{
+  for (int xx=0; xx < hv.count(); xx++) {
+    if (on) {
+      OSvXSHARED_on(&hv[xx].hv);
+    } else {
+      OSvXSHARED_off(&hv[xx].hv);
+    }
+  }
+}
+
 OSSV *OSPV_hvarray::STOREp(char *key, SV *value)
 {
   int xx = index_of(key);
@@ -574,6 +585,21 @@ OSSV *OSPV_hvdict::FETCHp(char *key)
 
 OSSV *OSPV_hvdict::traverse(char *keyish)
 { return FETCHp(keyish); }
+
+void OSPV_hvdict::XSHARE(int on)
+{
+  os_cursor cs(hv);
+  while (cs.first()) {
+    hkey *k1 = (hkey*) hv.retrieve_key(cs);
+    OSSV *val = hv.pick(k1);
+    assert(val);
+    if (on) {
+      OSvXSHARED_on(val);
+    } else {
+      OSvXSHARED_off(val);
+    }
+  }
+}
 
 OSSV *OSPV_hvdict::STOREp(char *key, SV *nval)
 {
@@ -964,6 +990,17 @@ OSSV *OSPV_avarray::traverse(char *keyish)
   return FETCHi(atol(keyish));
 }
 
+void OSPV_avarray::XSHARE(int on)
+{
+  for (int xx=0; xx < av.count(); xx++) {
+    if (on) {
+      OSvXSHARED_on(&av[xx]);
+    } else {
+      OSvXSHARED_off(&av[xx]);
+    }
+  }
+}
+
 OSSV *OSPV_avarray::STOREi(int xx, SV *value)
 {
   if (xx < 0) return 0;
@@ -1104,6 +1141,17 @@ OSSV *OSPV_hvarray2::FETCHp(char *key)
 
 OSSV *OSPV_hvarray2::traverse(char *keyish)
 { return FETCHp(keyish); }
+
+void OSPV_hvarray2::XSHARE(int on)
+{
+  for (int xx=0; xx < hv.count(); xx++) {
+    if (on) {
+      OSvXSHARED_on(&hv[xx].hv);
+    } else {
+      OSvXSHARED_off(&hv[xx].hv);
+    }
+  }
+}
 
 OSSV *OSPV_hvarray2::STOREp(char *key, SV *value)
 {

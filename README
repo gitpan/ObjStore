@@ -52,7 +52,24 @@ Get it via http://www.perl.com/CPAN/authors/id/JPRIT/ !
 ##################
 
 
-** 01-06-98 RELEASE 1.22 - HAPPY NEW YEAR!
+** 01-07-98 EMERGENCY RELEASE 1.23
+
+- Fixed refcnt problems in bless & indices.  From now on, make sure
+to check ossize as outlined in ./INSTALL:
+
+  'make test', then save the output of 'ossize -c'.  Run 'make test'
+  again and compare 'ossize -c' to the last snapshot.  The only thing
+  that might be different is the addition of another empty segment (this
+  is a known bug in safe references, example below).  If anything else
+  changes, there is a serious refcnt bug!
+
+- Indices now set readonly locks *ONLY* on fields that are used as
+keys.
+
+- Notification API.
+
+
+** 01-06-98 RELEASE 1.22
 
 - Real indices!  Queries such as /date between qw(Nov97 Jan98)/ are
 now easy!  And you can index on multiple keys: $index->configure(path
@@ -67,20 +84,6 @@ now easy!  And you can index on multiple keys: $index->configure(path
 - The stargate no longer destroys data as it is copied.
 
 - 'new_cursor' now defaults to transient memory.
-
-
-** 12-13-97 RELEASE 1.21
-
-- THE TUTORIAL IS DONE!  See ObjStore::Tutorial!
-
-- Fixed numerous minor bugs; fixed ObjStore::UNIVERSAL::isa;
-significant changes to posh; NOREFS invokation optimized out unless
-the method is present; re-organized the stargate; moved CSV stuff to
-ObjStore::CSV; untested support for kernel threads.
-
-- 'Table' redesigned for performance.  See ObjStore::Table2.
-
-- The documentation is updated & re-written!
 
 
 see ./INSTALL for hints on installation

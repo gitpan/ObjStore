@@ -19,16 +19,16 @@ begin 'update', sub {
     $db->destroy_root('tripwire');
 
     my $rt = $db->find_root('_osperl_private');
-    $rt? not_ok : ok;
+    ok(! $rt);
     $rt = $db->_PRIVATE_ROOT();
-    $rt? ok : not_ok;
+    ok($rt);
     $rt = $db->find_root('_osperl_private');
-    $rt? not_ok : ok;
+    ok(! $rt);
 };
 
 begin 'update', sub {
     my $seg = $db->get_segment($sid);
-    $seg->is_empty? ok:not_ok;
+    ok($seg->is_empty);
     $seg->destroy;
 };
 
@@ -37,5 +37,5 @@ begin 'update', sub {
     for ($db->get_all_roots()) {
 	$ok=0 if $_->get_name eq '_osperl_private';
     }
-    $ok? ok:not_ok;
+    ok($ok);
 };

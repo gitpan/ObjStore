@@ -196,19 +196,19 @@ Where the following invariants hold:
   $c->moveto($c->pos() + $delta) is $c->step($delta)
   $c->each($delta) is { $c->step($delta); $c->at(); }
 
-To eliminate the possibility of indices becoming out-of-sync with the
-actual data, the data is marked read-only as it is indexed.  This
-happens at a per-field level until you start using longer paths.  For
+To eliminate the possibility of indices becoming out-of-sync with
+actual data, keys are marked read-only as they are indexed.  For
 example,
 
   my $category = { name => 'Bath Toy' };
   my $row = { name => 'Rubber Ducky', category => $category };
 
   $index->configure(path => 'category/name, name');
+  $index->add($row);
 
 The first key is the category's name.  The second key is the row's
-name.  When this record is added, the entire category object is marked
-read-only (key 1) and the row's name is marked read-only (key 2).
+name.  You cannot index direct keys more than once.  There is no such
+restriction on indirect keys.
 
 =head2 And Access Paths (Oh My!)
 
@@ -381,14 +381,14 @@ See C<ObjStore::HV::Database>, C<ObjStore::Table3::Database>
 
 =item * $open_mode = $db->is_open();
 
-=item * $Seg = $db->create_segment();
+=item * $s = $db->create_segment();
 
 =item * $value = $db->root($root_name => sub{ $new_value });
 
 This is the recommended API for roots.  If the given root is not
 found, creates a new one.  Returns the root's current value.
 
-=item * $Seg = $db->get_segment($segment_number);
+=item * $s = $db->get_segment($segment_number);
 
 Note that this method (correctly) never returns an error.  The only
 way to know which segments are actually created in a database is to
@@ -509,31 +509,55 @@ blindingly fast.
 
 =over 4
 
-=item * $Seg->set_comment($comment);
+=item * $s->set_comment($comment);
 
-=item * $Seg->destroy();
+=item * $s->destroy();
 
-=item * $size = $Seg->size();
+=item * $size = $s->size();
 
-=item * $yes = $Seg->is_empty();
+=item * $yes = $s->is_empty();
 
-=item * $yes = $Seg->is_deleted();
+=item * $yes = $s->is_deleted();
 
-=item * $num = $Seg->get_number();
+=item * $num = $s->get_number();
 
-=item * $comment = $Seg->get_comment();
+=item * $comment = $s->get_comment();
 
-=item * $Seg->lock_into_cache();
+=item * $s->lock_into_cache();
 
-=item * $Seg->unlock_from_cache();
+=item * $s->unlock_from_cache();
 
-=item * $Seg->set_fetch_policy($policy[, $size]);
+=item * $s->set_fetch_policy($policy[, $size]);
 
 Policy can be one of C<segment>, C<page>, or C<stream>.
 
-=item * $Seg->set_lock_whole_segment($policy);
+=item * $s->set_lock_whole_segment($policy);
 
 Policy can be one of C<as_used>, C<read>, or C<write>.
+
+=back
+
+=head2 C<::Notification>
+
+=over 4
+
+=item * ObjStore::subscribe(...);
+
+=item * ObjStore::unsubscribe(...);
+
+=item * set_queue_size($size);
+
+=item * ($size, $pending, $overflow) = queue_status();
+
+=item * $fd = _get_fd();
+
+=item * $n = receive([$timeout]);
+
+=item * $db = $n->get_database;
+
+=item * $p = $n->focus;
+
+=item * $why = $n->why;
 
 =back
 
@@ -553,6 +577,11 @@ C<bless> and C<isa> work according to the moment of the C<bless>ing,
 rather than searching the current C<@ISA> tree.  (C<UNIVERSAL::can>
 remains un-modified.)  The method C<os_class> reports the natural
 persistent class of an object.
+
+=item * C<$o->notify($why, ['now'])>
+
+Without the 'now' parameter, notification will take place upon
+commmit.
 
 =item * C<$errs = $o-E<gt>is_corrupted($verbosity_level)>
 

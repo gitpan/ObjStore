@@ -16,7 +16,6 @@ UPGRADE
 XSthr.h
 bugs/bug.fmm
 bugs/bugrep015834
-bugs/osperl.plog.gz
 dextv.tmpl
 edit.c
 hints/dec_osf.pl
@@ -70,12 +69,13 @@ t/array.t
 t/avhv.t
 t/avset.t
 t/bless.t
-t/chk_arraybug.t
+t/avgrow.t
 t/cursor.t
 t/deadlock.pl
 t/hash.t
 t/index.t
-t/integer.t
+t/int16.t
+t/notify.t
 t/overload.t
 t/peek.good
 t/ref.t

@@ -204,7 +204,7 @@ OSSV::OSSV(OSSVPV *nval) : _type(OSVt_UNDEF)
 
 OSSV::~OSSV()
 {
-  OSvSHARED_off(this); 
+  OSvANYSHARE_off(this);
   set_undef();
 }
 
@@ -326,7 +326,7 @@ int OSSV::morph(int nty)
   return 1;
 }
 
-// DANGER! This is ONLY for copying OSSVs between arrays.
+// DANGER! This is ONLY to assist in moving OSSVs between arrays.
 void OSSV::FORCEUNDEF()
 { _type = OSVt_UNDEF; }
 
@@ -687,27 +687,30 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
 static const os_unsigned_int32 REFCNT32 = 4294967285UL;    // 2**32 - 10
 static const os_unsigned_int16 REFCNT16 = 65526;           // 2**16 - 10
 
-void OSSVPV::READONLY_inc()
+void OSSVPV::ROCNT_inc()
 {
-  if (OSPvREADONLY(this) < REFCNT16) {
-    ++OSPvREADONLY(this);
+  if (OSPvROCNT(this) < REFCNT16) {
+    ++OSPvROCNT(this);
   } else {
-    OSPvREADONLY(this) = ~0;  //permanent!
+    OSPvROCNT(this) = ~0;  //permanent!
   }
 }
 
-void OSSVPV::READONLY_dec()
+void OSSVPV::ROCNT_dec()
 {
-  if (OSPvREADONLY(this) == 0) osp_croak("%p->READONLY_dec() to -1", this);
-  if (OSPvREADONLY(this) < REFCNT16) {
-    --OSPvREADONLY(this);
+  if (OSPvROCNT(this) < REFCNT16) {
+    if (OSPvROCNT(this) <= 1) {
+      assert(OSPvROCNT(this) == 1);
+      XSHARE(0);
+    }
+    --OSPvROCNT(this);
   }
 }
 
 void OSSVPV::REF_inc() {
+  DEBUG_refcnt(warn("OSSVPV(0x%x)->REF_inc() from %d", this, _refs));
   _refs++;
   if (_refs > REFCNT32) osp_croak("OSSVPV::REF_inc(): _refs > %ud", REFCNT32);
-  DEBUG_refcnt(warn("OSSVPV(0x%x)->REF_inc() to %d", this, _refs));
 }
 
 void OSSVPV::REF_dec() { 
@@ -760,6 +763,8 @@ ossv_bridge *OSSVPV::new_bridge()
 
 OSSV *OSSVPV::traverse(char *keyish)
 { osp_croak("OSSVPV(%p)->traverse", this); return 0; }
+void OSSVPV::XSHARE(int)
+{ osp_croak("OSSVPV(%p)->xshare", this); }
 
 void OSSVPV::fwd2rep(char *methname, SV **top, int items)
 {
@@ -872,7 +877,8 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
   assert(mode == 's' || mode == 'u');
   assert(paths->is_array());
   int pathcnt = paths->_count();
-  assert(pathcnt >= 0 && pathcnt < INDEX_MAXKEYS);
+  if (pathcnt < 1) osp_croak("Index path unset");
+  assert(pathcnt < INDEX_MAXKEYS);
   keycnt = 0;
   sharecnt = 0;
 
@@ -906,6 +912,9 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
 	  OSvSHARED_off(at);
 	}
 	shared[sharecnt++] = at;
+      } else {
+	if (mode == 's')
+	  OSvXSHARED_on(at);  // turned off when ROCNT_dec to zero
       }
       ++pi;
       if (pi == len) {
@@ -919,9 +928,9 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
 	obj = at->get_ospv();
 	// record write lock
 	if (mode == 's') {
-	  obj->READONLY_inc();
+	  obj->ROCNT_inc();
 	} else {
-	  obj->READONLY_dec();
+	  obj->ROCNT_dec();
 	}
       }
     }

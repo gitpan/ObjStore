@@ -29,7 +29,11 @@ OSPV_fatindex::OSPV_fatindex()
 { dexinit_tv(&fi_tv); conf_slot=0; }
 
 OSPV_fatindex::~OSPV_fatindex()
-{ CLEAR(); dexfree_tv(&fi_tv); }
+{
+  CLEAR(); 
+  dexfree_tv(&fi_tv);
+  if (conf_slot) conf_slot->REF_dec();
+}
 
 char *OSPV_fatindex::os_class(STRLEN *len)
 { *len = 15; return "ObjStore::Index"; }
@@ -131,7 +135,7 @@ OSPV_fatindex_cs::~OSPV_fatindex_cs()
 {
   if (os_segment::of(this) == os_segment::of(0)) {
     dOSP; dTXN;
-    if (txn->can_update()) TcOSPV(&fi_tc)->REF_inc();
+    if (txn->can_update()) TcOSPV(&fi_tc)->REF_dec();
   } else {
     TcOSPV(&fi_tc)->REF_dec();
   }

@@ -35,12 +35,12 @@ sub check {
     if (-e $old) {
 	if (system("diff $old $new")==0) {
 	    unlink $new;
-	    ok;
+	    ok(1);
 	} else {
-	    not_ok;
+	    ok(0);
 	}
     } else {
-	system("mv $new $old")==0? ok:not_ok;
+	ok(system("mv $new $old")==0);
     }
 }
 

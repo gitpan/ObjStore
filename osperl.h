@@ -92,29 +92,23 @@ typedef void (*XS_t)(CV*);
 #define OSvTYPE_set(sv,to) \
 	(sv)->_type = (((sv)->_type & ~OSVTYPEMASK) | (to & OSVTYPEMASK))
 
-#define OSVf_SHARED		0x80
+#define OSVf_XSHARED		0x40	/*external*/
+#define OSVf_SHARED		0x80	/*direct*/
+#define OSvANYSHARE(sv)		((sv)->_type & (OSVf_SHARED | OSVf_XSHARED))
+#define OSvANYSHARE_off(sv)	((sv)->_type &= ~(OSVf_SHARED | OSVf_XSHARED))
+
 #define OSvSHARED(sv)		((sv)->_type & OSVf_SHARED)
 #define OSvSHARED_on(sv)	((sv)->_type |= OSVf_SHARED)
 #define OSvSHARED_off(sv)	((sv)->_type &= ~OSVf_SHARED)
+#define OSvXSHARED(sv)		((sv)->_type & OSVf_XSHARED)
+#define OSvXSHARED_on(sv)	((sv)->_type |= OSVf_XSHARED)
+#define OSvXSHARED_off(sv)	((sv)->_type &= ~OSVf_XSHARED)
 
-#define OSvTRYWRITE(sv)							\
-STMT_START {								\
-  if (OSvSHARED(sv))							\
+#define OSvTRYWRITE(sv)						\
+STMT_START {							\
+  if (OSvANYSHARE(sv))						\
     croak("Attempt to modify READONLY %s", sv->type_2pv(), sv);	\
 } STMT_END
-
-/*
-enum ossvtype {
-//  ossv_unused=0,
-  ossv_undef=1,
-  ossv_iv=2,
-  ossv_nv=3,
-  ossv_pv=4,
-  ossv_obj=5,	// ref counted objects (containers or complex objects)
-  ossv_xiv=6	// use os_int16 in OSSV instead of allocating an ossv_iv
-};
-[enum is stupid]
-*/
 
 struct ossv_bridge;
 struct OSSVPV;
@@ -184,15 +178,7 @@ struct OSPV_nv {
 #define OSPV_BLESS2	0x0002	/* blessed with 'bless version 2' */
 
 #define OSPvFLAGS(pv)		(pv)->pad_1
-#define OSPvREADONLY(pv)	(pv)->_weak_refs
-
-// improve output XXX
-#define OSPvTRYWRITE(pv)				\
-STMT_START {						\
-if (OSPvREADONLY(pv)) {					\
-  croak("Attempt to write to READONLY (%p)", pv);	\
-}							\
-} STMT_END
+#define OSPvROCNT(pv)		(pv)->_weak_refs
 
 #define OSPvINUSE(pv)		(OSPvFLAGS(pv) & OSPV_INUSE)
 #define OSPvINUSE_on(pv)	(OSPvFLAGS(pv) |= OSPV_INUSE)
@@ -211,8 +197,8 @@ struct OSSVPV : os_virtual_behavior {
   virtual ~OSSVPV();
   void REF_inc();
   void REF_dec();
-  void READONLY_inc();
-  void READONLY_dec();
+  void ROCNT_inc();
+  void ROCNT_dec();
   int _is_blessed();
   HV *stash();
   char *blessed_to(STRLEN *len);
@@ -222,7 +208,9 @@ struct OSSVPV : os_virtual_behavior {
   virtual char *os_class(STRLEN *len);  //must be NULL terminated too
   virtual char *rep_class(STRLEN *len);
   virtual int get_perl_type();
+  // you must implement none or both of the following
   virtual OSSV *traverse(char *keyish);
+  virtual void XSHARE(int on);
   // methods for easy downcasting assertions
   virtual int is_array();
   virtual int is_hash();
@@ -261,8 +249,7 @@ struct OSPV_Ref2_protect : OSPV_Ref2 {
 };
 
 // A cursor must be a single composite object.  Otherwise you would
-// need cursors for cursors.  Each cursor is responsible for calling
-// OSPvTRYWRITE(OSSPV*) before modifications.
+// need cursors for cursors.
 
 struct OSPV_Cursor2 : OSSVPV {
   static os_typespec *get_os_typespec();

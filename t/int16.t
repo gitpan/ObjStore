@@ -4,7 +4,6 @@ BEGIN { $| = 1; $tx=1; print "1..2\n"; }
 use strict;
 use ObjStore ':ALL';
 use lib './t';
-use integer;
 use test;
 
 &open_db;
@@ -17,5 +16,5 @@ begin 'update', sub {
 	$fatty->[$x] = $x + 32760;
 	$ok &&= $fatty->[$x] == $x + 32760;
     }
-    $ok? ok:not_ok;
+    ok($ok);
 };

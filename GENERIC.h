@@ -53,6 +53,7 @@ struct OSPV_hvarray : OSPV_Generic {
   virtual double _percent_filled();
   virtual int _count();
   virtual OSSV *traverse(char *keyish);
+  virtual void XSHARE(int on);
 };
 
 struct OSPV_hvarray_cs : OSPV_Cursor {
@@ -117,6 +118,7 @@ struct OSPV_hvdict : OSPV_Generic {
   virtual SV *NEXT(ossv_bridge*);
   virtual int _count();
   virtual OSSV *traverse(char *keyish);
+  virtual void XSHARE(int on);
 };
 
 struct OSPV_hvdict_cs : OSPV_Cursor {
@@ -195,6 +197,7 @@ struct OSPV_avarray : OSPV_Generic {
   virtual double _percent_filled();
   virtual int _count();
   virtual OSSV *traverse(char *keyish);
+  virtual void XSHARE(int on);
 };
 
 struct OSPV_avarray_cs : OSPV_Cursor {
@@ -228,6 +231,7 @@ struct OSPV_hvarray2 : OSPV_Generic {
   virtual double _percent_filled();
   virtual int _count();
   virtual OSSV *traverse(char *keyish);
+  virtual void XSHARE(int on);
 };
 
 struct OSPV_hvarray2_cs : OSPV_Cursor {

@@ -1,5 +1,5 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..7\n"; }
+BEGIN { $| = 1; $tx=1; print "1..6\n"; }
 
 use ObjStore;
 use lib './t';
@@ -11,7 +11,7 @@ use test;
 &open_db;
 begin 'update', sub {
     my $john = $db->root('John');
-    $john? ok:not_ok;
+    ok($john);
     my $a = $john->{'array'} = new ObjStore::AV($db);
 
     my $fatty = $john->{'fatty'} = new ObjStore::AV($db);
@@ -32,21 +32,19 @@ begin 'update', sub {
 begin sub {
     my $john = $db->root('John');
     my $a = $john->{'array'};
-    ($a->[0] == 1.5 and
-     $a->[1] == 2)? ok:not_ok;
-    if ($a->[2] ne "string") {
+    ok($a->[0] == 1.5 and
+       $a->[1] == 2);
+    ok($a->[2] eq "string") or do {
 	print "ObjStore: " . join(" ", unpack("c*", $a->[2])) . "\n";
 	print "perl:     " . join(" ", unpack("c*", "string")) . "\n";
-	not_ok;
-    } else {ok}
-    $a->[3][1] eq 'b' ? ok:not_ok;
-    "$a->[4]{zip}" eq "$a" ? ok:not_ok;
+    };
+    ok($a->[3][1] eq 'b');
+    ok("$a->[4]{zip}" eq "$a");
 };
 
 begin 'update', sub {
     my $john = $db->root('John');
     $john->{'array'}[4] = undef;  #break circular link
     delete $john->{'array'};
-    ok;
 };
 

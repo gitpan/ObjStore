@@ -36,17 +36,13 @@ begin 'update', sub {
     $tbl->new_index('Field', 'long', 'f3->0');
 
     bless $tbl, 'ObjStore::Table2';
-    if ($tbl->is_corrupted(1)) {
-	not_ok; ObjStore::peek($tbl);
-    } else {ok}
+    ok(! $tbl->is_corrupted(1)) or ObjStore::peek($tbl);
 
     $tbl->add(new Row($tbl));
     $tbl->remove($ar->[16]);
 
 #    $tbl->rebuild_indices;
-    if ($tbl->is_corrupted(1)) {
-	not_ok; ObjStore::peek($tbl);
-    } else {ok}
+    ok(! $tbl->is_corrupted(1)) or ObjStore::peek($tbl);
 };
 
 begin 'update', sub {

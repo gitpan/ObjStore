@@ -10,15 +10,15 @@ begin sub {
     my $john = $db->root('John');
     my $john_copy = $db->root('John');
 
-    $john ? ok : not_ok;
-    $john == 'john'? not_ok:ok;
-    $john != 'john'? ok:not_ok;
-    $john == $john_copy ? ok : not_ok;
-    "$john" eq "$john_copy" ? ok : not_ok;
+    ok($john);
+    ok(! ($john == 'john'));
+    ok($john != 'john');
+    ok($john == $john_copy);
+    ok("$john" eq "$john_copy");
 
     my @fun = grep(ref, values %$john);
-    @fun > 2 ? ok : not_ok;
+    ok(@fun > 2);
     my ($a,$b) = @fun;
-    $a != $b ? ok : not_ok;
-    "$a" eq "$b" ? not_ok : ok;
+    ok($a != $b);
+    ok("$a" ne "$b");
 };

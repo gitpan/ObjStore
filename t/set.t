@@ -26,19 +26,16 @@ for my $rep (10, 100) {
 	}
 	@k = sort @k;
 	@v = sort @v;
-	if (@k==3 and $k[0] eq 'bob' and $k[1] eq 'ed' and $k[2] eq 'joe' and
-	    @v==3 and $v[0] == 1 and $v[1] == 2 and $v[2] == 3) {
-	    ok;
-	} else {
-	    not_ok;
+	ok(@k==3 and $k[0] eq 'bob' and $k[1] eq 'ed' and $k[2] eq 'joe' and
+	    @v==3 and $v[0] == 1 and $v[1] == 2 and $v[2] == 3) or do {
 	    warn join(' ', @k);
 	    warn join(' ', @v);
-	}
+	};
 
 	my $yuk = pop @set;
 	$set->rm($yuk);
-	$set->contains($yuk) ? not_ok : ok;
+	ok(! $set->contains($yuk));
 	$set->add($yuk);
-	$set->contains($yuk) ? ok : not_ok;
+	ok($set->contains($yuk));
     };
 };

@@ -16,7 +16,7 @@ use test;
 require PTest;
 require TestDB;
 $db = new TestDB(test_db(), 'update');
-ref $db eq 'TestDB'? ok:not_ok;
+ok(ref $db eq 'TestDB');
 
 # fold duplicated code XXX
 
@@ -51,22 +51,22 @@ sub isa_test {
     my $bs1 = $o->_blessto_slot;
     bless $o, blessed($o);
     my $bs2 = $o->_blessto_slot;
-    $bs1 == $bs2 ?ok:not_ok;
+    ok($bs1 == $bs2);
 
     push(@{"$pkg\::ISA"}, 'Winner');
-    $o->isa('Winner') ? not_ok:ok;
-    $o->UNIVERSAL::isa('Winner') ? ok:not_ok;
+    ok(! $o->isa('Winner'));
+    ok($o->UNIVERSAL::isa('Winner'));
     bless $o, $pkg;
     $bs2 = $o->_blessto_slot;
 #    ObjStore::peek($bs2);
-    $bs1 == $bs2 ? not_ok:ok;
-    isa_matches($o)? ok:not_ok;
+    ok($bs1 != $bs2);
+    ok(isa_matches($o));
 
     pop @{"$pkg\::ISA"};
-    $o->isa('Winner') ? ok:not_ok; #7
+    ok($o->isa('Winner'));
 #    $o->UNIVERSAL::isa('Winner') ? not_ok:ok; #XXX
     bless $o, $pkg;
-    isa_matches($o)? ok:not_ok;
+    ok(isa_matches($o));
 }
 
 begin 'update', sub {
@@ -81,13 +81,13 @@ begin 'update', sub {
     # basic bless
     my $phash = bless {}, 'Bogus';
     my $p1 = bless $phash, 'PTest';
-    ref $p1 eq 'PTest' ? ok : do { not_ok; warn $p1; };
+    ok(ref $p1 eq 'PTest') or warn $p1;
     
     $j->{obj} = $p1;
-    ref $j->{obj} eq 'PTest' ? ok: do { not_ok; warn $j->{obj}; };
+    ok(ref $j->{obj} eq 'PTest') or warn $j->{obj};
 
     $j->{obj} = new PTest($db);
-    ref $j->{obj} eq 'PTest'? ok:not_ok;
+    ok(ref $j->{obj} eq 'PTest');
 
     # object - changing @ISA
     my $o = $db->root('John')->{obj};
@@ -97,6 +97,6 @@ begin 'update', sub {
 begin sub {
     my $j = $db->root('John');
     my $o = $j->{obj};
-    ref($o) eq 'PTest'? ok:not_ok;
-    $o->bonk ? ok:not_ok;
+    ok(ref($o) eq 'PTest');
+    ok($o->bonk);
 };

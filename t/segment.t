@@ -1,5 +1,5 @@
 # -*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..4\n"; }
+BEGIN { $| = 1; $tx=1; print "1..3\n"; }
 
 use ObjStore ':ALL';
 use lib './t';
@@ -14,7 +14,7 @@ my $junk = {
 
 begin 'update', sub {
     my $john = $db->root('John');
-    $john ? ok : not_ok;
+    die "no db" if !$john;
     
     if (exists $john->{junk_seg}) {
 	delete $john->{junk_in_seg};
@@ -31,11 +31,11 @@ begin 'update', sub {
 	
     # segment is determined by OSSVPV, not from OSSV
     my $nseg = $h->segment_of;
-    $nseg->get_number() == $seg->get_number()? ok : not_ok;
+    ok($nseg->get_number() == $seg->get_number());
     
     # double-check the obvious
     $nseg = $h->{nums}->segment_of;
-    $nseg->get_number() == $seg->get_number()? ok : not_ok;
+    ok($nseg->get_number() == $seg->get_number());
 };
 
 begin 'update', sub {

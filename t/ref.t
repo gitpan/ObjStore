@@ -69,7 +69,7 @@ begin sub {
 
     for my $o (ObjStore::Ref->load($safe, $db)->focus,
 	     ObjStore::Ref->load($unsafe, $db)->focus) {
-	"$o" eq "$toast"? ok:not_ok;
+	ok("$o" eq "$toast");
     }
 };
 die if $@;

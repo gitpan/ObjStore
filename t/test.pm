@@ -6,7 +6,7 @@ use ObjStore;
 use ObjStore::Config ':ALL';
 require Exporter;
 @ISA = 'Exporter';
-@EXPORT = qw(&ok &not_ok &test_db &open_db $db);
+@EXPORT = qw(&ok &test_db &open_db $db);
 
 #ObjStore::debug qw(txn);
 #$ObjStore::REGRESS = 1;
@@ -16,19 +16,11 @@ sub test_db() { TMP_DBDIR . "/perltest" }
 
 sub ok {
     my ($ok, $guess) = @_;
-    $ok = 1 if @_ == 0;
     carp "This is ok $tx" if $guess && $guess != $tx;
     print(($ok? '':'not ')."ok $tx\n");
 #    croak $tx if !$ok;
     ++ $tx;
     $ok;
-}
-
-sub not_ok {
-    my ($guess) = @_;
-    carp "This is not_ok $tx" if $guess && $guess != $tx;
-    warn $@ if $@;
-    print "not ok $tx\n"; $tx++;
 }
 
 sub open_db() {
@@ -52,7 +44,7 @@ END {
 	    }
 	}
     }
-    $ok? ok:not_ok;
+    ok($ok);
 }
 
 1;

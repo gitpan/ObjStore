@@ -8,10 +8,7 @@ use test;
 
 sub chk_refs {
     my ($r1, $r2) = @_;
-    if ($r1 == $r2) {ok} else {
-	carp "[$tx] refs wrong by ".($r1-$r2);
-	not_ok;
-    }
+    ok($r1 == $r2) or carp "[$tx] refs wrong by ".($r1-$r2);
 }
 
 my $refs;
@@ -24,7 +21,7 @@ begin 'update', sub {
 
     my $c = [$john, {1=>\$john}];
     $john->STORE('gated', $c);
-    @$c == 0? not_ok:ok; #2
+    ok(@$c != 0);
 
     chk_refs($john->_refcnt, $refs+1); #3
 };

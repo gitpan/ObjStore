@@ -6,6 +6,7 @@ use ObjStore ':ADV';
 use lib './t';
 use test;
 ObjStore::fatal_exceptions(0);
+#ObjStore::debug qw/refcnt array/;
 
 package Toy;
 use base 'ObjStore::HV';
@@ -61,11 +62,14 @@ begin 'update', sub {
     # READONLY
     begin sub { $ages[0][0] = 0; };
     ok($@ =~ m'READONLY') or warn $@;
+    $@=undef;
 
+    $nx->[0]{age}[3] = 3;
     $nx->[0]{'ok'} = 1;  #should allow writes
 
 #    ok(readonly($nx->[0]{age}));  not yet
-    begin sub { $nx->[0]{age}[3] = 3; };
+
+    begin sub { $nx->[0]{age}[0] = 3; };
     ok($@ =~ m'READONLY') or warn $@;
 
     # cursors
@@ -81,12 +85,12 @@ begin 'update', sub {
     ok($c->at == $at);
 
     $ax->CLEAR();
-    $nx->[0]{age}[3] = 3;
+    $nx->[0]{age}[0] = 3;
 
     $nx->map(sub { my $r = shift; ok(0) if $ax->add($r) != $r; });
     ok(1);
 
     begin sub {$nx->add(bless {name=>'Goldilocks'}, 'Toy'); };
-    ok($@ =~ m'duplicate') or warn $@;
+    ok($@ =~ m'duplicate') or ObjStore::peek($nx);
 };
 die if $@;

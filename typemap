@@ -12,6 +12,7 @@ os_server *		O_OBJECT
 os_database *		O_OBJECT
 os_database_root *	O_OBJECT
 os_database_reference *	O_OBJECT
+os_notification *	O_OBJECT
 os_segment *		O_OBJECT
 os_object_cursor *	O_OBJECT
 OSSVPV *		O_OSSVPV
@@ -37,7 +38,7 @@ O_OBJECT
 	}
 
 O_OSSVPV
-	dOSP ;
+	dOSP;
 	ossv_bridge * ${var}_bridge = osp->sv_2bridge($arg, 1);
 	$var = ($type) ${var}_bridge->ospv();
 

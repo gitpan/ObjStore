@@ -3,11 +3,12 @@
 void osp_croak(const char* pat, ...)
 {
   dSP;
+  SV *msg = NEWSV(0,0);
   va_list args;
+  perl_require_pv("Carp.pm");
   va_start(args, pat);
-  char *message = mess(pat, &args);
+  sv_vsetpvfn(msg, pat, strlen(pat), &args, Null(SV**), 0, Null(bool*));
   va_end(args);
-  SV *msg = newSVpv(message, 0);
   SvREADONLY_on(msg);
   SAVEFREESV(msg);
   PUSHMARK(sp);

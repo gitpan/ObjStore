@@ -1,3 +1,13 @@
+** 12-13-97 RELEASE 1.21
+
+- THE TUTORIAL IS DONE!  See ObjStore::Tutorial!
+
+- Fixed numerous minor bugs; fixed ObjStore::UNIVERSAL::isa;
+significant changes to posh; NOREFS invokation optimized out unless
+the method is present; re-organized the stargate; moved CSV stuff to
+ObjStore::CSV; untested support for kernel threads.
+
+
 ** 11-21-97 RELEASE 1.20
 
 - 'bless' now stores the @ISA tree at bless-time.  Use $o->isa($class)
@@ -134,8 +144,7 @@ of 'large' can be customized (not yet).
 
 ** RELEASE 1.00
 
-- The first release, written during our 60 day ObjectStore evaluation!
-Why does ObjectStore have a reputation of being difficult?  (Given my
-self-directed study I knew an OS/perl combination would be fantastic!)
-Apparently, it is my mission to save the world from the unspeakable
-torture of relational databases!
+- The first release, written during our 60 day evaluation.  I knew a
+perl - OS combination would be fantastic!  Apparently, it is my
+mission to save the world from the unspeakable torture of relational
+databases.

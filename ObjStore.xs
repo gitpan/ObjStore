@@ -223,6 +223,146 @@ get_all_servers()
 	}
 	delete [] svrs;
 
+#-----------------------------# Notification
+
+MODULE = ObjStore	PACKAGE = ObjStore
+
+void
+subscribe(...)
+	PPCODE:
+	PUTBACK;
+	if (items == 0) return;
+	os_subscription *subs = new os_subscription[items];
+	dOSP;
+	for (int xa=0; xa < items; xa++) {
+	  ossv_bridge *br = osp->sv_2bridge(ST(xa), 1);
+	  subs[xa].assign(br->ospv());
+	}
+	int ok=0;
+	TIX_HANDLE(all_exceptions)
+	  os_notification::subscribe(subs, items);
+	  ok=1;
+	TIX_EXCEPTION
+	  CAPTURE_TIX_REPORT
+	TIX_END_HANDLE
+	delete [] subs;
+	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
+	return;
+
+void
+unsubscribe(...)
+	PPCODE:
+	PUTBACK;
+	if (items == 0) return;
+	os_subscription *subs = new os_subscription[items];
+	dOSP;
+	for (int xa=0; xa < items; xa++) {
+	  ossv_bridge *br = osp->sv_2bridge(ST(xa), 1);
+	  subs[xa].assign(br->ospv());
+	}
+	int ok=0;
+	TIX_HANDLE(all_exceptions)
+	  os_notification::unsubscribe(subs, items);
+	  ok=1;
+	TIX_EXCEPTION
+	  CAPTURE_TIX_REPORT
+	TIX_END_HANDLE
+	delete [] subs;
+	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
+	return;
+
+MODULE = ObjStore	PACKAGE = ObjStore::Notification
+
+static void
+os_notification::set_queue_size(size)
+	int size;
+
+static void
+os_notification::queue_status()
+	PPCODE:
+	os_unsigned_int32 sz, pend, over;
+	os_notification::queue_status(sz, pend, over);
+	EXTEND(SP, 3);
+	PUSHs(sv_2mortal(newSViv(sz)));
+	PUSHs(sv_2mortal(newSViv(pend)));
+	PUSHs(sv_2mortal(newSViv(over)));
+
+static int
+os_notification::_get_fd()
+
+static void
+os_notification::receive(...)
+	PROTOTYPE: $;$
+	PPCODE:
+	int timeout = -1;
+	if (items > 1) timeout = SvIV(ST(1));
+	os_notification *note;
+	if (os_notification::receive(note, timeout)) {
+	  XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Notification", note));
+	} else {
+	  XPUSHs(&sv_undef);
+	}
+
+void
+os_notification::_get_database()
+	PPCODE:
+	XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Database",
+	  THIS->get_database()));
+
+void
+os_notification::focus()
+	PPCODE:
+	PUTBACK;
+	dOSP;
+	SV *ret = osp->ospv_2sv((OSSVPV *) THIS->get_reference().resolve());
+	SPAGAIN;
+	XPUSHs(ret);
+
+void
+os_notification::why()
+	PPCODE:
+	char *str = (char*) THIS->get_string();
+	assert(str);
+	if (str[0] == 0) {
+	  XPUSHs(sv_2mortal(newSViv(THIS->get_kind())));
+	} else {
+	  XPUSHs(sv_2mortal(newSVpv(str, 0)));
+	}
+
+void
+os_notification::DESTROY()
+
+MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL
+
+void
+OSSVPV::notify(why, ...)
+	SV *why
+	PROTOTYPE: $$;$
+	CODE:
+	int now=0;
+	if (items == 3) {
+	  if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), na), "now")) now=1;
+	  else croak("%p->notify('%s', ['now'])", THIS, SvPV(why, na));
+	}
+	os_notification note;
+	if (SvNIOK(why)) {
+	  os_int32 kind = SvIV(why);
+	  if (kind < 0)
+	    croak("%p->notify(%d): non-positive numbers are reserved", kind);
+	  note.assign(THIS, kind, 0);
+	} else {
+	  note.assign(THIS, 0, SvPV(why, na));
+	}
+	int ok=0;
+	TIX_HANDLE(all_exceptions)
+	  if (now) os_notification::notify_immediate(&note, 1);
+	  else     os_notification::notify_on_commit(&note, 1);
+	  ok=1;
+	TIX_EXCEPTION
+	  CAPTURE_TIX_REPORT
+	TIX_END_HANDLE
+	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
+
 #-----------------------------# Transaction
 
 # It is not clear why perl should need access to any transaction that
@@ -883,7 +1023,6 @@ OSSVPV::_blessto_slot(...)
 	    ((OSSVPV*)THIS->classname)->REF_dec();
 	  OSPvBLESS2_on(THIS);
 	  THIS->classname = (char*)nval;
-	  ((OSSVPV*)THIS->classname)->REF_inc();
 	}
 	if (!OSPvBLESS2(THIS) || GIMME_V == G_VOID) return;
 	SV *ret = osp->ospv_2sv((OSSVPV*)THIS->classname);
@@ -930,7 +1069,8 @@ OSSVPV::get_pointer_numbers()
 void
 OSSVPV::const()
 	PPCODE:
-	OSPvREADONLY(THIS) = ~0;
+	OSPvROCNT(THIS) = ~0;
+	THIS->XSHARE(1);
 
 void
 OSSVPV::POSH_CD(keyish)
@@ -1008,7 +1148,6 @@ OSPV_Generic::STORE(xx, nval)
 	PPCODE:
 	SV **savesp = SP;
 	PUTBACK;
-	OSPvTRYWRITE(THIS);
 	SV *ret = osp->ossv_2sv(THIS->STOREi(xx, nval));
 	SPAGAIN ;
 	assert(SP == savesp);
@@ -1018,7 +1157,6 @@ void
 OSPV_Generic::_Pop()
 	PPCODE:
 	PUTBACK ;
-	OSPvTRYWRITE(THIS);
 	SV *ret = THIS->Pop();
 	SPAGAIN ;
 	if (ret) XPUSHs(ret);
@@ -1027,14 +1165,12 @@ void
 OSPV_Generic::_Push(nval)
 	SV *nval;
 	CODE:
-	OSPvTRYWRITE(THIS);
 	THIS->Push(nval);
 
 void
 OSPV_Generic::_Shift(nval)
 	SV *nval;
 	CODE:
-	OSPvTRYWRITE(THIS);
 	THIS->Shift(nval);
 
 #-----------------------------# HV
@@ -1059,7 +1195,6 @@ OSPV_Generic::STORE(key, nval)
 	PPCODE:
 	SV **savesp = SP;
 	PUTBACK ;
-	OSPvTRYWRITE(THIS);
 	SV *ret = osp->ossv_2sv(THIS->STOREp(key, nval));
 	SPAGAIN ;
 	assert(SP == savesp);
@@ -1069,7 +1204,6 @@ void
 OSPV_Generic::DELETE(key)
 	char *key
 	CODE:
-	OSPvTRYWRITE(THIS);
 	THIS->DELETE(key);
 
 int
@@ -1096,7 +1230,6 @@ OSPV_Generic::NEXTKEY(...)
 void
 OSPV_Generic::CLEAR()
 	CODE:
-	OSPvTRYWRITE(THIS);
 	THIS->CLEAR();
 
 #-----------------------------# Index
@@ -1107,7 +1240,6 @@ void
 OSPV_Generic::add(sv)
 	SV *sv;
 	PPCODE:
-	OSPvTRYWRITE(THIS);
 	PUTBACK;
 	ossv_bridge *br = osp->sv_2bridge(sv, 1, os_segment::of(THIS));
 	THIS->add(br->ospv());
@@ -1118,7 +1250,6 @@ void
 OSPV_Generic::remove(sv)
 	SV *sv
 	PPCODE:
-	OSPvTRYWRITE(THIS);
 	PUTBACK;
 	ossv_bridge *br = osp->sv_2bridge(sv, 1);
 	THIS->remove(br->ospv());
@@ -1129,7 +1260,6 @@ OSPV_Generic::configure(...)
 	PPCODE:
 	SV **top = &ST(0);
 	PUTBACK;
-	OSPvTRYWRITE(THIS);
 	THIS->configure(top, items);
 	return;
 
@@ -1145,7 +1275,6 @@ OSPV_Generic::FETCH(xx)
 void
 OSPV_Generic::CLEAR()
 	CODE:
-	OSPvTRYWRITE(THIS);
 	THIS->CLEAR();
 
 #-----------------------------# Ref

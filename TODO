@@ -44,7 +44,7 @@ Peeker
 optimize
   do autoclassloading upon open
 
-Support for notification, database access control
+database access control API
 
 renovate thread specific stuff in ObjStore.xs
 
@@ -56,6 +56,15 @@ _Per_segment_data is not free'd when no longer needed
 
 
 + VAGUE POSSIBILITIES +
+
+get_database
+  factor
+  os_server::get_databases() doesn't deal with bless
+
+notifications
+  batch notify
+  notify should take the string length!
+  get_string should return the length!
 
 Split GENERIC into ODI & Splash parts!
 

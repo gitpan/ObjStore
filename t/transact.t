@@ -13,7 +13,7 @@ ObjStore::set_transaction_priority(0);
 &open_db;
 
 eval { &ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
-$@ =~ m/does not exist/? ok:not_ok;
+ok($@ =~ m/does not exist/) or warn $@;
 
 # make sure the tripwire is ready
 begin 'update', sub {
@@ -30,11 +30,11 @@ begin('read', sub {
     my $john = $db->root('John');
     
     eval { $john->{'write'} = 0; };
-    $@ =~ m/Attempt to write during a read-only/? ok:not_ok;
+    ok($@ =~ m/Attempt to write during a read-only/) or warn $@;
 
-    $john->{right} == 69? ok : not_ok;
+    ok($john->{right} == 69);
 });
-$@ ? not_ok:ok;
+ok(! $@);
 
 begin('update', sub {
     my $j = $db->root('John');
@@ -43,9 +43,9 @@ begin('update', sub {
 	die 'undo';
     });
     warn $@ if $@ !~ m'^undo';
-    exists $j->{oopsie}? not_ok : ok;
+    ok(! exists $j->{oopsie});
 });
-$@ ? not_ok : ok;
+ok(! $@);
 
 if (1) {
 #ObjStore::debug qw(txn);
@@ -84,6 +84,5 @@ begin 'update', sub {
     } else { 1 }
 };
 warn $@ if $@;
-if ($attempt==3) {ok}
-else {warn $attempt; not_ok; }
+ok($attempt==3) or warn $attempt;
 }

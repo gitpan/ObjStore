@@ -13,7 +13,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $COMPILE_TIME $TRANSACTION_PRIORITY
 	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD);
 
-$VERSION = '1.22';
+$VERSION = '1.23';
 
 require Exporter;
 require DynaLoader;
@@ -22,7 +22,7 @@ require DynaLoader;
     my @x_adv = qw(&blessed &reftype
 		   &translate &set_default_open_mode
 		   &get_all_servers &get_lock_status 
-		   &is_lock_contention &peek);
+		   &is_lock_contention &peek &subscribe &unsubscribe);
     my @x_tra = qw(&set_transaction_priority &schema_dir
 		   &fatal_exceptions &release_name
 		   &release_major &release_minor &release_maintenance
@@ -659,6 +659,19 @@ sub destroy {
     my ($o) = @_;
     if (!$o->is_empty()) { croak("attempt to destroy unempty os_segment"); }
     $o->_destroy;
+}
+
+package ObjStore::Notification;
+
+# Should work exactly like ObjStore::lookup
+sub get_database {
+    my ($n) = @_;
+    my $db = $n->_get_database();
+    if ($db && $db->is_open) {
+	&ObjStore::begin(sub { $db->import_blessing(); });
+	die if $@;
+    }
+    $db;
 }
 
 package ObjStore::UNIVERSAL;

@@ -2,21 +2,13 @@
 
 Tested Configurations:
 
-   perl 5.004_04, 5.004_53-5.004_62
-     (In general, it doesn't matter how perl is compiled.)
+   perl 5.004_04, 5.004_53-5.004_64
 
 
    Solaris 2.5.1
 
      SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1+
      SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0.*
-
-
-   Digital Unix OSF1 V4.0 / AXP
-     (requires ExtUtils::ExCxx & patches to perl 5.004_56;
-      email if you need help)
-
-     Dec C++ Compiler / ObjectStore 5.0
 
 
 -------------------------------------------------------------------------

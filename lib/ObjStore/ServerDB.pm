@@ -95,6 +95,7 @@ sub do_boot_class {
     return if $o->SUPER::FETCH($class);
     ObjStore::require_isa_tree($class);
     my $i = $class->new($o->create_segment($class));
+    die "$class->new(...) returned '$i'" if !ref $i;
     $o->_install($i);
 }
 

@@ -1,3 +1,37 @@
+** 04-10-98 RELEASE 1.36
+
+- Added ObjStore::Posh::Remote & qtposh.  However, qtposh may not work
+without patches for Event and PerlQt.  Mileage may vary.  (Qt is a
+cross-platform GUI library like Tk.  See http://www.troll.no)
+
+- Various minor fixes.
+
+
+** 04-06-98 RELEASE 1.35
+
+- Another read-only mode is available for ObjStore::Index.  A
+distinction is made between exclusive and shared read-only keys.
+The default mode has been changed to _exclusive_ read-only.
+Also added support for shift and pop.
+
+- Delay object destruction with ObjStore::Mortician.  Also, general
+improvements to the serverization modules.
+
+- Optimized typemap slightly.  Also fixed typemap bugs in
+ObjStore::Index::seek & ObjStore::Index::configure.  Optimized
+reallocation of (persistent) memory in string assignments.  (1.34 code
+was buggy!)
+
+- Overloaded == & != operator tests no longer work if either argument
+is non-persistent.  While this breaks backward compatiblility, I
+believe the extra strictness is worth it.
+
+- The automatic safe_require code was apparently a bit _TOO_ safe.
+Exceptions were been hidden!  Fixed.
+
+- Improved Digital AXP hints.
+
+
 ** 03-28-98 RELEASE 1.33
 
 - Stringification of persistent objects can no longer cause

@@ -5,17 +5,18 @@
 # PerlQt 1.06 + various patches
 # Event 0.01 + various patches
 #
-# I'm not sure if this will work out of the box yet.
+# This probably wont work out of the box yet.  Sorry!
 
 use strict;
 use ObjStore;
-use vars qw($DB);
+use vars qw($DB $Reset);
 
 sub usage {
     print q"
 Usage: qtposh [switches] database
   -Idirectory      specify @INC directory (may be used more than once)
   -[mM]module..    executes `use/no module...' (just like perl)
+  -reset           ignore the stored cursor; start fresh
   -v               print version number and patchlevel of qtposh (and exit)
 
 ";
@@ -44,6 +45,8 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	    die "qtposh: can't find myself" if ! $FindBin::Bin;
 	    unshift(@INC, "$FindBin::Bin/$dir");
 	}
+    } elsif ($o =~ m/^-reset$/) {
+	++$Reset;
     } elsif ($o =~ m/^-panic$/) {
 	warn "qtposh: panic ignored (qtposh is unflappable)\n";
     } elsif ($o =~ m/^-v$/) {
@@ -152,6 +155,7 @@ Perl Artistic License (see http://www.perl.com/perl/misc/Artistic.html)
 }
 
 package Editor;
+use ObjStore;
 use IO::File;
 use Qt;
 use QEvent;
@@ -203,13 +207,15 @@ sub new {
     $$o{in}->setFocus();
     $$o{in}->setFrameStyle($Frame{Box} | $Frame{Plain});
     $$o{in}->setLineWidth(1);
+    $$o{in}->setText("\n\n");
+    $$o{in}->setCursorPosition(10000, 0);
     $o->connect($$o{in}, 'returnPressed()', 'execute()');
     $l->addWidget($$o{in},3);
 #    $l->setRowStretch(1,2);
 
     $l->addSpacing(3);
     $$o{out} = QMultiLineEdit->new($o);
-    $$o{out}->setFocusPolicy($Focus{No});
+    $$o{out}->setFocusPolicy(defined $Focus{No}? $Focus{No} : 0); #XXX?
     $$o{out}->setFrameStyle($Frame{Box} | $Frame{Plain});
     $$o{out}->setLineWidth(1);
     $$o{out}->setReadOnly(1);
@@ -255,6 +261,7 @@ sub refresh {
 	    $$o{out}->setText($$o{db}->get_pathname. " is not an ObjStore::ServerDB");
 	    return;
 	}
+	# check every time through XXX
 	my $top = $$o{db}->hash;
 	my $server = $top->{'ObjStore::Process'};
 	my $d = time - $$server{mtime};
@@ -268,10 +275,11 @@ sub refresh {
 	    };
 	    $$o{out}->setText($$o{db}->get_pathname." has not been\nupdated since ".scalar(localtime $$server{mtime})." ($str)");
 	}
-	my $remote = $top->{'ObjStore::Posh::Remote'};
+	my $myclass = 'ObjStore::Posh::Remote';
+	my $remote = $top->{ $myclass };
 	if (!$remote) {
-	    $$o{out}->setText("creating Posh::Remote...");
-	    $top->boot_class('ObjStore::Posh::Remote');
+	    $$o{out}->setText("creating $myclass...");
+	    $top->boot_class($myclass);
 	    return;
 	}
 	$remote->enter($USER);
@@ -288,7 +296,14 @@ sub refresh {
     $$o{mtime} = $$c{mtime};
 
     $$o{out}->deselect();
-    my $t = $c->prompt()."\n\n";
+    my $t;
+    if ($main::Reset) {
+	$c->init;
+	$main::Reset = 0;
+    } else {
+	begin sub { $t = $c->prompt()."\n\n"; };
+	if ($@) { warn; $c->init; }
+    }
     $t .= "died: ".$$c{why} if $$c{why};
     $t .= $$c{out} if $$c{out};
     $$o{out}->setText($t);
@@ -299,8 +314,14 @@ sub execute {
     my ($o) = @_;
     return if !$$o{cursor};
     my $c = $$o{cursor}->focus;
-    $c->execute($$o{in}->text());
-    $$o{in}->clear();
+    my $in = $$o{in}->text;
+    my $at = rindex($in, "\n\n");
+    my $send = defined $at? substr($in, $at+2) : $in;
+    $c->execute($send);
+    my $hist = $$c{history};
+    $$o{in}->setText(join("\n\n", ($hist? @$hist: ()), $send) . "\n\n");
+    $$o{in}->setCursorPosition(10000, 0);
+    $$o{in}->setYOffset($$o{in}->totalHeight - $$o{in}->viewHeight);
 }
 
 use slots ('opendb()', 'load()', 'save()', 'printer()', 'closepane()', 'about()');

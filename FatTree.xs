@@ -20,16 +20,16 @@ static FatTree_thr *construct_thr()
   init_tc(&ti->tc);
   return ti;
 }
-static void destory_thr(FatTree_thr *ti)
+static void destory_thr(FatTree_thr *ti) //hook up XXX
 {
   TcTV(&ti->tc) = 0;
   free_tc(&ti->tc);
 }
-dTHRINIT(FatTree, construct_thr, destroy_thr);
+dXSTHRINIT(FatTree, construct_thr(), "ObjStore::REP::FatTree::ThreadInfo");
 
 #define dGCURSOR(dex)				\
   FatTree_thr *gl;				\
-  THRINFO(FatTree, gl);				\
+  XSTHRINFO(FatTree, gl);				\
   tc_refocus(&gl->tc, dex)
 
 //--------------------------- ---------------------------
@@ -142,6 +142,7 @@ void OSPV_fattree_av::SPLICE(int offset, int length, SV **base, int count)
 {
   dGCURSOR(&ary);
   if (length) {
+    dTHR;
     if (GIMME_V == G_ARRAY) {
       dOSP;
       dSP;
@@ -446,6 +447,7 @@ BOOT:
   hv_store(szof, "avtn", 4, newSViv(sizeof(avtn)), 0);
   hv_store(szof, "OSPV_fatindex2", 14, newSViv(sizeof(OSPV_fatindex2)), 0);
   hv_store(szof, "dex2tn", 6, newSViv(sizeof(dex2tn)), 0);
+  XSTHRBOOT(FatTree);
 
 MODULE = ObjStore::REP::FatTree		PACKAGE = ObjStore::REP::FatTree::AV
 

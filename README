@@ -13,11 +13,11 @@ http://www.odi.com (NASDAQ: ODIS).  They use a unique Cache-Forward
 Architecture to make persistent data available in literally the most
 efficient manner possible.
 
-Prior to this joining of forces: ObjectStore was too radical a design
-decision for many applications; and perl5 did not have a simple way of
+Prior to this joining of forces ObjectStore was too radical a design
+decision for many applications and perl5 did not have a simple way of
 storing complex data persistently.  Now there is an easy way to build
-database applications, especially if you are concerned about
-preserving your ideals of encapsulation.
+database applications (especially if you are concerned about
+preserving your ideals of encapsulation).
 
 =head2 INCLUDED TOOLS
 
@@ -37,7 +37,7 @@ course :-).  (Also similar to C<isql>/C<wisql>.)
 =item * osperlserver
 
 Provides remote method invokation, database job scheduling, and
-server-object collaboration services.  Completely generic.
+server-object collaboration services.  Completely generic!
 
 =back
 
@@ -57,42 +57,26 @@ You will need:
 See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 
-##################
-# RECENT CHAN@ES #
-##################
+=head1 R!CENT CHANGES
 
 
-** 04-10-98 RELEASE 1.36
+** 04-23-98 RELEASE 1.38
 
-- Added ObjStore::Posh::Remote & qtposh.  However, qtposh may not work
-without patches for Event and PerlQt.  Mileage may vary.
+- Support for multiple threads.  Changed ObjStore::Transaction->new()
+to conform the standard method call convention.  While partially
+tested (perl 5.004_64 solaris), additional internal reorganization and
+testing is still needed.
 
-- Various minor fixes.
+- osperlserver no longer invokes the 'evolve' method upon restart.
+
+- VERSIONs are not longer required for persistent classes.  Instead
+'0.001' is defaulted.  Be aware that you must use a version greater
+than '0.001' once you add an explicit version.
 
 
-** 04-06-98 RELEASE 1.35
+** 04-14-98 RELEASE 1.37
 
-- Another read-only mode is available for ObjStore::Index.  A
-distinction is made between exclusive and shared read-only keys.
-The default mode has been changed to _exclusive_ read-only.
-Also added support for shift and pop.
-
-- Delay object destruction with ObjStore::Mortician.  Also, general
-improvements to the serverization modules.
-
-- Optimized typemap slightly.  Also fixed typemap bugs in
-ObjStore::Index::seek & ObjStore::Index::configure.  Optimized
-reallocation of (persistent) memory in string assignments.  (1.34 code
-was buggy!)
-
-- Overloaded == & != operator tests no longer work if either argument
-is non-persistent.  While this breaks backward compatiblility, I
-believe the extra strictness is worth it.
-
-- The automatic safe_require code was apparently a bit _TOO_ safe.
-Exceptions were been hidden!  Fixed.
-
-- Improved Digital AXP hints.
+- Updated documentation.
 
 
 see ./INSTALL for hints on installation

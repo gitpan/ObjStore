@@ -245,11 +245,6 @@ never relocated.
 
 =item *
 
-Some of my code might be hard to read.  Imagine how hard it was to
-write!
-
-=item *
-
 Functions or methods starting with '_' are internal to the C<ObjStore>
 extension.  They are subject to change entirely without notice.
 
@@ -277,62 +272,14 @@ knows the sender's client# and could pass this information
 transparently to subscribers.  The additional overhead be just 2 bytes
 per received notification.
 
-=item * SIGNALS ARE UNRELIABLE
-
-[This bug might have been entirely fixed!]
-
-Perl signal handlers are not bulletproof.  Since ObjectStore makes
-aggressive use of signals, pathelogical failure is not impossible.
-Currently, it is recommmended that you avoid lock timeouts and
-deadlocks altogether.  This can be accomplished by restricting each
-database to a single writer, and using mvcc mode for readers.  (This
-is a good architecture anyway!)
-
-If you cannot use this architecture, please test the reliability of
-your signal handlers before making a large code investment.  This is
-worth testing because with conservative and careful use of perl signal
-handlers, you should be able to avoid triggering any of the known
-failure modes.
-
 =item * MIXING WITH EVAL
 
-[This bug might have been entirely fixed!]
-
-It is possible to use C<eval> within transactions, but B<you
-absolutely must not> use the C<ObjectStore> API or access any
-persistent memory.
-
-  begin('read', sub {
-    ...
-    eval { $db->root('new root' => [1,2,3]); };
-    ...
-  });
-
-In the above code, the update in a read transaction will cause an
-exception that crashes perl.  This is due to the excellent but
-imperfect integration of C<ObjectStore> exceptions and perl
-exceptions.  I understand how to fix it, just haven't had time.  In
-general, you should global replace C<eval> to C<begin>.
-
-=item * ABORT MANUAL-OVERRIDE
-
-[A proper fix is on the TODO list.  Maybe this is solved.]
-
-Since C<eval> does not imply a nested transaction, if you use C<eval>
-you can have situations where a transaction must be manually aborted.
-This situation actually turns up in C<posh>.  Perhaps it is best
-explained by example:
-
-  my $cmd = <$input>;
-
-  begin 'update', sub {
-    eval $cmd;
-    if ($@) {
-      ObjStore::Transaction::get_current()->abort(); #manual abort!
-      print $@;
-    }
-    undef $@;
-  };
+It is possible to use C<eval> within transactions, but B<you must not>
+use the C<ObjectStore> API or access persistent memory.  This is due
+to the excellent but imperfect integration of C<ObjectStore>
+exceptions and perl exceptions.  In general, you should just use
+C<begin> instead of C<eval>.  (Also see C<ObjStore::Process> and
+C<ObjStore::Posh::Cursor>.)
 
 =item * CROSS DATABASE POINTERS
 
@@ -372,6 +319,13 @@ destroying the segment.  This makes it non-trival to determine whether
 a segment is empty or not.  The needed change is listed as ODI feature
 request C<#SE055496_O#>.
 
+=item * WIN32
+
+Threads will not work until perl has a well-tested API for an
+externally created thread to call into the perl interpreter.  (The
+beginnings of this are there in the form of new_struct_thread(), but
+it still needs a bit work.)
+
 =item * TRANSACTIONS
 
 Transaction hold onto transient memory longer than necessary.  The
@@ -381,8 +335,8 @@ thought it was too complicated.
 
 =item * C<MOP>
 
-This is not a general purpose C<ObjectStore> editor with complete C<MOP>
-support.  Actually, I don't think this is a bug.
+This is not a general purpose C<ObjectStore> editor with complete
+C<MOP> support.  Actually, I don't think this is a bug!
 
 =item * HIGH VOLITILITY
 
@@ -394,5 +348,36 @@ compatibility will be preserved when possible. :-)
 I didn't get a Ph.D in English.  Sorry!
 
 =back
+
+=head1 SOURCE CODE AVAILABILITY
+
+While there have been gains in software quality in the form of GNU,
+Perl, Apache, Linux, Qt, and recently the Netscape browser, we are
+still in the dark ages with respect to database technology.  After
+avoiding relational databases for years, I sensed a combination of
+persistance and perl could offer the same level of quality and
+simplicity that I find invaluable in addressing the hurdles I face as
+a software professional.  It might seem obvious in hindsight (doesn't
+it always?!), but it is my conviction that it was something in
+particular (not just luck!) that allowed me imagine and implement this
+cutting-edge technology years before it would be recognized and
+adopted.  Therefore, I would like to express a poignant "thank you" to
+all the wonderful teachers with whom I've had the opportunity of
+studying.  My ideas are truly theirs!  While I predict that this
+software will be considered a world-class inter-disciplinary
+achievement, I do not see it as such.  Rather, I see it as a simple
+mechanical exercise employed to bring me to a basic level of clear
+understanding.  And what are my real aspirations?  I should keep quiet
+about that, but I can say this much: One of my friends had an email
+signature: "Life would be so much easier if we could just look at the
+source code."  (Imagine, computational metaphysics! :-) In using this
+module, you might feel a hint of it...who knows?  You might even be
+interested in understanding more (even beyond the boundary of all
+thought and limitations).  "With our thoughts we make the world."
+Perhaps it's not common knowledge, but some things don't require
+belief to be true.  In short, if you have never studied with a master,
+I highly recommend it!  (It is a priceless opportunity!)  If you look
+sincerely, you will be able to find one.  They are waiting for you...!
+:-)
 
 =cut

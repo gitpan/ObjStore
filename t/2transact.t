@@ -8,6 +8,8 @@ use ObjStore::Config;
 use lib './t';
 use test;
 
+#ObjStore::debug qw(txn);
+
 #my $tsys = 'ObjStore::Transaction';
 sub txn() { ObjStore::Transaction::get_current() }
 
@@ -82,7 +84,6 @@ begin('update', sub {
 ok(! $@);
 
 if (1) {
-#ObjStore::debug qw(txn);
 my $debug =0;
 
 # retry deadlock
@@ -101,7 +102,7 @@ begin 'update', sub {
 	my $quiet = 1? '2>/dev/null':'';
 	system("$^X -Mblib t/deadlock.pl 1>/dev/null $quiet &");
 	warn "[1]sleep\n" if $debug;
-	sleep 5;
+	sleep 6;
 	warn "[1]left\n" if $debug;
 	my $left = $db->root('tripwire');
 	$left->{left} = 0;

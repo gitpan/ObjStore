@@ -30,6 +30,7 @@ junk/posh2pod.pl
 junk/rename.pl
 lib/ObjStore.pm
 lib/ObjStore.pod
+lib/ObjStore/AV/QSet.pm
 lib/ObjStore/AV/Set.pm
 lib/ObjStore/AVHV.pm
 lib/ObjStore/AppInstance.pm

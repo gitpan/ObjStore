@@ -1,5 +1,17 @@
 void osp_croak(const char* pat, ...);
 
+/*
+  Safety, then Speed;  There are lots of interlocking refcnts:
+
+  - Each bridge has a refcnt to the SV that holds it's transaction.
+
+  - Each transaction has a linked list of bridges.
+
+  - Each bridge has a refcnt to the persistent object, but only
+    during updates (and in writable databases).
+ */
+
+struct osp_txn;
 struct osp_bridge {
   osp_bridge *next;
   osp_bridge();
@@ -9,6 +21,7 @@ struct osp_bridge {
   virtual int ready();			// can delete bridge now?
   virtual int invalid();		// error to dereference?
 
+  SV *txsv;				// my transaction scope
 #ifdef OSP_DEBUG  
   int br_debug;
 #define BrDEBUG(b) b->br_debug
@@ -21,27 +34,34 @@ struct osp_bridge {
 #endif
 };
 
-struct osp_txn;
+struct dytix_handler {
+  tix_handler hand;
+  dytix_handler();
+};
 
 // per-thread globals
 struct osp_thr {
   osp_thr();
   ~osp_thr();
-  static int info_key;
-  static osp_thr *fetch();
 
-  //context
-  long debug;
-  SV *errsv;
-  HV *CLASSLOAD;
-  SV *stargate;
-  struct osp_txn *txn;
-  tix_handler handler;
-  osp_bridge *bridge_top;   //should be invalid
+  //global globals
+  static void boot();
+  static osp_thr *fetch();
+  static SV *stargate;
+  static HV *CLASSLOAD;
+  static SV *TXGV;
+  static AV *TXStack;
+  static osp_bridge *bridge_top;
 
   //methods
-  int can_update(void *);
-  void destroy_bridge();
+  static void burn_bridge();
+
+  //context
+  long signature;
+  long debug;
+  SV *errsv;
+  dytix_handler *hand;
+  char *report;
 
   //glue methods
   static os_segment *sv_2segment(SV *);
@@ -58,9 +78,10 @@ struct osp_thr {
 struct osp_txn {
   osp_txn(os_transaction::transaction_type_enum,
 	  os_transaction::transaction_scope_enum);
-  ~osp_txn();
   void abort();
   void commit();
+  void pop();
+  void burn_bridge();
   void checkpoint();
   void post_transaction();
   int can_update(os_database *);
@@ -70,19 +91,28 @@ struct osp_txn {
   int is_prepare_to_commit_completed();
 
   os_transaction::transaction_type_enum tt;
-  osp_txn *up;
+  os_transaction::transaction_scope_enum ts;
+  U32 owner;   //for local transactions
   osp_bridge *bridge_top;
   os_transaction *os;
-  tix_handler handler;
-  int got_os_exception;
-  char *report;
-  int deadlocked;  //only in top_level
 };
 
 #define dOSP osp_thr *osp = osp_thr::fetch()
-#define dTXN osp_txn *txn = osp->txn
+#define dTXN							\
+mysv_lock(osp_thr::TXGV);					\
+osp_txn *txn = 0;						\
+if (AvFILL(osp_thr::TXStack) >= 0) {				\
+  SV *_txsv = SvRV(*av_fetch(osp_thr::TXStack,			\
+			    AvFILL(osp_thr::TXStack), 0));	\
+  txn = (osp_txn*) SvIV(_txsv);					\
+}
 
-// rename ALWAYS -> FINALLY
+
+// THESE MACROS CAN PROBABLY BE REMOVED NOW
+//
+// 1. REMOVE THEM
+// 2. RE-TEST
+// 3. GRIN
 
 #define OSP_START0				\
 STMT_START {					\

@@ -58,7 +58,7 @@ static objectstore_lock_option str_2lock_option(char *str)
 }
 
 XS(XS_ObjStore_translate)
-{ dOSP; perl_call_sv(osp->stargate, G_SCALAR); }
+{ dOSP; assert(osp_thr::stargate); perl_call_sv(osp_thr::stargate, G_SCALAR); }
 
 // lookup static symbol (not needed if dynamically linked)
 extern "C" XS(boot_ObjStore__REP__ODI);
@@ -66,6 +66,13 @@ extern "C" XS(boot_ObjStore__REP__Splash);
 extern "C" XS(boot_ObjStore__REP__FatTree);
 
 //----------------------------- ObjStore
+
+MODULE = ObjStore	PACKAGE = ObjStore::ThreadInfo
+
+void
+osp_thr::DESTROY()
+	CODE:
+	delete THIS;
 
 MODULE = ObjStore	PACKAGE = ObjStore
 
@@ -75,13 +82,15 @@ BOOT:
   their BOOT: section which needs to be done at runtime rather than
   compile time." -- The perl compiler
   */
+  PUTBACK;
+  osp_thr::boot();
   // Nuke the following lines if you are dynamic-linking
   newXS("ObjStore::REP::ODI::bootstrap", boot_ObjStore__REP__ODI, file);
   newXS("ObjStore::REP::Splash::bootstrap", boot_ObjStore__REP__Splash, file);
   newXS("ObjStore::REP::FatTree::bootstrap", boot_ObjStore__REP__FatTree, file);
   //
 #ifdef _OS_CPP_EXCEPTIONS
-  // Must tell perl to use ANSI C++ exceptions!
+  // Must switch perl to use ANSI C++ exceptions!
   perl_require_pv("ExtUtils/ExCxx.pm");
   if (SvTRUE(ERRSV)) croak(SvPV(ERRSV,na));
 #endif
@@ -95,6 +104,13 @@ BOOT:
   hv_store(szof, "OSSVPV", 6, newSViv(sizeof(OSSVPV)), 0);
   hv_store(szof, "OSPV_Ref2_hard", 14, newSViv(sizeof(OSPV_Ref2_hard)), 0);
   hv_store(szof, "OSPV_Ref2_protect", 17, newSViv(sizeof(OSPV_Ref2_protect)), 0);
+
+void
+_fixup()
+	CODE:
+	SvREFCNT(&sv_undef) = 0;
+	SvREFCNT(&sv_yes) = 0;
+	SvREFCNT(&sv_no) = 0;
 
 void
 reftype(ref)
@@ -127,14 +143,29 @@ _debug(mask)
 	osp->debug = mask;
 	XSRETURN_IV(old);
 
+void
+_lock_method(sub)
+	SV *sub
+	PPCODE:
+	if (SvROK(sub)) {
+	    sub = SvRV(sub);
+	    if (SvTYPE(sub) != SVt_PVCV)
+		sub = Nullsv;
+	} else {
+	    char *name = SvPV(sub, na);
+	    sub = (SV*)perl_get_cv(name, FALSE);
+	}
+	if (!sub)
+	    croak("invalid subroutine reference or name");
+	CvFLAGS(sub) |= CVf_LOCKED|CVf_METHOD;
+
 SV *
 set_stargate(code)
 	SV *code
 	CODE:
-	dOSP ;
-	ST(0) = osp->stargate? sv_mortalcopy(osp->stargate):&sv_undef;
-	if (!osp->stargate) { osp->stargate = newSVsv(code); }
-	else { sv_setsv(osp->stargate, code); }
+	ST(0) = osp_thr::stargate? sv_mortalcopy(osp_thr::stargate):&sv_undef;
+	if (!osp_thr::stargate) { osp_thr::stargate = newSVsv(code); }
+	else { sv_setsv(osp_thr::stargate, code); }
 
 void
 release_name()
@@ -182,10 +213,7 @@ initialize()
 	objectstore::set_auto_open_mode(objectstore::auto_open_disable);
 	objectstore::set_incremental_schema_installation(0);    //otherwise buggy
 #ifdef USE_THREADS
-	croak("ObjStore::initialize(): threads not supported yet");
-//	osp_thr::info_key = SvIV(ST(2));
 	objectstore::set_thread_locking(1);
-	//collections are left without protection...!
 #else
 	objectstore::set_thread_locking(0);
 #endif
@@ -238,7 +266,10 @@ get_all_servers()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv(sv_newmortal(), CLASS, svrs[xx] ));
+		SV *ref = sv_newmortal();
+		sv_setref_pv(ref, CLASS, svrs[xx]);
+		SvREADONLY_on(SvRV(ref));
+		PUSHs(ref);
 	}
 	delete [] svrs;
 
@@ -309,7 +340,9 @@ os_notification::receive(...)
 	if (items > 1) timeout = SvNV(ST(1)) * 1000;
 	os_notification *note;
 	if (os_notification::receive(note, timeout)) {
-	  XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Notification", note));
+	  SV *ret =sv_setref_pv(sv_newmortal(),"ObjStore::Notification", note);
+	  SvREADONLY_on(SvRV(ret));
+	  XPUSHs(ret);
 	} else {
 	  XPUSHs(&sv_undef);
 	}
@@ -355,7 +388,7 @@ OSSVPV::notify(why, ...)
 	  else if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), na), "commit")) now=0;
 	  else croak("%p->notify('%s', $when)", THIS, SvPV(why, na));
 	} else {
-	  warn("%p->notify($string): assuming $when eq 'commit', please specify");
+	  warn("%p->notify($string): assuming $when eq 'commit', please specify",THIS);
 	}
 	os_notification note;
 	note.assign(THIS, 0, SvPV(why, na)); //number slot is reserved
@@ -366,41 +399,48 @@ OSSVPV::notify(why, ...)
 
 #-----------------------------# Transaction
 
-# A stack of transactions is needed mostly to make sure
-# the nesting scheme makes sense.  Otherwise, you usually
-# care only about the most deeply nested transaction.
-
 MODULE = ObjStore	PACKAGE = ObjStore::Transaction
 
 osp_txn *
-new(how)
-	char *how
-	CODE:
+new(...)
+	PROTOTYPE: $;$$
+	PPCODE:
 	char *CLASS = "ObjStore::Transaction";
 	os_transaction::transaction_type_enum tt;
-	if (strEQ(how, "read")) tt = os_transaction::read_only;
-	else if (strEQ(how, "update")) tt = os_transaction::update;
-	else if (strEQ(how, "abort_only") ||
-	         strEQ(how, "abort")) tt = os_transaction::abort_only;
-	else croak("ObjStore::begin(%s): unknown transaction type", how);
-	RETVAL = new osp_txn(tt, os_transaction::local);
-	OUTPUT:
-	RETVAL
+	os_transaction::transaction_scope_enum scope;
+	os_transaction *cur = os_transaction::get_current();
+	if (!cur) {
+	  tt = os_transaction::read_only;
+	  scope = os_transaction::local;
+	} else {
+	  tt = cur->get_type();
+	  scope = cur->get_scope();
+	}
+	for (int arg=1; arg < items; arg++) {
+	  char *spec = SvPV(ST(arg),na);
+	  if (strEQ(spec, "read")) tt = os_transaction::read_only;
+	  else if (strEQ(spec, "update")) tt = os_transaction::update;
+	  else if (strEQ(spec, "abort_only") ||
+	         strEQ(spec, "abort")) tt = os_transaction::abort_only;
+	  else if (strEQ(spec, "local")) scope = os_transaction::local;
+	  else if (strEQ(spec, "global")) scope = os_transaction::global;
+	  else croak("ObjStore::Transaction::new(): unknown spec '%s'", spec);
+	}
+	new osp_txn(tt, scope);
+	SV **tsv = av_fetch(osp_thr::TXStack, AvFILL(osp_thr::TXStack), 0);
+	assert(tsv);
+	XPUSHs(sv_2mortal(newRV_inc(SvRV(*tsv))));
 
 void
-osp_txn::destroy()
+osp_txn::DESTROY()
 	CODE:
-	delete THIS;	//must be precise about when this happens
-
-void
-osp_txn::deadlocked()
-	PPCODE:
-	XSRETURN_IV(THIS->deadlocked);
+	DEBUG_txn(warn("delete txn(%p)", THIS));
+	delete THIS;
 
 void
 osp_txn::top_level()
 	PPCODE:
-	XSRETURN_IV(THIS->up == 0);
+	XSRETURN_IV(AvFILL(osp_thr::TXStack) == -1);
 
 void
 osp_txn::abort()
@@ -411,24 +451,36 @@ osp_txn::commit()
 void
 osp_txn::checkpoint()
 
+void
+osp_txn::name(...)
+	PROTOTYPE: $;$
+	PPCODE:
+	if (!THIS->os) XSRETURN_UNDEF;
+	if (items == 2) {
+	  THIS->os->set_name(SvPV(ST(1),na));
+	} else {
+	  char *str = THIS->os->get_name();
+	  XPUSHs(newSVpv(str, 0));
+	  delete str;
+	}
+
 char *
 SEGV_reason()
 	PPCODE:
-	dOSP ; dTXN ;
-	if (!txn || !txn->report) XSRETURN_UNDEF;
-	XSRETURN_PV(txn->report);
+	dOSP;
+	if (!osp->report) XSRETURN_UNDEF;
+	XPUSHs(newSVpv(osp->report, 0));
+	osp->report = 0;
 
 void
 osp_txn::post_transaction()
 
-osp_txn *
+void
 get_current()
-	CODE:
-	char *CLASS = "ObjStore::Transaction";
-	dOSP ; dTXN ;
-	RETVAL = txn;
-	OUTPUT:
-	RETVAL
+	PPCODE:
+	SV **tsv = av_fetch(osp_thr::TXStack, AvFILL(osp_thr::TXStack), 0);
+	assert(tsv);
+	XPUSHs(sv_mortalcopy(*tsv));
 
 void
 osp_txn::get_type()
@@ -635,7 +687,7 @@ os_database::is_writable()
 	PPCODE:
 	// not ODI spec; but more useful
 	if (THIS->is_open_read_only()) XSRETURN_NO;
-	dOSP; dTXN;
+	dTXN;
 	if (txn && txn->tt == os_transaction::read_only) XSRETURN_NO;
 	XSRETURN_YES;
 
@@ -693,14 +745,16 @@ os_database::get_all_segments()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv(sv_newmortal(), CLASS, segs[xx] ));
+		SV *ref = sv_newmortal();
+		sv_setref_pv(ref, CLASS, segs[xx]);
+		SvREADONLY_on(SvRV(ref));
+		PUSHs(ref);
 	}
 	delete [] segs;
 
 void
 os_database::_PRIVATE_ROOT()
 	PPCODE:
-	dOSP;
 	dTXN;
 	os_database_root *rt = THIS->find_root(private_root_name);
 	if (!rt && txn && txn->can_update(THIS)) {
@@ -1184,6 +1238,7 @@ OSPV_Generic::POP()
 	PPCODE:
 	PUTBACK;
 	SV *ret = THIS->POP();
+	//DEBUG_array(warn("%p->POP: %p", THIS, ret));
 	SPAGAIN;
 	if (ret) XPUSHs(ret);
 
@@ -1192,6 +1247,7 @@ OSPV_Generic::SHIFT()
 	PPCODE:
 	PUTBACK;
 	SV *ret = THIS->SHIFT();
+	//DEBUG_array(warn("%p->SHIFT: %p", THIS, ret));
 	SPAGAIN;
 	if (ret) XPUSHs(ret);
 

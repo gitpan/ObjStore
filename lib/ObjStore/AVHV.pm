@@ -106,6 +106,7 @@ sub new {
     my $o = $class->SUPER::new($near, $fmap->{__MAX__}+1);
     $o->[0] = $fmap;
     if ($init) {
+	confess "$o initializer is not a ref ($init)" if !ref $init;
 	while (my ($k,$v) = each %$init) {
 	    croak "Bad key '$k' for $fmap" if !exists $fmap->{$k};
 	    $o->{$k} = $v;

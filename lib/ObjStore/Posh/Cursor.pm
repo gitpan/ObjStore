@@ -3,9 +3,7 @@ package ObjStore::Posh::Cursor;
 use ObjStore ':ADV';
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-$VERSION = '0.70';
-
-# history?
+$VERSION = '0.71';
 
 sub new {
     my ($o) = shift->SUPER::new(@_);
@@ -13,6 +11,7 @@ sub new {
     die "expecting a ServerDB" 
 	if !$top->isa('ObjStore::ServerDB::Top');
     $$o{mtime} = time;
+    $$o{history} = [];
     $o->do_init();
     $o;
 }
@@ -20,7 +19,7 @@ sub new {
 use ObjStore::notify qw(init);
 sub do_init {
     my ($o) = @_;
-    $$o{where} = [[$top->new_ref($o,'hard')]];   #array of paths
+    $$o{where} = [[$o->database_of->hash->new_ref($o,'hard')]];   #array of paths
     $$o{at} = 0;
 }
 
@@ -100,21 +99,24 @@ sub resolve {
     } else {
 	my $err;
 	my $warn='';
-	local $SIG{__WARN__} = sub { $warn.=$_[0] };
-	begin sub {
-	    my $at = $o->myeval($to);
-	    if ($@) {
-		$err .= $warn.$@;
-	    } else {
-		$$o{out} = $warn;
-		push @at, $at;
-		if ($update) {
-		    $w->UNSHIFT([map { $_->new_ref($w,'hard') } @at]);
-		    pop @$w if @$w > 5;
-		    $$o{at} = 0;
+        {
+	    local $SIG{__WARN__} = sub { $warn.=$_[0] };
+	    begin sub {
+		local $Carp::Verbose = 1;
+		my $at = $o->myeval($to);
+		if ($@) {
+		    $err .= $warn.$@;
+		} else {
+		    $$o{out} = $warn;
+		    push @at, $at;
+		    if ($update) {
+			$w->UNSHIFT([map { $_->new_ref($w,'hard') } @at]);
+			pop @$w if @$w > 5;
+			$$o{at} = 0;
+		    }
 		}
-	    }
-	};
+	    };
+	}
 	warn if $@;
 	$$o{why} = $err if $err;
     }
@@ -124,9 +126,16 @@ sub resolve {
 sub do_execute {
     require ObjStore::Peeker;
     my ($o, $in) = @_;
+
     $in =~ s/\s+$//;
+    $in =~ s/^\s+//;
+    my $hist = $$o{history} ||= [];
+    push @$hist, $in;
+    shift @$hist if @$hist > 10;  #configurable?
+
     # use a fresh transaction: speed doesn't matter compared to safety
     begin sub {
+	local $Carp::Verbose = 1;
 	$$o{mtime} = time;
 	$$o{why} = '';
 	$$o{out} = '';
@@ -143,7 +152,7 @@ sub do_execute {
 	} elsif ($in =~ m/^(ls|peek|raw) \b \s* (.*?) \s* $/sx) {
 	    my ($cmd,$to) = ($1,$2);
 	    my @at;
-	    if ($to) {
+	    if (length $to) {
 		@at = $o->resolve($to, 0);
 	    } else {
 		my $at = $o->{where}[ $$o{at} ] ||= [];
@@ -162,25 +171,27 @@ sub do_execute {
 	} else {
 	    my $err = '';
 	    my $warn = '';
-	    local $SIG{__WARN__} = sub { $warn.=$_[0] };
-	    begin sub {
-		my @r = $o->myeval($in);
-		if ($@) {
-		    $err .= $warn.$@;
-		} else {
-		    my $p = ObjStore::Peeker->new(depth => 10, vareq => 1);
-		    my $out=$warn;
-		    for (@r) { $out .= $p->Peek($_) }
-		    $$o{out} = $out;
-		}
-	    };
+	    {
+		local $SIG{__WARN__} = sub { $warn.=$_[0] };
+		begin sub {
+		    local $Carp::Verbose = 1;
+		    my @r = $o->myeval($in);
+		    if ($@) {
+			$err .= $warn.$@;
+		    } else {
+			my $p = ObjStore::Peeker->new(depth => 10, vareq => 1);
+			my $out=$warn;
+			for (@r) { $out .= $p->Peek($_) }
+			$$o{out} = $out;
+		    }
+		};
+	    }
 	    warn if $@;
 	    $$o{why} = $err if $err;
 	}
     };
     if ($@) {
-	$o->do_init();
-	$$o{why} .= "\nreinitialized after $@";
+	$$o{why} .= $@;
     }
 }
 

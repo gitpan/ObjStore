@@ -4,17 +4,28 @@ use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
 use vars qw($VERSION @DB $DAEMON);
-$VERSION = '0.02';
+$VERSION = '0.51';
 $DAEMON = 1;
 my $default_server = 'ObjStore::ServerDB';
 
 for (my $arg=0; $arg < @ARGV; $arg++) {
     my $o = $ARGV[$arg];
-    if ($o =~ m/^ -d (ebug)? $/x) {
+    if ($o =~ m/^ -d(ebug)? $/x) {
 	# different flavors?
 	++$ObjStore::Notification::DEBUG_RECEIVE;
     } elsif ($o =~ m/^ -F (ore(ground)?)? $/x) {
 	$DAEMON = 0;
+    } elsif ($o =~ m/^-d(\w+)$/) {
+	# this style is preferred
+	for my $d (split / */, $1) {
+	    if ($d eq 'F') {
+		$DAEMON = 0;
+	    } elsif ($d eq 'n') {
+		++$ObjStore::Notification::DEBUG_RECEIVE;
+	    } else {
+		warn "unrecognized debug option '$d' (ignored)\n";
+	    }
+	}
     } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
 	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
         eval "require $m";
@@ -102,10 +113,6 @@ for (@DB) {
 	$top->boot(split /,/, $_->[2]);
 	my %objs;
 	for (values %$top) { $objs{$_} = $_ if blessed $_ }
-	for (values %objs) {
-	    # not much point in checking is_evolved...
-	    $_->evolve();
-	}
 	$top->restart() if $top->can('restart');
 	for (values %objs) {
 	    $_->restart() if $_->can('restart');
@@ -124,10 +131,12 @@ ObjStore::Process->Loop();
 sub usage {
     print "
 Usage: osperlserver [switches] database[=Class[+Class[,Class]]] [databases...]
-  -F[oreground]    do not fork
-  -Idirectory      specify @INC directory (may be used more than once)
+  -d\\w+
+     F             do not fork
+     n             copy notifications to stderr
+  -Idirectory      specify \@INC directory (may be used more than once)
   -[mM]module..    executes `use/no module...' (just like perl)
-  -v               print version number and patchlevel of osperlserver
+  -v               print version number (and exit)
 
     server:/full/path/to/database
        $default_server->new(...); boot();

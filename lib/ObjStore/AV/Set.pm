@@ -6,7 +6,7 @@ use vars qw($VERSION);
 use Carp;
 use ObjStore ':ADV';
 
-$VERSION = '0.04';
+$VERSION = '0.50';
 
 sub add {
     my ($o, $e) = @_;
@@ -32,7 +32,7 @@ sub exists {
 
 sub where {
     my ($o, $e) = @_;
-    return if !blessed $e || !$e->isa('ObjStore::UNIVERSAL');
+    return if !blessed $e;
     my $x;
     for (my $z=0; $z < $o->FETCHSIZE(); $z++) {
 	my $e2 = $o->[$z];
@@ -103,10 +103,11 @@ Implements an API very similar to C<ObjStore::Index>, except with an
 array implementation.  Elements are unsorted.  Both C<add> and
 C<remove> always scans the entire set.  
 
-This might seems like a joke, but keep in mind that this O(N)
-complexity algorithm takes constant time(Q) for all N<Q.  (Don't be
-too enamoured with computer-science theory.  :-)
+This might seems like a joke, but keep in mind that O(N) complexity
+algorithms takes constant time(Q) for all N<Q.  (Don't be too
+enamoured with computer-science theory.  :-)
 
-This class may be useful as a primary index for C<ObjStore::Table3>.
+This class might be useful as a primary index for C<ObjStore::Table3>
+(for small data sets).
 
 =cut

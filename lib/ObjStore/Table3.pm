@@ -75,8 +75,16 @@ sub anyx {
     if ($$o{_primary}) {
 	return $$o{_primary};
     } else {
-	for my $i (@{$$o{_allindices}}) {
-	    return $i if @$i;
+	if ($$o{_allindices}) {
+	    for my $i (@{$$o{_allindices}}) {
+		return $i if @$i;
+	    }
+	} else {
+	    # bend over backwards...!
+	    for my $i (values %$o) {
+		next unless blessed $i && $i->isa('ObjStore::Index');
+		return $i if @$i;
+	    }
 	}
     }
     undef;

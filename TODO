@@ -10,19 +10,33 @@ following in the body of your message:
 
 + IDEAS +
 
-study the perl compiler (ExCxx)
-
-perl magic should be non-lazy
-
+bridges must be per-thread & per-txn!
+  lists per thread:
+    active bridges for per-transaction
+    free list (& waiting for leave-scope)
+  txn completes: must invalidate all txn scoped bridges
+    lock txn-mutex
+    iterate through each thread
+  perl: bridge goes out of scope, must move to free list ASAP
+  optional transaction-level mutex to debug data accesses
 bridges
   use a doubly-linked ring
-  pool allocation
+  pool allocation (x64?)
+bridge must be optional!
+  transient data
+&
+  Perl variables do not need to increment database refcnts as long as
+  deleted data is not referenced.  Envision two modes:
+  1. Don't increment, but enable extra code to check for improper use.
+  2. Don't increment.  Performance should be better but crashes are
+     possible.
 
-Perl variables do not need to increment database refcnts as long as
-deleted data is not referenced.  Envision two modes:
-1. Don't increment, but enable extra code to check for improper use.
-2. Don't increment.  Performance should be better but crashes are
-possible.
+study the perl compiler (ExCxx)
+
+perl magic should be non-lazy!
+
+osperlserver -l:daily /tmp/log/qsg_gui.19980304?
+  maybe put logic in ObjStore::Process?
 
 Support for multiple application schemas
   generic scalar object typemap
@@ -30,14 +44,18 @@ Support for multiple application schemas
   REFCNT
   Bit::Vector
 
-transactions
-  keep a single transaction stack
-  begin('update!',...): force switch to update?
-  void os_transaction::set_name(const char*); 
-  char* os_transaction::get_name();
-
 
 + VAGUE POSSIBILITIES +
+
+-MObjStore=-Dflags ?
+
+transactions
+  prevent more than one thread from using a local transaction? (safe mode?)
+  begin('update!',...): force switch to update?
+
+qtposh
+  optionally distinguish between return and enter keys
+  word wrap, but it doesn't seem to be supported
 
 posh
   merge with ObjStore::Posh::Cursor?
@@ -73,8 +91,6 @@ permutation magic for AVHV
 
 translate('transient', $persistent)
 
-asyncronous signals can cause perl to SEGV? (known perl bug)
-
 move ObjStore::subscribe back into ObjStore::Notification?
 
 optimize splash suite
@@ -83,9 +99,6 @@ optimize splash suite
 
 ObjStore::Index
   $t->select(['*'], sub { my $r = shift; ... }); ??why
-
-Threads!
-  renovate thread specific stuff in ObjStore.xs
 
 pathexam
   invisibly auto-traverse references?

@@ -1,6 +1,7 @@
 use strict;
 package ObjStore::notify;
 use Carp;
+use vars qw($Debug);
 
 sub import {
     no strict 'refs';
@@ -10,7 +11,23 @@ sub import {
 	# add more intelligence for extra call tracking?
 #	croak "can't find method $ {p}::do_$m" 
 #	    unless defined *{"$ {p}::do_$m"}{CODE};
-	*{"$ {p}::$m"} = sub { shift->notify(join($;, $m, @_), 'now'); () };
+	*{"$p\::$m"} = sub {
+	    my $o = shift;
+	    if ($ObjStore::notify::Debug) {
+		my $ok=1;
+		for my $arg (@_) { $ok=0 if !defined $arg || $arg =~ / $; /x }
+		if (!$ok) {
+		    my @args;
+		    for my $arg (@_) { push @args, defined $arg?$arg:'UNDEF' }
+		    my $args = join(',', @args);
+		    $args =~ s/ $; /\$\;/gx;
+		    carp "$o->$p\::$m($args)\n";
+		}
+	    }
+	    my $msg = join($;, $m, @_);
+	    $o->notify($msg, 'now');
+	    ()
+	};
     }
 }
 

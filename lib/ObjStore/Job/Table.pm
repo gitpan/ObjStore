@@ -63,6 +63,7 @@ sub work {
 
     local $WorkLevel = 1;
     begin 'update', sub {
+	local $Carp::Verbose = 1;
 	$Interrupt = 0;
 	my @todo = @$priorities; #snapshot
 

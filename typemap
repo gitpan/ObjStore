@@ -8,13 +8,11 @@
 
 TYPEMAP
 
-os_server *		O_OBJECT
+os_server *		O_ROOBJECT
 os_database *		O_OBJECT
 os_database_root *	O_OBJECT
-os_database_reference *	O_OBJECT
+os_segment *		O_ROOBJECT
 os_notification *	O_OBJECT
-os_segment *		O_OBJECT
-os_segment_access *	O_OBJECT
 os_object_cursor *	O_OBJECT
 OSSVPV *		O_OSSVPV
 OSPV_Container *	O_OSSVPV
@@ -27,13 +25,21 @@ OSPV_Ref2 *		O_OSSVPV
 OSPV_Cursor2 *		O_OSSVPV
 OSPV_Ref *		O_OSSVPV
 OSPV_Cursor *		O_OSSVPV
-osp_bridge *		T_PTRREF
+osp_thr *		O_OBJECT
 osp_txn *		O_OBJECT
+osp_bridge *		T_PTRREF
 
 ######################################################################
 INPUT
 
 O_OBJECT
+	if( sv_isobject($arg) && (SvTYPE(SvRV($arg)) == SVt_PVMG) )
+		$var = ($type)SvIV((SV*)SvRV( $arg ));
+	else{
+		croak( \"${Package}::$func_name() -- $var is not a blessed SV reference\" );
+	}
+
+O_ROOBJECT
 	if( sv_isobject($arg) && (SvTYPE(SvRV($arg)) == SVt_PVMG) )
 		$var = ($type)SvIV((SV*)SvRV( $arg ));
 	else{
@@ -51,6 +57,10 @@ OUTPUT
 # char* having the name of the package for the blessing.
 O_OBJECT
 	sv_setref_pv( $arg, CLASS, (void*)$var );
+
+O_ROOBJECT
+	sv_setref_pv( $arg, CLASS, (void*)$var );
+	if (SvROK($arg)) SvREADONLY_on(SvRV($arg));
 
 O_OSSVPV
 	croak("not implemented");

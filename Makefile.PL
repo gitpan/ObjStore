@@ -104,7 +104,7 @@ WriteMakefile
 		       # Proc::Daemon
 		     },
      VERSION_FROM => 'lib/ObjStore.pm',
-     OPTIMIZE     => '-g -O2',
+     OPTIMIZE     => '-g',
      EXE_FILES  => [qw/ospeek posh qtposh osperlserver osp_hack/],
      'LIBS'     => ["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losths"],
      'DEFINE'   => "-DOSP_DEBUG -DSCHEMADIR=$sdir",

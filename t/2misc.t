@@ -1,6 +1,6 @@
 # even obscure -*-perl-*- should work
 use Test 1.03;
-BEGIN { plan tests => 16 }
+BEGIN { plan tests => 13 }
 
 use ObjStore ':ADV';
 use lib './t';

@@ -109,8 +109,6 @@ OSSV *OSPV_hvarray::STORE(SV *sv, SV *value)
     hv[hv.count()].hk.s(key, strlen(key)+1);
   }
   hv[xx].hv = value;
-  dTHR;
-  if (GIMME_V == G_VOID) return 0;
   return &hv[xx].hv;
 }
 

@@ -16,7 +16,7 @@ extern "C" {
 has no affect on correctness; it is just a debugging tool.
 Re-defining it to nothing avoids warnings from the solaris sunpro
 compiler.  If you see warnings on your system, figure out how to force
-your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
+your compiler to shut-up, and send me a patch. :-) */
 
 #endif
 
@@ -27,11 +27,8 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 }
 #endif
 
-// embed.h is a little too aggressive XXX
 #undef rs
-#undef op
-#undef GIMME_V
-#define GIMME_V            OP_GIMME(Perl_op, block_gimme())  //yikes!
+#include <ostore/ostore.hh>
 
 #if !defined(dTHR)
 #define dTHR extern int errno
@@ -39,8 +36,6 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 
 #undef croak
 #define croak osp_croak
-
-#include <ostore/ostore.hh>
 
 // Merge perl and ObjectStore typedefs...
 #undef I32
@@ -426,5 +421,6 @@ struct OSPV_Cursor : OSPV_Ref {
 };
 
 extern "C" void mysv_dump(SV *sv);
+extern "C" void mysv_lock(SV *sv);
 
 #endif

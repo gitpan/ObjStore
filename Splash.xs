@@ -206,6 +206,7 @@ void OSPV_avarray::UNSHIFT(SV **base, int items)
 void OSPV_avarray::SPLICE(int offset, int length, SV **base, int count)
 {
   if (length) {
+    dTHR;
     if (GIMME_V == G_ARRAY) {
       dOSP;
       SV **sv = new SV*[length];

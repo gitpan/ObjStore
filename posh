@@ -57,7 +57,7 @@ Usage: posh [switches] [database [class]]
   -[mM]module..    executes `use/no module...' (just like perl)
   -noescape        disables !shell escape
   -update          open databases in update mode
-  -v               print version number and patchlevel of posh (and exit)
+  -v               print version number (and exit)
 
 ";
 	exit;

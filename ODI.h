@@ -1,11 +1,10 @@
 //------------------------------------------------------------ODI
 
+#include "osp_hkey.h"
+
 // ObjectStore collections
-#include <ostore/coll.hh>
 #include <ostore/coll/cursor.hh>
 #include <ostore/coll/dict_pt.hh>
-
-#include "osp_hkey.h"
 
 struct OSPV_hvdict : OSPV_Generic {
   static os_typespec *get_os_typespec();

@@ -66,7 +66,9 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
 
   if (br) {
     // until exceptions are more reliable XXX
-    if (br->invalid()) croak("sv_2bridge: persistent data out of scope");
+    if (br->invalid()) {
+      croak("sv_2bridge: persistent data out of scope");
+    }
     return br;
   }
   if (!force) return 0;
@@ -81,8 +83,8 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
     XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Segment", seg));
     XPUSHs(ref);
     PUTBACK ;
-    assert(osp->stargate);
-    int count = perl_call_sv(osp->stargate, G_SCALAR);
+    assert(osp_thr::stargate);
+    int count = perl_call_sv(osp_thr::stargate, G_SCALAR);
     assert(count==1);
     SPAGAIN ;
     br = osp->sv_2bridge(POPs, 0);
@@ -761,7 +763,8 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
   if (CLASS) {
     // roll up into database open? XXX
     SV *toclass=0;
-    SV **msvp = hv_fetch(osp->CLASSLOAD, CLASS, *CLEN, 0); //in CACHE?
+    // will need to lock? XXX
+    SV **msvp = hv_fetch(osp_thr::CLASSLOAD, CLASS, *CLEN, 0); //in CACHE?
     if (msvp) toclass = *msvp;
 
     if (!toclass || !SvPOK(toclass)) {		// load and add to CACHE
@@ -795,7 +798,7 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
 	      SvPV(sv1, na), SvPV(sv2, na), SvPV(GvSV(errgv), na));
       }
       SvREFCNT_inc(toclass);
-      hv_store(osp->CLASSLOAD, CLASS, *CLEN, toclass, 0);
+      hv_store(osp_thr::CLASSLOAD, CLASS, *CLEN, toclass, 0);
       PUTBACK;
       FREETMPS;
       LEAVE;
@@ -885,7 +888,8 @@ int OSSVPV::can_update(void *vptr)
 {
   if (os_segment::of(this) == os_segment::of(0)) {
     // might be updating the transient index in read mode
-    dOSP; dTXN;
+    dTXN;
+    assert(txn);
     return txn->can_update(vptr);
   } else {
     // can only be in update mode
@@ -938,11 +942,13 @@ void OSSVPV::fwd2rep(char *methname, SV **top, int items)
 ospv_bridge::ospv_bridge(OSSVPV *_pv)
   : pv(_pv)
 {
+  // optimize XXX
+  // if transient, we shouldn't need a bridge! XXX
   is_transient = os_segment::of(pv) == os_segment::of(0);
   can_delete = 0;
   BrDEBUG_set(this, 0);
 
-  dOSP; dTXN;
+  osp_txn *txn = (osp_txn*) SvIV(txsv);
   assert(pv);
   STRLEN junk;
   DEBUG_bridge(this,warn("ospv_bridge 0x%x->new(%s=0x%x) is_transient=%d",
@@ -957,7 +963,7 @@ ospv_bridge::~ospv_bridge()
     croak("persistent data being used outside of it's transaction");
 }
 OSSVPV *ospv_bridge::ospv()
-{ assert(pv); return pv; }
+{ return pv; }
 int ospv_bridge::ready()
 { return can_delete && !pv; }
 void ospv_bridge::release()
@@ -975,17 +981,21 @@ void ospv_bridge::invalidate()
 void ospv_bridge::unref()
 {
   if (!pv) return;
-  OSSVPV *copy = pv;  //avoid any potential race condition
-  pv=0;
 
-  dOSP ; dTXN ;
-  assert(txn);
-  DEBUG_bridge(this, warn("ospv_bridge 0x%x->unref(pv=0x%x) updt=%d",
-		    this, copy, txn->can_update(copy)));
-  assert(copy);
-  if (txn->can_update(copy)) {
-    copy->REF_dec();
-  }
+  // avoid single thread race condition
+  OSSVPV *copy = pv; pv=0;
+
+  // going out of scope might happen after the next transaction has started
+  osp_txn *txn = (osp_txn*) SvIV(txsv);
+  mysv_lock(osp_thr::TXGV);      // any means to avoid it?
+  int can_update = txn->can_update(copy);
+  SvREFCNT_dec(txsv);
+
+  DEBUG_bridge(this, warn("ospv_bridge 0x%x->unref(pv=0x%x)", this, copy));
+
+  // a read transaction that skipped pre-commit invalidation
+  if (!can_update) return;
+  copy->REF_dec();
 }
 
 /*--------------------------------------------- INTERFACES */
@@ -1259,7 +1269,29 @@ void OSPV_Cursor::next()
 { NOTFOUND("next"); }
 
 //////////////////////////////////////////////////////////////////////
-// adapted from perl 5.004_63
+// adapted from perl 5.004_6\d
+
+void
+mysv_lock(SV *sv)
+{
+#ifdef USE_THREADS
+    dTHR;
+    MAGIC *mg = condpair_magic(sv);
+    MUTEX_LOCK(MgMUTEXP(mg));
+    if (MgOWNER(mg) == thr)
+	MUTEX_UNLOCK(MgMUTEXP(mg));
+    else {
+	while (MgOWNER(mg))
+	    COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
+	MgOWNER(mg) = thr;
+	DEBUG_L(PerlIO_printf(PerlIO_stderr(), "0x%lx: pp_lock lock 0x%lx\n",
+			      (unsigned long)thr, (unsigned long)sv);)
+	MUTEX_UNLOCK(MgMUTEXP(mg));
+	SvREFCNT_inc(sv);	/* keep alive until magic_mutexfree */
+	save_destructor(unlock_condpair, sv);
+    }
+#endif
+}
 
 #ifndef Perl_debug_log
 #define Perl_debug_log	PerlIO_stderr()

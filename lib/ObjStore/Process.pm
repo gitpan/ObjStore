@@ -14,8 +14,8 @@ use vars (qw($VERSION @ISA @EXPORT_OK),
 	  qw($Status $LoopLevel $ExitLevel),  #loop
 	 );
 $VERSION = '0.05';
-@ISA = qw(ObjStore::HV Event);
-@EXPORT_OK = qw(meter checkpoint);  #Loop Exit ?XXX
+@ISA = qw(ObjStore::HV Event Exporter);
+@EXPORT_OK = qw(txqueue txretry meter checkpoint);  #Loop Exit ?XXX
 #
 # We actually sub-class Event so other processes could theortically
 # send messages that tweaked remote event loops (without additional
@@ -92,6 +92,7 @@ sub autonotify {
 	my ($sz, $pend, $over) = ObjStore::Notification->queue_status();
 	$MAXPENDING = $pend if $pend > $MAXPENDING;
 	if ($over != $overflow) {
+	    # need better hook? XXX
 	    warn "lost ".($over-$overflow)." messages";
 	    $overflow = $over;
 	}
@@ -149,13 +150,12 @@ sub do_debug {
 use vars qw($TXN $TxnTime $Checkpoint $Elapsed $TType $UseOSChkpt
 	    @ONDIE);
 
-$TType = 'update';  #default to read XXX
+$TType = 'update';  #default to local, read XXX
 sub set_mode {
     my ($o,$m) = @_;
     $TType = $m;
 }
 
-# another API for full transaction commit?  do we run out of memory otherwise? XXX
 sub checkpoint { ++$Checkpoint }
 
 use vars qw($ABORT); # DEPRECIATED
@@ -172,7 +172,7 @@ sub _checkpoint {
 		if ($PROCESS) {
 		    if ($PROCESS->deleted()) {
 			ObjStore::Process->Exit(0);
-			die "another server is starting up, exiting...";
+			die "another server started up, exiting...";
 		    } 
 		    my $s = $PROCESS->focus();
 		    $chkpt_timer = $$s{chkpt_timer} if $$s{chkpt_timer};
@@ -200,10 +200,6 @@ sub _checkpoint {
 	    $TXN->checkpoint();
 	} else {
 	    $ok? $TXN->commit() : $TXN->abort();
-	    $TXN->post_transaction(); #2
-	    confess "transaction mismatch"
-		if pop @ObjStore::TxnStack != $TXN;
-	    $TXN->destroy();
 	    undef $TXN;
 	}
 	$ABORT=0;
@@ -212,9 +208,9 @@ sub _checkpoint {
     $Checkpoint=0;
     if ($continue) {
 	if (!$TXN) {
-	    confess "cannot nest dynamic transaction" if @ObjStore::TxnStack;
-	    $TXN = ObjStore::Transaction::new($TType);
-	    push @ObjStore::TxnStack, $TXN;
+	    confess "cannot nest dynamic transactions"
+		if @ObjStore::TXStack;
+	    $TXN = ObjStore::Transaction->new($TType);
 	}
 	$TxnTime = [gettimeofday];
 	Event->timer(-after => $chkpt_timer, -callback => sub { ++$Checkpoint; });
@@ -222,29 +218,100 @@ sub _checkpoint {
     }
 }
 
+use vars qw($TXOpen @TXtodo @TXready);
+
+sub txretry {
+    use attrs 'locked';
+    lock $TXOpen;
+    push @TXready, map { { retry => 1, code => $_ } } @_;
+}
+sub txqueue {
+    use attrs 'locked';
+    lock $TXOpen;
+    if ($TXOpen) {
+	$_->() for @_;
+    } else {
+	push @TXready, map { { retry => 0, code => $_ } } @_;
+    }
+}
+sub async_checkpoint {
+    # avoid regex! XXX
+    my ($sleep) = @_;
+    while ($ExitLevel >= 1) {
+	my $tx;
+	do { 
+	    lock $TXOpen;
+	    $tx = ObjStore::Transaction->new('global', 'read');
+	    $TXOpen = 1;
+	    push @TXready, @TXtodo;
+	    @TXtodo = ();
+	};
+	sleep $sleep;   #fractional? XXX
+	do {
+	    lock $TXOpen;
+	    $TXOpen=0;
+	    !$ABORT? $tx->commit() : $tx->abort();
+	    $ABORT=0;
+	};
+    }
+}
+
 sub ondie { push @ONDIE, $_[1]; }
 
 sub meter { ++ $METERS{ $_[$#_] }; }
 
-use vars qw($SigInit);
+use vars qw($Init);
 
-sub Loop {
+sub init_signals {
+    $SIG{HUP} = sub {};
+    for my $sig (qw(INT TERM)) {
+	$SIG{$sig} = sub { 
+	    my $why = "SIG$sig\n";
+	    ObjStore::Process->Exit($why);
+	};
+    }
+    $Init = 1;
+}
+
+*Loop = \&Loop_single;
+
+sub Loop_mt {
+    my ($o) = @_;
+    local $Status = 'abnormal';
+    local $LoopLevel = $LoopLevel+1;
+    ++$ExitLevel;
+    if (!$Init) {
+	&init_signals;
+    }
+    while ($ExitLevel >= $LoopLevel) {
+	eval {
+	    while ($ExitLevel >= $LoopLevel) {
+		Event->DoOneEvent();
+		next if !lock $TXOpen || !@TXready;
+		my @c = @TXready;
+		@TXready = ();
+		for my $j (@c) {
+		    my $c = $$j{code};
+		    if ($$j{retry}) { push @TXtodo if !$c->(); }
+		    else { $c->(); }
+		}
+	    }
+	};
+	if ($@) {
+	    ++$ABORT;
+	    warn $@;
+	}
+    }
+    $Status
+}
+
+sub Loop_single {
     my ($o,$waiter) = @_;
     local $Status = 'abnormal';
     local $LoopLevel = $LoopLevel+1;
     ++$ExitLevel;
 #    warn "Loop enter $LoopLevel $ExitLevel";
-
-    if (!$SigInit) {
-	$SIG{HUP} = sub {};
-	for my $sig (qw(INT TERM)) {
-	    $SIG{$sig} = sub { 
-		my $why = "SIG$sig\n";
-		ObjStore::Process->Exit($why);
-	    };
-	}
-	$SigInit = 1;
-    }
+    &init_signals if !$Init;
 
     $o->_checkpoint(1) if !$TXN;
     while ($ExitLevel >= $LoopLevel) {
@@ -330,7 +397,9 @@ $SIG{__DIE__} = sub { die '['.localtime()."] $EXE($$): $_[0]" };
 Experimental package to integrate ObjStore transactions with Event.
 Implements dynamic transactions.
 
-Read the source, Luke!
+Read the source, Luke!  You should probably cut-and-paste this code
+into your own application since it may continue to evolve.  Think of
+it as a cookbook...!
 
 =head1 AUTONOTIFY
 

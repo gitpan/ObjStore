@@ -18,7 +18,7 @@ use vars
     qw($DEFAULT_OPEN_MODE $MAX_RETRIES),                       # simulated
     qw($EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.36';
+$VERSION = '1.38';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -78,18 +78,15 @@ $SIG{SEGV} = \&$EXCEPTION
     unless defined $SIG{SEGV}; # MUST NOT BE CHANGED! XXX
 
 eval { require Thread::Specific; };
-undef $@;
+undef $@;   # only required if available
 bootstrap ObjStore($VERSION);
-
-#'Thread::Specific'->can('key_create')? 'Thread::Specific'->key_create() : 0
 
 END {
 #    debug(qw(bridge txn));
     if ($INITIALIZED) {
-	while (my $t = ObjStore::Transaction::get_current()) {
-	    $t->abort();
-	    $t->destroy();
-	}
+	lock %ObjStore::Transaction::;
+	my @copy = reverse @ObjStore::Transaction::Stack;
+	for (@copy) { $_->abort }
 	ObjStore::shutdown();
     }
 }
@@ -147,22 +144,9 @@ $MAX_RETRIES = 10;
 sub get_max_retries { $MAX_RETRIES; }
 sub set_max_retries { $MAX_RETRIES = $_[0]; }
 
-use vars qw(@TxnStack);
 sub begin {
-    my ($tt, $code);
-    my $ctt;
-    {
-	my $ctx = ObjStore::Transaction::get_current();
-	$ctt = $ctx->get_type if $ctx;
-    }
-    if (@_ == 1) {
-	$tt = $ctt || 'read';
-	$code = shift;
-    } elsif (@_ == 2) {
-	($tt, $code) = @_;
-    } else {
-	croak "begin([type], code)";
-    }
+    my $code = pop @_;
+    croak "last argument must be CODE" if !ref $code eq 'CODE';
 
     my $wantarray = wantarray;
     my @result;
@@ -170,8 +154,7 @@ sub begin {
     my $do_retry;
     do {
 	@result=();
-	my $txn = ObjStore::Transaction::new($tt);
-	push @TxnStack, $txn;
+	my $txn = ObjStore::Transaction->new(@_);
 	my $ok=0;
 	$ok = eval {
 	    if ($wantarray) {
@@ -184,13 +167,10 @@ sub begin {
 	    $txn->post_transaction(); #1
 	    1;
 	};
-	($ok and $tt !~ m'^abort') ? $txn->commit() : $txn->abort();
-	$txn->post_transaction(); #2
-	++ $retries;
-	$do_retry = ($txn->deadlocked && $txn->top_level &&
+	($ok and $txn->get_type !~ m'^abort') ? $txn->commit() : $txn->abort();
+	$do_retry = (!$ok and $@ =~ m/Deadlock/ and $txn->top_level and
 		     $retries < get_max_retries());
-	if (pop @TxnStack != $txn) { confess "transaction mismatch" }
-	$txn->destroy;
+	++ $retries;
 	die if ($@ and $FATAL_EXCEPTIONS and !$do_retry);
 
     } while ($do_retry);
@@ -441,7 +421,17 @@ sub STORE {
     $$o = $new;
 }
 
-# Psuedo-class to animate persistent bless!  (Kudos to Devel::Symdump :-)
+package ObjStore::Transaction;
+use vars qw(@Stack);
+#for (qw(new top_level abort commit checkpoint post_transaction
+#	get_current get_type),
+#     # experimental
+#     qw(prepare_to_commit is_prepare_to_commit_invoked
+#        is_prepare_to_commit_completed)) {
+#    ObjStore::_lock_method($_)
+#}
+
+# Psuedo-class to animate persistent bless..  (Kudos to Devel::Symdump :-)
 #
 package ObjStore::BRAHMA;
 use Carp;
@@ -612,11 +602,10 @@ sub isa_versions {
     confess "ObjStore::BRAHMA::isa_versions: loop in \@$pkg\::ISA"
 	if ++$depth > 100;
     no strict 'refs';
-    if (!defined $ {"$pkg\::VERSION"}) {
-	warn "\$$pkg\::VERSION must be assigned a version string!\n";
-    } else {
-	$vmap->{$pkg} = $ {"$pkg\::VERSION"};
-    }
+#    if (!defined $ {"$pkg\::VERSION"}) {
+#	warn "\$$pkg\::VERSION must be assigned a version string!\n";
+#    }
+    $vmap->{$pkg} = $ {"$pkg\::VERSION"} || '0.001';
     for my $z (@{"$pkg\::ISA"}) { isa_versions($z, $vmap, $depth); }
     $vmap;
 }
@@ -985,8 +974,6 @@ use Carp;
 
 sub segment_of { $_[0]; }
 sub database_of { $_[0]->_database_of->import_blessing; }
-
-sub BLESS { croak "Segments absolutely cannot be blessed (you segment head!)" }
 
 sub destroy {
     my ($o) = @_;

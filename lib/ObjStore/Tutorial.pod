@@ -11,6 +11,9 @@ The HTML version is easier to read than the man page version.
 Once you have won a few times, make sure to read the source code to
 see how easy it is to put stuff like this together.
 
+[Caveat: I haven't had time to update the tutorial for quite a few
+releases.  Sorry!]
+
 =head1 DESCRIPTION
 
 C<I</home/joshua%> B<posh>>

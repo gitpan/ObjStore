@@ -1,6 +1,10 @@
 #ifndef __osp_hkey__
 #define __osp_hkey__
 
+// perl overlaps with _Mapping_ext::op method!
+#undef GIMME_V
+#undef op
+
 #include <ostore/coll.hh>
 
 // 8 bytes

@@ -1,7 +1,9 @@
-Devel/Maker.pm
+CHANGES
 INSTALL
 MANIFEST
 MANIFEST.bak
+Maker/Package.pm
+Maker/Rules.pm
 ObjStore.pm
 ObjStore.xs
 PoweredByOS.gif
@@ -9,9 +11,13 @@ README
 TODO
 be
 bugrep015834
-osperl-schema.c
+evo.c
+osperl-3-schema.c
+osperl-old.hh
 osperl.c
 osperl.hh
+ospevo-1-schema.c
+sack.pl
 splash.h
 t/basic.t
 t/cursor.t

@@ -8,15 +8,11 @@ Name           DSLI  Description                                  Info
 ObjStore       am+O  ObjectStore DBMS Interface                   JPRIT
 
 Easy, flexible, lightning-fast persistent via ObjectStore.  Stores
-scalars, hashes, and references without any flattening.  The perl tie
-interface is used to make access completely transparent.  The schema
-is also designed to easily support direct access from native C++ and
-potentially Java.  MOP support is planed for editing and reporting on
-arbitrary schemas.  100GB databases can be created and managed
-completely in Perl5 with vastly better performance than Oracle or
-Informix!
-
+scalars, hashes, and references without flattening.  Perl databases
+can be accessed from C++ and/or Java.  Inversely, persistent C++ 
+objects can be added back into Perl!
            << This is the relational database killer app! >>
+
 
 Perl-ObjectStore mailing list:
 
@@ -24,25 +20,43 @@ majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
 
 
 see ./INSTALL for installation instructions
-
 see ./TODO for list of things to do
+see ./CHANGES for a historical perspective
 
 
-### CHANGES ###
+### RECENT CHANGES ###
+
+
+** Released 1.03
+
+- Investigated schema evolution.  Will provide a database evolver
+going forward.
+
+- Can't wait for reasonable tied arrays!  Added array-based Sacks.
+They're not tied, but at least they're inefficient.
+
+- Found and fixed problems with reference counting.  Now the tests
+can be run and the database does not grow.
+
+- Blessings are now persistent!  (Untested)
+
+- Re-designed the make system again.
+
+- Started writing documentation.  (Yawn.)
 
 
 ** Released 1.02
 
-- Improved makefile.  Fixed blib.  Usage now looks like this:
+- Improved make file.  Fixed blib.  Usage now looks like this:
 
 perl ./be [-nop] [-silent] [-verbose] <cmd>
    checked      - verify that the package is complete
-   made         - run the compiler, etc.
+   made         - run the compiler, toast the pop-tarts, etc.
    installed    - copy files to final install area
    uninstalled  - delete any files that were installed
    cleaned      - delete all temporary files
-   manifested   - update the MANIFEST file
-   guitarred    - create a tar.gz distribution file
+   manifest     - update the MANIFEST file
+   dist         - create a tar.gz distribution file
 
 - Fixed version numbering for Exporter.  1.2 => 1.02
 

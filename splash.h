@@ -217,7 +217,7 @@ int newfirst;
     os_segment *WHERE = os_segment::of(a);
     T *tmp= new(WHERE, T::get_os_typespec(),allocated) T[allocated];
     newfirst= (allocated>>1) - (newcnt>>1);
-    for(int i=0;i<cnt;i++) tmp[newfirst+i].operator=(&a[first+i]);
+    for(int i=0;i<cnt;i++) tmp[newfirst+i].operator=(a[first+i]);
 #ifdef	DEBUG
     fprintf(stderr, "SPListBase::grow() a= %p, old= %p, allocinc= %d, first= %d, amnt= %d, cnt= %d, allocated= %d\n",
             tmp, a, allocinc, first, amnt, cnt, allocated);

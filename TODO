@@ -29,9 +29,6 @@ Of course, there is always room for improvement!
 
 + CORE CHANGES +
 
-Copy a bunch of test scripts from the perl release and adapt them
-for ObjStore.  Add a test script to check reference counting.
-
 Turn ObjectStore exceptions into catchable perl exceptions?
 At least dump the perl caller stack!
 
@@ -41,14 +38,17 @@ Programmer friendly C++ access to persistent perl data structures
 Get or $h->{foo}=undef should not attempt to modify during read transaction!
 This is hard to fix until OS exceptions print the perl caller stack.
 
-Fix typemap bug that forces users to untie tied variables manually.
+Fix typemap bug that forces users to untie tied variables manually.  (Fixed?)
 
 Track down any/all XS transient memory leaks.  Is there any way to
 avoid copying from persistent to transient memory?  For example, can
 we pass persistent strings directly back to perl?
 
 Check wantarray before returning an ossv?  Creating a tied hash is
-time consuming?
+performance hit?
+
+Copy a bunch of test scripts from the perl release and adapt them
+for ObjStore.  Add a test script to check reference counting.
 
 Disable assertions if optimization.
 
@@ -59,8 +59,19 @@ xsubpp C++ ideas
  - should be able to insert CODE between INPUT tags
  - should warn if mismatch between arglist & arg decls
 
+Peek should finish on circular data structures.
+
+User specified expected cardinality when creating containers?
+
+static OSSV::get_name(ossv_*v) -> string
+
 
 + BIGGISH PROJECTS +
+
+Make ObjStore a shared library!  Make it easy to add additional
+extension that implement high performance persistent objects/collections
+dynamically.  Split out the timeseries & text object managers into
+separate shared objects.  Dream about Apache/Perl/ObjStore integration!
 
 Add arrays.  Maybe wait until perl-porters improve TIEARRAY interface.
 Add support for parts of the TimeSeries Object Manager but not with tied vars.
@@ -70,19 +81,13 @@ Add support for the Text Object Manager!
 BIG Collections could be blessed (not tied) objects using os_set or os_Dictionary.
   os_set ordered by a perl sub?  direct C++ access still ok & easy?
 
-Make ObjStore a shared library!  Make it easy to add additional
-extension that implement high performance persistent objects/collections
-dynamically.  Split out the timeseries & text object managers into
-separate shared objects.  Dream about Apache/Perl/ObjStore integration!
-
-Add MOP support for editing & reporting of abritrary databases!
---> ObjectDesign - Claudio Demarco - 617-674-5346
-
 Expand Make.pm to encompass all architectures/compilers/situations.
 Integrate with and replace MakeMaker.
 
 Could perl performance be improved for tied varibles?  Cache method
 entry points with magic and rewrite all perl support code in C++?
 Do data structure traversals in C instead of perl?  (like Data::DumperX)
+
+Add MOP support for editing & reporting of abritrary databases (?)
 
 

@@ -6,10 +6,10 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-sub ok { print "ok $tx\n"; $tx++; }
+sub ok { print "ok $tx\n"; $tx++; }  # this is a dubious aide
 sub not_ok { print "not ok $tx\n"; $tx++; }
 
-BEGIN { $| = 1; $tx=1; print "1..9\n"; }
+BEGIN { $| = 1; $tx=1; print "1..7\n"; }
 END {not_ok unless $loaded;}
 use ObjStore;
 $loaded = 1;
@@ -31,12 +31,11 @@ ok; #1
 
 	if (! $john) {
 	    my $hv = $DB->newHV('array');
-	    $hv->refs == 0? ok:not_ok; #3
 	    ref $hv eq 'ObjStore::HV' ? ok:not_ok;
 	    $john = $DB->root('John', $hv);
-	    $hv->refs == 1? ok:not_ok;
+	    tied(%$john)->Type eq 'HASH' or die $john;
 	} else {
-	    ok; ok; ok;
+	    ok;
 	}
 
 	## roots
@@ -46,9 +45,14 @@ ok; #1
 
 	## force OSPV_array to grow
 
-	for (1..10) { $john->{$_} = "Stringish$_"; }
+	for (1..10) { $john->{$_} = "String $_"; }
+
+	my $dict = $john->{dict} = $DB->newHV('dict');
+	for (1..10) { $dict->{$_} = $_ * 3.14159; }
 
 	## basic counter
+
+	tied(%$john)->Type eq 'HASH' or die $john;
 
 	my $cnt;
 	if (exists $john->{cnt}) {
@@ -68,7 +72,7 @@ ok; #1
 	    ok;
 	}
     };
-    print "[Abort] $@\n" if $@;
+    die "[Abort] $@\n" if $@;
     
     $DB->close;
     ok;

@@ -31,11 +31,11 @@ See $SchemaDir in ./be.
     { # osperl
 	my $inst = {
 	    script => [ 'ospeek' ],
-	    man3 => [ 'ObjStore.3', 'Eval.3', 'PHTML.3' ],
-	    lib => ['ObjStore.pm', 'ObjStore/',
+	    man3 => [ 'ObjStore.3' ],
+	    lib => ['ObjStore.pm', 'ObjStore/', 'ObjStore/GENERIC.pm',
 		    'ObjStore/Peeker.pm', 'ObjStore/PoweredByOS.gif',
-		    'Eval.pm', 'HTML/', 'HTML/PHTML.pm',
-		    'ObjStore/ObjStore.html', 'Eval.html', 'HTML/PHTML.html']};
+		    'ObjStore/ObjStore.html'],
+	};
 
 	if ($linkage eq 'dyn') {
 	    $inst->{arch} = ['auto/ObjStore/', 'auto/ObjStore/ObjStore.so'];
@@ -52,11 +52,10 @@ See $SchemaDir in ./be.
 					     ($r->cxx('perlmain.c'),
 					      $r->embed_perl('ObjStore')) :
 					     ()),
-					    $r->objstore($SchemaDir, 'osperl-04',
+					    $r->objstore($SchemaDir, 'osperl-05',
 							 ['collections']),
 					    $r->cxx('osperl.c'),
-					    $r->cxx('hv_builtin.c'),
-					    $r->cxx('set_builtin.c'),
+					    $r->xs('GENERIC.xs'),
 					    $r->xs('ObjStore.xs'),
 					    ),
 			   ($linkage eq 'dyn'?
@@ -66,9 +65,7 @@ See $SchemaDir in ./be.
 	$pk->a(new Maker::Seq($r->blib($inst), 
 			      new Maker::Phase($build,
 					       $r->pod2man('ObjStore.pod', 3),
-					       $r->pod2man('Eval.pm', 3),
-					       $r->pod2man('PHTML.pm', 3),
-					       $r->pod2html('ObjStore.pod', 'Eval.pm', 'PHTML.pm')),
+					       $r->pod2html('ObjStore.pod')),
 			      $r->populate_blib($inst),
 			      new Maker::Unit('osperl', sub {}),
 			      ),
@@ -85,20 +82,20 @@ See $SchemaDir in ./be.
 	    $pk->x("osrm -f $SchemaDir/perltest.db");
 	});
     }
-    { # ospevo
-	my $inst = { bin => [ 'ospevo' ] };
+    { # perldb
+	my $inst = { bin => [ 'perldb_util' ] };
 	my $r = new Maker::Rules($pk, 'perl-module');
 	$r->flags('cxx', "-I$Config{archlibexp}/CORE");
-
 	$pk->a(new Maker::Seq($r->blib($inst),
 			      new Maker::Phase('parallel',
-					       $r->objstore($SchemaDir, 'ospevo-01', [qw(evolution queries mop dbutil collections)]),
-					       $r->cxx('evo.c'),
+					       $r->objstore($SchemaDir, 'perldb-01', [qw(compactor dbutil queries collections)]),
+					       $r->cxx('edit.c'),
 					       $r->embed_perl(),
 					       $r->cxx('osperl.c'),
+					       $r->cxx('hv_builtin.c'),
 					       ),
-			      $r->link('cxx', 'ospevo'),
-			      new Maker::Unit('ospevo', sub{}),
+			      $r->link('cxx', 'perldb_util'),
+			      new Maker::Unit('util', sub{}),
 			      ),
 #	       $r->install($inst),
 #	       $r->uninstall($inst),

@@ -6,10 +6,10 @@ sub not_ok { print "not ok $tx\n"; $tx++; }
 use ObjStore;
 
 my $osdir = ObjStore->schema_dir;
-my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
+my $DB = ObjStore::open($osdir . "/perltest.db", 0, 0666);
 
 try_abort_only {
-    my $mess = new ObjStore::HV($DB, 'array');
+    my $mess = new ObjStore::HV($DB, 'splash_array', 7);
     my $dict = $mess->{dict} = new ObjStore::HV($mess);
     for (1..200) { $mess->{$_} = $_; }
     $dict->{foo} = 'bar';

@@ -207,7 +207,7 @@ sub _peek {
 	$o->o("},");
 	$o->nl;
     } elsif ($type eq 'ARRAY') {
-	croak "Peek doesn't do arrays yet";
+	$o->o($name . " [ ?? ],");
     } else {
 	die "Unknown type '$type'";
     }

@@ -2,8 +2,6 @@
 Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
 This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
-
-What is the most efficient way to manipulate the perl stack?
 */
 
 #include <assert.h>
@@ -11,6 +9,15 @@ What is the most efficient way to manipulate the perl stack?
 #include "osperl.hh"
 
 //----------------------------- Constants
+
+static auto_open_mode_enum str_2auto_open(char *str)
+{
+  if (strcmp(str, "read")==0) return objectstore::auto_open_read_only;
+  if (strcmp(str, "mvcc")==0) return objectstore::auto_open_mvcc;
+  if (strcmp(str, "update")==0) return objectstore::auto_open_update;
+  if (strcmp(str, "disable")==0) return objectstore::auto_open_disable;
+  croak("str_2auto_open: %s unrecognized", str);
+}
 
 static os_fetch_policy str_2fetch(char *str)
 {
@@ -31,23 +38,24 @@ static objectstore_lock_option str_2lock_option(char *str)
 //----------------------------- Exceptions
 
 DEFINE_EXCEPTION(perl_exception,"Perl-ObjStore Exception",0);
-static tix_handler *global_handler=0;
-static int objectstore_exception;
+static tix_handler *current_handler=0;
+static int got_os_exception;
+static int deadlocked;
 
-static void osperl_exception_hook(tix_exception_p cause, os_int32 value,
-	os_char_p report)
+static void
+osperl_exception_hook(tix_exception_p cause, os_int32 value, os_char_p report)
 {
   dSP ;
   PUSHMARK(sp) ;
   XPUSHs(sv_2mortal(newSVpv(report, 0)));
   PUTBACK;
-  SV *hdlr = perl_get_sv("ObjStore::Exception", 0);
+  SV *hdlr = perl_get_sv("ObjStore::EXCEPTION", 0);
   assert(hdlr);
 
-  if (global_handler) {		// OS exception within a transaction; no sweat
+  if (current_handler) {	// OS exception within a transaction; no sweat
 
-    objectstore_exception=1;
-    global_handler->_unwind_part_1(cause, value, report);
+    got_os_exception=1;
+    current_handler->_unwind_part_1(cause, value, report);
     perl_call_sv(hdlr, G_DISCARD);
 
   } else {			// emergency diagnostics
@@ -57,129 +65,148 @@ static void osperl_exception_hook(tix_exception_p cause, os_int32 value,
   }
 }
 
-// These XS functions are implemented directly in C++.
-// It is absolutely important that they work flawlessly.
+static void
+osperl_abort_top_level()
+{
+  os_transaction *txn;
+  txn = os_transaction::get_current();
+  while (txn) {
+    os_transaction::abort(txn);
+    delete txn;
+    txn = os_transaction::get_current();
+  }
+}
+
+static int txn_nested;
+
+static void
+osperl_transaction(os_transaction::transaction_type_enum tt,
+		   os_transaction::transaction_scope_enum scope_in)
+{
+  int retries;
+
+  dSP; dMARK;
+  I32 items = SP - MARK;
+  if (items != 1) croak("Usage: ObjStore::try_*(code)");
+
+  SV *code = POPs ;
+
+  if (os_transaction::get_current()) die("Nested transactions are unsupported");
+
+  if (!os_transaction::get_current()) {
+    //    warn("begin top");
+    retries=0;
+    txn_nested=0;
+    deadlocked=0;
+  }
+
+  PUTBACK ;
+  
+  RETRY: {
+    // Since perl_exception has no parent and is never signalled, we always
+    // get an unhandled exception when objectstore tries to throw an exception.
+
+    tix_handler bang(&perl_exception);
+    got_os_exception=0;
+    tix_handler *old_handler = current_handler;
+    current_handler = &bang;
+
+    os_transaction::begin(tt, scope_in, os_transaction::get_current());
+    
+    SPAGAIN ;
+    //    ENTER ;
+    //    SAVETMPS;
+    PUSHMARK(sp) ;
+    PUTBACK ;
+    ++ txn_nested;
+    int count = perl_call_sv(code, G_NOARGS|G_EVAL|G_DISCARD);
+    assert(count==0);
+    -- txn_nested;
+    //    warn("return to level %d", txn_nested);
+    //    FREETMPS ;
+    //    LEAVE ;
+    
+    if (got_os_exception) {
+      got_os_exception=0;
+      current_handler->_unwind_part_2();
+      tix_exception *ex = current_handler->get_exception();
+      if (ex && ex->ancestor_of(&err_deadlock)) {  //deadlock
+	//	warn("deadlock");
+	SV *error = GvSV(errgv);
+	sv_setpv(error, current_handler->get_report());
+	deadlocked=1;
+	osperl_abort_top_level();
+      }
+    }
+    current_handler=old_handler;
+    os_transaction *txn = os_transaction::get_current();
+    //    warn("transaction=0x%x", txn);
+    if (!txn) {
+      if (txn_nested) {
+	char *tmps = SvPV(GvSV(errgv), na);
+	if (!tmps || !*tmps) tmps = "Died";
+	//	warn("pop transaction");
+	die("%s", tmps);
+      }
+    } else {
+      if (SvTRUE(GvSV(errgv)) || tt == os_transaction::abort_only)
+	os_transaction::abort(txn);
+      else
+        os_transaction::commit(txn);
+      delete txn;
+    }
+  }
+  if (txn_nested==0 &&
+      deadlocked && retries++ < os_transaction::get_max_retries()) {
+    deadlocked=0;
+    //    warn("goto retry");
+    goto RETRY;
+  }
+  //  if (!txn_nested) warn("end top");
+}
 
 XS(XS_ObjStore_try_read)
-{
-	dXSARGS;
-	if (items != 1) croak("Usage: ObjStore::try_read(code)");
-	SP -= items;
-	SV *code = ST(0);
-
-//	ENTER ;
-//	SAVETMPS;
-
-	tix_handler bang(&perl_exception);
-	objectstore_exception=0;
-	tix_handler *old_handler = global_handler;
-	global_handler = &bang;
-	os_transaction::begin(os_transaction::read_only);
-
-	PUSHMARK(sp) ;
-
-	int count = perl_call_sv(code, G_NOARGS|G_EVAL|G_DISCARD);
-
-//	SPAGAIN ;
-
-	if (SvTRUE(GvSV(errgv))) {
-	  if (objectstore_exception) global_handler->_unwind_part_2();
-	  objectstore_exception=0;
-	}
-	os_transaction::commit();
-	global_handler=old_handler;
-
-//	PUTBACK ;
-//	FREETMPS ;
-//	LEAVE ;
-}
-
-XS(XS_ObjStore_try_abort_only)
-{
-	dXSARGS;
-	if (items != 1) croak("Usage: ObjStore::try_abort_only(code)");
-	SP -= items;
-	SV *code = ST(0);
-
-//	ENTER ;
-//	SAVETMPS;
-
-	tix_handler bang(&perl_exception);
-	objectstore_exception=0;
-	tix_handler *old_handler = global_handler;
-	global_handler = &bang;
-	os_transaction::begin(os_transaction::abort_only);
-
-	PUSHMARK(sp) ;
-
-	int count = perl_call_sv(code, G_NOARGS|G_EVAL|G_DISCARD);
-
-//	SPAGAIN ;
-
-	if (SvTRUE(GvSV(errgv))) {
-	  if (objectstore_exception) global_handler->_unwind_part_2();
-	  objectstore_exception=0;
-	}
-	os_transaction::abort();
-	global_handler=old_handler;
-
-//	PUTBACK ;
-//	FREETMPS ;
-//	LEAVE ;
-}
+{ osperl_transaction(os_transaction::read_only, os_transaction::local); }
 
 XS(XS_ObjStore_try_update)
-{
-	dXSARGS;
-	if (items != 1) croak("Usage: ObjStore::try_update(code)");
-	SP -= items;
-	SV *code = ST(0);
+{ osperl_transaction(os_transaction::update, os_transaction::local); }
 
-//	ENTER ;
-//	SAVETMPS;
+XS(XS_ObjStore_try_abort_only)
+{ osperl_transaction(os_transaction::abort_only, os_transaction::local); }
 
-	tix_handler bang(&perl_exception);
-	objectstore_exception=0;
-	tix_handler *old_handler = global_handler;
-	global_handler = &bang;
-	os_transaction::begin(os_transaction::update);
-
-	PUSHMARK(sp) ;
-
-	int count = perl_call_sv(code, G_NOARGS|G_EVAL|G_DISCARD);
-
-//	SPAGAIN ;
-
-	if (SvTRUE(GvSV(errgv))) {
-	  if (objectstore_exception) global_handler->_unwind_part_2();
-	  objectstore_exception=0;
-	  os_transaction::abort();
-	} else {
-	  os_transaction::commit();
-	}
-	global_handler=old_handler;
-
-//	PUTBACK ;
-//	FREETMPS ;
-//	LEAVE ;
-}
+// lookup static symbol (not needed if dynamically linked)
+extern "C" XS(boot_ObjStore__GENERIC);
 
 //----------------------------- ObjStore
 
 MODULE = ObjStore	PACKAGE = ObjStore
 
 BOOT:
+  // Nuke the following line if you are dynamic-linking ObjStore::GENERIC
+  newXS("ObjStore::GENERIC::bootstrap", boot_ObjStore__GENERIC, file);
+  //
+  SV* me = perl_get_sv("0", FALSE);
+  assert(me);
+  objectstore::set_client_name(SvPV(me, na));
   objectstore::initialize();		// should delay boot for flexibility? XXX
+  objectstore::set_incremental_schema_installation(1);
   objectstore::set_thread_locking(0);	// threads support...?!
-  os_collection::set_thread_locking(0);
-  os_index_key(hkey, hkey::rank, hkey::hash);
   tix_exception::set_unhandled_exception_hook(osperl_exception_hook);
+  osperl::boot_thread();
   newXSproto("ObjStore::try_read", XS_ObjStore_try_read, file, "&");
-  newXSproto("ObjStore::try_abort_only", XS_ObjStore_try_abort_only, file, "&");
   newXSproto("ObjStore::try_update", XS_ObjStore_try_update, file, "&");
+  newXSproto("ObjStore::try_abort_only", XS_ObjStore_try_abort_only, file, "&");
 
-static char *
-ObjStore::schema_dir()
+SV *
+reftype(ref)
+	SV *ref
+	CODE:
+	if (!SvROK(ref)) XSRETURN_NO;
+	ref = SvRV(ref);
+	XSRETURN_PV(sv_reftype(ref, 0));
+
+char *
+schema_dir(...)
 	CODE:
 	RETVAL = SCHEMADIR;
 	OUTPUT:
@@ -195,20 +222,12 @@ _enable_blessings(yes)
 	RETVAL
 
 SV *
-gateway(code)
+set_gateway(code)
 	SV *code
 	CODE:
 	ST(0) = osperl::gateway? sv_2mortal(newSVsv(osperl::gateway)): &sv_undef;
 	if (!osperl::gateway) { osperl::gateway = newSVsv(code); }
 	else { sv_setsv(osperl::gateway, code); }
-
-SV *
-reftype(ref)
-	SV *ref
-	CODE:
-	if (!SvROK(ref)) XSRETURN_NO;
-	ref = SvRV(ref);
-	XSRETURN_PV(sv_reftype(ref, 0));
 
 char *
 release_name()
@@ -239,46 +258,33 @@ release_maintenance()
 	RETVAL
 
 int
+network_servers_available()
+	CODE:
+	RETVAL = objectstore::network_servers_available();
+	OUTPUT:
+	RETVAL
+
+void
+set_auto_open_mode(mode, fp, ...)
+	char *mode
+	char *fp
+	PROTOTYPE: $$;$
+	CODE:
+	os_int32 sz = 0;
+	if (items == 3) sz = SvIV(ST(2));
+	objectstore::set_auto_open_mode(str_2auto_open(mode), str_2fetch(fp), sz);
+
+int
 get_page_size()
 	CODE:
 	RETVAL = objectstore::get_page_size();
 	OUTPUT:
 	RETVAL
 
-void
-begin_update()
-	CODE:
-	os_transaction::begin(os_transaction::update);
-	warn("ObjStore::begin_update() depreciated");
-
-void
-begin_read()
-	CODE:
-	os_transaction::begin(os_transaction::read_only);
-	warn("ObjStore::begin_read() depreciated");
-
-void
-begin_abort()
-	CODE:
-	os_transaction::begin(os_transaction::abort_only);
-	warn("ObjStore::begin_abort() depreciated");
-
-void
-commit()
-	CODE:
-	os_transaction::commit();
-	warn("ObjStore::commit() depreciated");
-
-void
-abort()
-	CODE:
-	os_transaction::abort();
-	warn("ObjStore::abort() depreciated - use 'die'");
-
 int
-abort_in_progress()
+return_all_pages()
 	CODE:
-	RETVAL = objectstore::abort_in_progress();
+	RETVAL = objectstore::return_all_pages();
 	OUTPUT:
 	RETVAL
 
@@ -293,9 +299,27 @@ get_all_servers()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv( newSViv(0) , CLASS, svrs[xx] ));
+		PUSHs(sv_setref_pv(sv_newmortal() , CLASS, svrs[xx] ));
 	}
 	delete [] svrs;
+
+os_database *
+database_of(ospv)
+	OSSVPV *ospv
+	CODE:
+	char *CLASS = "ObjStore::Database";
+	RETVAL = os_database::of(ospv);
+	OUTPUT:
+	RETVAL
+
+os_segment *
+segment_of(sv)
+	SV *sv
+	CODE:
+	char *CLASS = "ObjStore::Segment";
+	RETVAL = osperl::sv_2segment(sv);
+	OUTPUT:
+	RETVAL
 
 #-----------------------------# Server
 
@@ -324,19 +348,33 @@ os_server::get_databases()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv( newSViv(0) , CLASS, dbs[xx] ));
+		PUSHs(sv_setref_pv( sv_newmortal() , CLASS, dbs[xx] ));
 	}
 	delete [] dbs;
 
 #-----------------------------# Database
 
-MODULE = ObjStore	PACKAGE = ObjStore::Database
+MODULE = ObjStore	PACKAGE = ObjStore
 
-static os_database *
-os_database::open(pathname, read_only, create_mode)
+os_database *
+open(pathname, read_only, create_mode)
 	char *pathname
 	int read_only
 	int create_mode
+	CODE:
+	char *CLASS = "ObjStore::Database";
+	RETVAL = os_database::open(pathname, read_only, create_mode);
+	OUTPUT:
+	RETVAL
+
+int
+get_n_databases()
+	CODE:
+	RETVAL = os_database::get_n_databases();
+	OUTPUT:
+	RETVAL
+
+MODULE = ObjStore	PACKAGE = ObjStore::Database
 
 void
 os_database::close()
@@ -349,6 +387,12 @@ os_database::get_default_segment_size()
 
 int
 os_database::get_sector_size()
+
+int
+os_database::size()
+
+int
+os_database::size_in_sectors()
 
 time_t
 os_database::time_created()
@@ -367,6 +411,10 @@ os_database::is_open_read_only()
 
 int
 os_database::is_writable()
+
+void
+os_database::set_opt_cache_lock_mode(yes)
+	int yes
 
 void
 os_database::set_fetch_policy(policy, ...)
@@ -393,6 +441,14 @@ of(ospv)
 	RETVAL
 
 os_segment *
+os_database::get_default_segment()
+	CODE:
+	char *CLASS = "ObjStore::Segment";
+	RETVAL = THIS->get_default_segment();
+	OUTPUT:
+	RETVAL
+
+os_segment *
 os_database::get_segment(num)
 	int num
 	CODE:
@@ -412,7 +468,7 @@ os_database::get_all_segments()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv( newSViv(0) , CLASS, segs[xx] ));
+		PUSHs(sv_setref_pv( sv_newmortal() , CLASS, segs[xx] ));
 	}
 	delete [] segs;
 
@@ -427,7 +483,7 @@ os_database::get_all_roots()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv( newSViv(0), CLASS, roots[xx] ));
+		PUSHs(sv_setref_pv( sv_newmortal(), CLASS, roots[xx] ));
 	}
 	delete [] roots;
 
@@ -471,7 +527,7 @@ os_database_root::set_value(sv)
 	SV *sv
 	CODE:
 	OSSV *ossv=0;
-	ossv_magic *mg = osperl::sv_2magic(sv);
+	ossv_bridge *mg = osperl::sv_2bridge(sv);
 	if (mg) ossv = mg->force_ossv();
 	if (!ossv) {
 	  ossv = new(os_segment::of(THIS), OSSV::get_os_typespec()) OSSV(sv);
@@ -486,11 +542,22 @@ os_database_root::set_value(sv)
 
 MODULE = ObjStore	PACKAGE = ObjStore::Transaction
 
+int
+os_transaction::top_level()
+
 os_transaction *
 get_current()
 	CODE:
 	char *CLASS = "ObjStore::Transaction";
 	RETVAL = os_transaction::get_current();
+	OUTPUT:
+	RETVAL
+
+os_transaction *
+os_transaction::get_parent()
+	CODE:
+	char *CLASS = "ObjStore::Transaction";
+	RETVAL = THIS->get_parent();
 	OUTPUT:
 	RETVAL
 
@@ -505,6 +572,89 @@ os_transaction::get_type()
 	}
 	OUTPUT:
 	RETVAL
+
+void
+os_transaction::prepare_to_commit()
+
+int
+os_transaction::is_prepare_to_commit_invoked()
+
+int
+os_transaction::is_prepare_to_commit_completed()
+
+MODULE = ObjStore	PACKAGE = ObjStore
+
+void
+set_transaction_priority(pri)
+	int pri;
+	CODE:
+	objectstore::set_transaction_priority(pri);
+
+void
+set_max_retries(cnt)
+	int cnt;
+	CODE:
+	os_transaction::set_max_retries(cnt);
+
+int
+get_max_retries()
+	CODE:
+	RETVAL = os_transaction::get_max_retries();
+	OUTPUT:
+	RETVAL
+
+int
+abort_in_progress()
+	CODE:
+	RETVAL = objectstore::abort_in_progress();
+	OUTPUT:
+	RETVAL
+
+int
+is_lock_contention()
+	CODE:
+	RETVAL = objectstore::is_lock_contention();
+	OUTPUT:
+	RETVAL
+
+char *
+get_lock_status(ospv)
+	OSSVPV *ospv
+	CODE:
+	int st = objectstore::get_lock_status(ospv);
+	switch (st) {
+	case os_read_lock: RETVAL = "read"; break;
+	case os_write_lock: RETVAL = "write"; break;
+	default: XSRETURN_UNDEF;
+	}
+	OUTPUT:
+	RETVAL
+
+int
+get_readlock_timeout()
+	CODE:
+	RETVAL = objectstore::get_readlock_timeout();
+	OUTPUT:
+	RETVAL
+
+int
+get_writelock_timeout()
+	CODE:
+	RETVAL = objectstore::get_writelock_timeout();
+	OUTPUT:
+	RETVAL
+
+void
+set_readlock_timeout(tm)
+	int tm;
+	CODE:
+	objectstore::set_readlock_timeout(tm);
+
+void
+set_writelock_timeout(tm)
+	int tm;
+	CODE:
+	objectstore::set_writelock_timeout(tm);
 
 #-----------------------------# Segment
 
@@ -524,7 +674,24 @@ os_segment::destroy()
 	THIS->destroy();
 
 int
+os_segment::is_empty()
+
+int
+os_segment::is_deleted()
+
+int
+os_segment::return_memory(now)
+	int now
+
+int
 os_segment::size()
+
+int
+os_segment::set_size(new_sz)
+	int new_sz
+
+int
+os_segment::unused_space()
 
 int
 os_segment::get_number()
@@ -567,10 +734,6 @@ of(sv)
 	SV *sv
 	CODE:
 	char *CLASS = "ObjStore::Segment";
-	if (sv_isa(sv, "ObjStore::Segment")) {
-	  ST(0) = sv;  //refcnt ok?
-	  XSRETURN(1);
-	}
 	RETVAL = osperl::sv_2segment(sv);
 	OUTPUT:
 	RETVAL
@@ -580,36 +743,17 @@ of(sv)
 MODULE = ObjStore	PACKAGE = ObjStore::Magic
 
 void
-ossv_magic::DESTROY()
+ossv_bridge::DESTROY()
 
 #-----------------------------# UNIVERSAL
 
 MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL
 
-SV *
-new(area, rep, card)
-	os_segment *area
-	char *rep
-	int card
-	CODE:
-	// This is a low-level interface.
-	// Area is the first argument and the object is not blessed
-	// to user's preference.
-	//
-	if (card < 0) croak("Negative cardinality");
-	OSSV *ossv = new(area, OSSV::get_os_typespec()) OSSV;
-	ossv->_refs=0;
-	ossv->new_object(rep, card);
-	ST(0) = osperl::ossv_2sv(ossv);
-
 void
 OSSVPV::_bless(pstr)
-	OSSV_RAW *pstr
+	char *pstr
 	CODE:
-	if (pstr->natural() != ossv_pv)
-	  croak("Can only give literal blessings you idiot");
-	assert(pstr->vptr);
-	THIS->BLESS( (char*) pstr->vptr);
+	THIS->BLESS(pstr);
 
 char *
 OSSVPV::_ref()
@@ -630,22 +774,6 @@ OSSVPV::_paddress(...)
 	CODE:
 	ST(0) = sv_2mortal(newSViv((long) THIS));
 
-int
-OSSVPV::_pcmp(to_sv, ...)
-	SV *to_sv
-	PROTOTYPE: $;$
-	CODE:
-	OSSVPV *to=0;
-	ossv_magic *to_mg = osperl::sv_2magic(to_sv);
-	if (!to && to_mg) to = to_mg->ospv();
-	if (!to && SvIOK(to_sv)) to = (OSSVPV*) SvIV(to_sv);
-	if (!to) XSRETURN_UNDEF;
-	if (THIS == to) RETVAL = 0;
-	else if (THIS < to) RETVAL = -1;
-	else RETVAL = 1;
-	OUTPUT:
-	RETVAL
-
 double
 OSSVPV::cardinality()
 	CODE:
@@ -659,95 +787,4 @@ OSSVPV::percent_unused()
 	RETVAL = THIS->percent_unused();
 	OUTPUT:
 	RETVAL
-
-#-----------------------------# HV
-
-MODULE = ObjStore	PACKAGE = ObjStore::HV
-
-SV *
-OSSVPV::FETCH(key)
-	char *key;
-	CODE:
-	ST(0) = THIS->FETCHp(key);
-
-SV *
-OSSVPV::_at(key)
-	char *key;
-	CODE:
-	ST(0) = THIS->ATp(key);
-
-SV *
-OSSVPV::STORE(key, nval)
-	char *key;
-	SV *nval;
-	CODE:
-	SV *ret;
-	ret = THIS->STOREp(key, nval);
-	if (ret) { ST(0) = ret; }
-	else     { XSRETURN_EMPTY; }
-
-void
-OSSVPV::DELETE(key)
-	char *key;
-	CODE:
-	THIS->DELETE(key);
-
-int
-OSSVPV::EXISTS(key)
-	char *key;
-	CODE:
-	RETVAL = THIS->EXISTS(key);
-	OUTPUT:
-	RETVAL
-
-SV *
-OSSVPV::FIRSTKEY()
-	CODE:
-	ST(0) = THIS->FIRST( THIS_magic );
-
-SV *
-OSSVPV::NEXTKEY(ign)
-	char *ign;
-	CODE:
-	ST(0) = THIS->NEXT( THIS_magic );
-
-void
-OSSVPV::CLEAR()
-	CODE:
-	THIS->CLEAR();
-
-#-----------------------------# Set
-
-MODULE = ObjStore	PACKAGE = ObjStore::Set
-
-void
-OSSVPV::a(...)
-	CODE:
-	for (int xx=1; xx < items; xx++) {
-	  SV *ret = THIS->ADD(ST(xx));
-	}
-
-int
-OSSVPV::contains(val)
-	SV *val;
-	CODE:
-	RETVAL = THIS->CONTAINS(val);
-	OUTPUT:
-	RETVAL
-
-void
-OSSVPV::r(nval)
-	SV *nval;
-	CODE:
-	THIS->REMOVE(nval);
-
-SV *
-OSSVPV::first()
-	CODE:
-	ST(0) = THIS->FIRST( THIS_magic );
-
-SV *
-OSSVPV::next()
-	CODE:
-	ST(0) = THIS->NEXT( THIS_magic );
 

@@ -8,10 +8,10 @@ Name           DSLI  Description                                  Info
 ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
 Interface to ObjectStore OODBMS (http://www.odi.com).  Stores scalars,
-sets, hashes, and references directly in the database without any
-flattening of nested or circular structures.  Virtual memory mechanism
-used to make read/write access nearly as fast as memory mapped files.
-Includes CGI support module for `Perl Embedded HTML'.
+arrays, hashes, sets, and references directly in the database without
+any flattening of nested or circular structures.  Virtual memory
+mechanism used to make read/write access nearly as fast as memory
+mapped files.
 
 Available via http://www.perl.org/CPAN/modules/by-module/ObjStore
 
@@ -31,19 +31,17 @@ see ./CHANGES for a historical perspective
 ### RECENT CHANGES ###
 
 
-** 09-20-97 Released 1.14
+** 09-27-97 Released 1.15
 
-- Resolved and documentated the question of Java/C++ integration.  The
-best course seems to wait and see what Larry Wall comes up with.
+- Expanded analysis of Perl, Java, C++, and SQL as database languages.
 
-- No schema changes.
+- Partial arrays.  Mileage may vary.
 
+- Automatic retry in the event of deadlock (69).
 
-** 09-02-97 Released 1.12
+- Blessed classes now try to 'require' themselves the first time they
+are instantiated in transient memory.
 
-- HTML::PHTML and Eval modules added.  HTML::PHTML gives you a simple
-and powerful "Perl Embedded HTML" page cache for CGI programs.
-Includes all the best features of HTML::Embperl and ePerl in about 340
-lines of code.  HTML::PHTML module does not require ObjStore.
+- Renamed $Exception to $EXCEPTION.
 
-- No other changes.
+- PHTML.pm and Eval.pm moved to their own distribution.

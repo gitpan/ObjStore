@@ -8,7 +8,7 @@ use ObjStore;
 
 {
     my $osdir = ObjStore->schema_dir;
-    my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
+    my $DB = ObjStore::open($osdir . "/perltest.db", 0, 0666);
     
     try_update {
 	my $john = $DB->root('John');

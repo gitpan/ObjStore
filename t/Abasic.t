@@ -24,14 +24,14 @@ ok; #1
 
 {
     my $osdir = ObjStore->schema_dir;
-    my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
+    my $DB = ObjStore::open($osdir . "/perltest.db", 0, 0666);
     $DB ? ok : not_ok; #2
     
     try_update {
 	my $john = $DB->root('John');
 
 	if (! $john) {
-	    my $hv = new ObjStore::HV($DB, 'array');
+	    my $hv = new ObjStore::HV($DB, 'splash_array', 7);
 	    $john = $DB->root('John', $hv);
 	}
 
@@ -51,7 +51,8 @@ ok; #1
 
 	for (1..10) { $john->{$_} = "String $_"; }
 
-	my $dict = $john->{dict} = new ObjStore::HV($DB, 'dict');
+	$john->{dict} = new ObjStore::HV($DB, 'os_dictionary', 20);
+	my $dict = $john->{dict};
 	for (1..10) { $dict->{$_} = $_ * 3.14159; }
 
 	## basic counter

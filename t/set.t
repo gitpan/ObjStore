@@ -7,15 +7,15 @@ sub not_ok { print "not ok $tx\n"; $tx++; }
 use strict;
 use ObjStore;
 
-my $DB = ObjStore::Database->open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
+my $DB = ObjStore::open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
 
-for my $rep (qw(array hash)) {
+for my $rep (keys %ObjStore::Set::REP) {
     try_update {
 	my $john = $DB->root('John');
 	die if !$john;
     
-	my $set = $john->{c} = new ObjStore::Set($DB, $rep);
-	$set->a({ joe => 1 }, { bob => 2 }, { ed => 3 });
+	my $set = $john->{c} = new ObjStore::Set($DB, $rep, 7);
+	$set->add({ joe => 1 }, { bob => 2 }, { ed => 3 });
 
 	my (@k,@v,@set);
 	for (my $o = $set->first; $o; $o = $set->next) {
@@ -35,12 +35,13 @@ for my $rep (qw(array hash)) {
 	}
 
 	my $yuk = pop @set;
-	$set->r($yuk);
+	$set->rm($yuk);
 	$set->contains($yuk) ? not_ok : ok;
-	$set->a($yuk);
+	$set->add($yuk);
 	$set->contains($yuk) ? ok : not_ok;
 	
 	delete $john->{c};
-    }
+    };
+    die if $@;
 };
 print "[Abort] $@\n" if $@;

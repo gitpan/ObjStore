@@ -7,7 +7,7 @@ modify it under the same terms as Perl itself.
 
 
 Tested Systems:
-   sun4-solaris / SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1, 4.0.2, 5.0.0
+   sun4-solaris / SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1,4.0.2,5.0.0,5.0.1
 
 
 The build process is a bit radical and needs some hand-holding.

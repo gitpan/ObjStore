@@ -8,29 +8,18 @@ modify it under the same terms as Perl itself.
 #include <assert.h>
 #include <string.h>
 #include "osperl.hh"
+#include <ostore/coll.hh>
 
-/*--------------------------------------------- registration */
-
-osperl_ospec *osperl_ospec::operator=(const osperl_ospec &t1)
-{ memcpy(this, &t1, sizeof(osperl_ospec)); return this; }
-
-SPList < osperl_ospec > *osperl::ospecs = 0;
-
-void osperl::register_spec(char *name, MkOSPerlObj_t fun)
-{
-  if (!ospecs) ospecs = new SPList<osperl_ospec> (10, 8);
-  osperl_ospec spec;
-  spec.name = name;
-  spec.fun = (void *) fun;
-  ospecs->push(spec);
-}
+//#define DEBUG_OSSV_ASSIGN 1
+//#define DEBUG_REFCNT 1
+//#define DEBUG_BRIDGE 1
 
 /*--------------------------------------------- typemap services */
 
-// Is tied?  Examine tied object, extract ossv_magic from '~'
+// Is tied?  Examine tied object, extract ossv_bridge from '~'
 // Is OSSV in a PVMG?
 // Can we croak if failure? XXX
-ossv_magic *osperl::sv_2magic(SV *nval)
+ossv_bridge *osperl::sv_2bridge(SV *nval)
 {
   assert(nval);
   if (!SvROK(nval)) return 0;
@@ -50,13 +39,13 @@ ossv_magic *osperl::sv_2magic(SV *nval)
       //      warn("junk attached via ~ magic");
       return 0;
     }
-    ossv_magic *mg = (ossv_magic*) SvIV((SV*)SvRV(mgobj));
+    ossv_bridge *mg = (ossv_bridge*) SvIV((SV*)SvRV(mgobj));
     assert(mg);
     return mg;
 
   } else if (SvOBJECT(nval) && SvTYPE(nval) == SVt_PVMG) {
 
-    ossv_magic *mg = (ossv_magic*) SvIV(nval);
+    ossv_bridge *mg = (ossv_bridge*) SvIV(nval);
     assert(mg);
     return mg;
 
@@ -70,13 +59,13 @@ os_segment *osperl::sv_2segment(SV *sv)
   if (sv_isa(sv, "ObjStore::Database"))
     return ((os_database*) SvIV((SV*)SvRV(sv)))->get_default_segment();
 
-  ossv_magic *mg = osperl::sv_2magic(sv);
-  if (!mg) croak("osperl::sv_2segment(SV*): allocation area outside of persistent memory");
+  ossv_bridge *mg = osperl::sv_2bridge(sv);
+  if (!mg) croak("osperl::sv_2segment(SV*): must be persistent object");
   return os_segment::of(mg->get_location());
 }
 
 SV *osperl::gateway=0;
-ossv_magic *osperl::force_sv_2magic(os_segment *seg, SV *nval)
+ossv_bridge *osperl::force_sv_2bridge(os_segment *seg, SV *nval)
 {
   dSP ;
   // You must use ENTER / LEAVE around this function.
@@ -90,7 +79,7 @@ ossv_magic *osperl::force_sv_2magic(os_segment *seg, SV *nval)
   int count = perl_call_sv(osperl::gateway, G_SCALAR);
   assert(count==1);
   SPAGAIN ;
-  ossv_magic *mg = osperl::sv_2magic(POPs);
+  ossv_bridge *mg = osperl::sv_2bridge(POPs);
   PUTBACK ;
   //  FREETMPS ;
   //  LEAVE ;
@@ -100,11 +89,20 @@ ossv_magic *osperl::force_sv_2magic(os_segment *seg, SV *nval)
   return mg;
 }
 
-int osperl::enable_blessings = 1;
+int osperl::enable_blessings;
+HV* osperl::CLASSLOAD;
+
+void osperl::boot_thread()
+{
+  enable_blessings = 1;
+  CLASSLOAD = perl_get_hv("ObjStore::CLASSLOAD", FALSE);
+  assert(CLASSLOAD);
+}
+
 SV *osperl::wrap_object(OSSV *ossv, OSSVPV *ospv)
 {
   char *CLASS = enable_blessings? ospv->get_blessing() : ospv->base_class();
-  ossv_magic *magic = ospv->NEW_MAGIC(ossv, ospv);
+  ossv_bridge *magic = ospv->NEW_BRIDGE(ossv, ospv);
   SV *rv;
 
   switch (ospv->get_perl_type()) {
@@ -190,57 +188,61 @@ SV *osperl::hkey_2sv(hkey *hk)
   return sv_2mortal(newSVpv(hk->pv, hk->len-1));
 }
 
-/*--------------------------------------------- ossv_magic */
+/*--------------------------------------------- ossv_bridge */
 
-// Since we update refcnts, the ossv_magic must not
+// Since we update refcnts, the ossv_bridge must not
 // change during its lifetime.
-ossv_magic::ossv_magic(OSSV *_sv, OSSVPV *_pv)
+ossv_bridge::ossv_bridge(OSSV *_sv, OSSVPV *_pv)
   : sv(_sv), pv(_pv)
 {
   assert(sv || pv);
+#if DEBUG_BRIDGE
+  warn("ossv_bridge 0x%x->new(sv=0x%x, %s=0x%x)",
+       this, _sv, _pv->base_class(), _pv);
+#endif
   os_transaction *xion = os_transaction::get_current();
   if (xion && xion->get_type() != os_transaction::read_only) {
     if (sv) { sv->REF_inc(); }
     else {
       if (pv) { pv->REF_inc(); }
-      else croak("ossv_magic::ossv_magic");
+      else croak("ossv_bridge::ossv_bridge");
     }
   }
 }
 
-ossv_magic::~ossv_magic()
+ossv_bridge::~ossv_bridge()
 {
-#if DEBUG_DESTROY
-  warn("ossv_magic 0x%x->DESTROY", this);
+#if DEBUG_BRIDGE
+  warn("ossv_bridge 0x%x->DESTROY(sv=0x%x, pv=0x%x)", this, sv, pv);
 #endif
   os_transaction *xion = os_transaction::get_current();
   if (xion && xion->get_type() != os_transaction::read_only) {
     if (sv) { sv->REF_dec(); }
     else {
       if (pv) { pv->REF_dec(); }
-      else croak("ossv_magic::~ossv_magic()");
+      else croak("ossv_bridge::~ossv_bridge()");
     }
   }
 }
 
-void ossv_magic::dump()
+void ossv_bridge::dump()
 {
   if (sv) {
-    warn("ossv_magic=0x%x sv=%s pv=0x%x", this, sv->as_pv(), pv);
+    warn("ossv_bridge=0x%x sv=%s pv=0x%x", this, sv->as_pv(), pv);
   } else {
-    warn("ossv_magic=0x%x pv=0x%x", this, pv);
+    warn("ossv_bridge=0x%x pv=0x%x", this, pv);
   }
 }
 
-OSSV *ossv_magic::force_ossv()
+OSSV *ossv_bridge::force_ossv()
 {
   if (sv) return sv;
-  if (!pv) croak("ossv_magic::force_ossv(): assertion failed");
+  if (!pv) croak("ossv_bridge::force_ossv(): assertion failed");
   OSSV *ossv = new(os_segment::of(pv), OSSV::get_os_typespec()) OSSV(pv);
   return ossv;
 }
 
-OSSVPV *ossv_magic::ospv()
+OSSVPV *ossv_bridge::ospv()
 {
 #if !defined NDEBUG
   if (sv && pv) assert(sv->vptr == pv);
@@ -250,11 +252,11 @@ OSSVPV *ossv_magic::ospv()
   return 0;
 }
 
-void *ossv_magic::get_location()
+void *ossv_bridge::get_location()
 {
   if (pv) return pv;
   if (sv) return sv->PvREFok()? sv->vptr : sv;
-  croak("ossv_magic invalid");
+  croak("ossv_bridge invalid");
 }
 
 /*--------------------------------------------- OSSV */
@@ -350,7 +352,7 @@ OSSV *OSSV::operator=(SV *nval)
   if (ok) return this;
 
   OSSV *ossv;
-  ossv_magic *mg = osperl::sv_2magic(nval);
+  ossv_bridge *mg = osperl::sv_2bridge(nval);
   if (mg) { s(mg); return this; }
 
   if (SvIOKp(nval)) {
@@ -365,7 +367,7 @@ OSSV *OSSV::operator=(SV *nval)
   } else {
     ENTER ;
     SAVETMPS ;
-    s(osperl::force_sv_2magic(os_segment::of(this), nval));  //segment ok? XXX
+    s(osperl::force_sv_2bridge(os_segment::of(this), nval));  //segment ok? XXX
     FREETMPS ;
     LEAVE ;
   }
@@ -412,8 +414,9 @@ int OSSV::morph(ossvtype nty)
   case ossv_nv:    delete ((OSPV_nv*)vptr); vptr=0; break;
 
   case ossv_pv:
-#ifdef DEBUG_OSSV_VALUES
-    warn("OSSV::morph(%d -> %d): deleting string '%s' 0x%x", _type, nty,vptr,vptr);
+#ifdef DEBUG_OSSV_ASSIGN
+    warn("OSSV(0x%x)->morph(pv): deleting string '%s' 0x%x",
+	 this, vptr, vptr);
 #endif
     delete [] ((char*)vptr);
     vptr = 0;
@@ -421,7 +424,7 @@ int OSSV::morph(ossvtype nty)
 
   case ossv_obj: break;
 
-  default: croak("OSSV::morph type %s unknown", OSSV::type_2pv( (ossvtype)_type));
+  default: croak("OSSV->morph type %s unknown", OSSV::type_2pv( (ossvtype)_type));
   }
   _type = nty;
   return 1;
@@ -430,32 +433,14 @@ int OSSV::morph(ossvtype nty)
 void OSSV::set_undef()
 { morph(ossv_undef); }
 
-void OSSV::new_object(char *rep, os_unsigned_int32 cardinality)
-{
-  morph(ossv_obj);
-  os_segment *where = os_segment::of(this);
-  for (int xx=0; xx < osperl::ospecs->scalar(); xx++) {
-    osperl_ospec &spec = osperl::ospecs->operator[](xx);
-    if (strEQ(spec.name, rep)) {
-      vptr = (*(MkOSPerlObj_t)spec.fun)(where, rep, cardinality);
-      break;
-    }
-  }
-  if (!vptr) croak("OSSV::new_object: rep %s not found", rep);
-#ifdef DEBUG_MEM_OSSVPV
-  warn("OSSV::new_object(%s,%d) = 0x%x", rep, cardinality, vptr);
-#endif
-  PvREF_inc();
-}
-
 void OSSV::s(os_int32 nval)
 {
   if (morph(ossv_iv)) {
     vptr = new(os_segment::of(this), OSPV_iv::get_os_typespec()) OSPV_iv;
   }
   ((OSPV_iv*)vptr)->iv = nval;
-#ifdef DEBUG_OSSV_VALUES
-  warn("OSSV(0x%x) = iv(%d)", this, nval);
+#ifdef DEBUG_OSSV_ASSIGN
+  warn("OSSV(0x%x)->s(i:%d)", this, nval);
 #endif
 }
 
@@ -465,8 +450,8 @@ void OSSV::s(double nval)
     vptr = new(os_segment::of(this), OSPV_nv::get_os_typespec()) OSPV_nv;
   }
   ((OSPV_nv*)vptr)->nv = nval;
-#ifdef DEBUG_OSSV_VALUES
-  warn("OSSV(0x%x) = nv(%f)", this, nval);
+#ifdef DEBUG_OSSV_ASSIGN
+  warn("OSSV(0x%x)->s(n:%f)", this, nval);
 #endif
 }
 
@@ -478,8 +463,8 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)
   int neednull = nval[nlen-1]!=0;
 //  warn("OSSV::s - prior type = %d", _type);
   if (!morph(ossv_pv)) {
-#ifdef DEBUG_OSSV_VALUES
-    warn("OSSV::s: deleting string 0x%x", vptr);
+#ifdef DEBUG_OSSV_ASSIGN
+    warn("OSSV(0x%x)->s(): deleting string 0x%x", this, vptr);
 #endif
     delete [] ((char*)vptr);
     vptr = 0;
@@ -489,16 +474,16 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)
   memcpy(str, nval, nlen);
   if (neednull) str[nlen] = 0;
   vptr = str;
-#ifdef DEBUG_OSSV_VALUES
-  warn("OSSV::s(%s): alloc string 0x%x", (char*) vptr, str);
+#ifdef DEBUG_OSSV_ASSIGN
+  warn("OSSV(0x%x)->s(%s): alloc 0x%x", this, (char*) vptr, str);
 #endif
 }
 
-void OSSV::s(ossv_magic *mg)
+void OSSV::s(ossv_bridge *mg)
 {
   if (mg->pv) { s(mg->pv); return; }
   if (mg->sv) { s(mg->sv); return; }
-  croak("OSSV::s(ossv_magic*): assertion failed");
+  croak("OSSV::s(ossv_bridge*): assertion failed");
 }
 
 void OSSV::s(OSSV *nval)
@@ -517,6 +502,9 @@ void OSSV::s(OSSV *nval)
 void OSSV::s(OSSVPV *nval)
 { 
   assert(nval);
+#ifdef DEBUG_OSSV_ASSIGN
+  warn("OSSV(0x%x)->s(%s=0x%x)", this, nval->base_class(), nval);
+#endif
   if (morph(ossv_obj)) {
     PvREF_inc(nval);
   } else if (vptr != nval) {
@@ -685,16 +673,67 @@ OSSVPV::OSSVPV()
   : _refs(0), classname(0)
 {}
 OSSVPV::~OSSVPV()
-{ BLESS(0); }
+{ classname=0; }
 
-// Class names are allocated elsewhere and are never deallocated.
-void OSSVPV::BLESS(char *nval)
-{ classname=nval; }
+// Class names are allocated in _get_persistent_raw_string.
+// They are not reference counted or deallocated automatically.
+void OSSVPV::BLESS(char *clname)
+{
+  //  warn("BLESS 0x%x to %s", this, clname);
+  if (strEQ(clname, base_class())) {
+    classname = 0;
+    return;
+  }
+
+  dSP ;
+  ENTER ;
+  SAVETMPS ;
+  PUSHMARK(sp);
+  XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Database", os_database::of(this)));
+  XPUSHs(sv_2mortal(newSVpv(clname, 0)));
+  PUTBACK ;
+  int count = perl_call_method("_get_persistent_raw_string", G_SCALAR);
+  assert(count==1);
+  SPAGAIN ;
+
+  SV *rawsv = POPs;
+  if (SvROK(rawsv)) {
+    IV tmp = SvIV((SV*)SvRV(rawsv));
+    classname = (char *) tmp;
+  }
+  else croak("_get_persistent_raw_string returned <bogus>");
+
+  PUTBACK ;
+  FREETMPS ;
+  LEAVE ;
+}
 
 char *OSSVPV::get_blessing()
 {
   char *CLASS = classname;
-  if (!CLASS) CLASS = base_class();
+  if (CLASS) {
+    int cl = strlen(CLASS);       // cache in the database? XXX
+    
+    if (osperl::enable_blessings &&
+	!hv_exists(osperl::CLASSLOAD, CLASS, cl)) {
+      SV *clsv = sv_2mortal(newSVpv(CLASS, cl));
+      SV *ldr = perl_get_sv("ObjStore::CLASSLOAD", 0);
+      assert(ldr);
+      dSP ;
+      ENTER ;
+      SAVETMPS ;
+      PUSHMARK(sp);
+      XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Database",
+			  os_database::of(this)));
+      XPUSHs(clsv);
+      PUTBACK ;
+      perl_call_sv(ldr, G_DISCARD);
+      FREETMPS ;
+      LEAVE ;
+    }
+  } else {
+    CLASS = base_class();
+  }
   assert(CLASS);
   return CLASS;
 }
@@ -704,17 +743,16 @@ void OSSVPV::REF_inc() {
   _refs++;
   if (_refs > MAX_REFCNT) croak("OSSVPV::REF_inc(): _refs > %ud", MAX_REFCNT);
 #ifdef DEBUG_REFCNT
-  warn("OSSVPV::REF_inc() 0x%x to %d", this, _refs);
+  warn("OSSVPV(0x%x)->REF_inc() to %d", this, _refs);
 #endif
 }
 
 void OSSVPV::REF_dec() { 
   _refs--;
 #ifdef DEBUG_REFCNT
-  warn("OSSVPV::REF_dec() 0x%x to %d", this, _refs);
+  warn("OSSVPV(0x%x)->REF_dec() to %d", this, _refs);
 #endif
   if (_refs == 0) {
-//    warn("OSSVPV::REF_dec() deleting 0x%x", this);
     delete this;
   }
 }
@@ -723,32 +761,33 @@ int OSSVPV::get_perl_type()
 { return SVt_PVMG; }
 
 char *OSSVPV::base_class()
-{ croak("OSSVPV::base_class() must be overridden"); return 0; }
+{ croak("OSSVPV(0x%x)->base_class() must be overridden", this); return 0; }
 
-ossv_magic *OSSVPV::NEW_MAGIC(OSSV *, OSSVPV *)
-{ croak("OSSVPV::NEW_MAGIC() must be overridden"); return 0; }
+// Usually will override, but here's a default.
+ossv_bridge *OSSVPV::NEW_BRIDGE(OSSV *_sv, OSSVPV *_pv)
+{ return new ossv_bridge(_sv,_pv); }
 
 // common to containers
-double OSSVPV::cardinality() { croak("OSSVPV::cardinality()"); return 0; }
-double OSSVPV::percent_unused() { croak("OSSVPV::percent_unused()"); return 0; }
-SV *OSSVPV::FIRST(ossv_magic*) { croak("OSSVPV::FIRST"); return 0; }
-SV *OSSVPV::NEXT(ossv_magic*) { croak("OSSVPV::NEXT"); return 0; }
-void OSSVPV::CLEAR() { croak("OSSVPV::CLEAR"); }
+double OSSVPV::cardinality() { croak("OSSVPV(0x%x)->cardinality()",this); return 0; }
+double OSSVPV::percent_unused() { croak("OSSVPV(0x%x)->percent_unused()",this); return 0; }
+SV *OSSVPV::FIRST(ossv_bridge*) { croak("OSSVPV(0x%x)->FIRST",this); return 0; }
+SV *OSSVPV::NEXT(ossv_bridge*) { croak("OSSVPV(0x%x)->NEXT",this); return 0; }
+void OSSVPV::CLEAR() { croak("OSSVPV(0x%x)->CLEAR",this); }
 
 // hash
-SV *OSSVPV::FETCHp(char *) { croak("OSSVPV::FETCHp"); return 0; }
-SV *OSSVPV::ATp(char *key) { croak("OSSVPV::ATp"); return 0; }
-SV *OSSVPV::STOREp(char *, SV *) { croak("OSSVPV::STOREp"); return 0; }
-void OSSVPV::DELETE(char *) { croak("OSSVPV::DELETE"); }
-int OSSVPV::EXISTS(char *) { croak("OSSVPV::EXISTS"); return 0; }
+SV *OSSVPV::FETCHp(char *) { croak("OSSVPV(0x%x)->FETCHp",this); return 0; }
+SV *OSSVPV::STOREp(char *, SV *) { croak("OSSVPV(0x%x)->STOREp",this); return 0; }
+void OSSVPV::DELETE(char *) { croak("OSSVPV(0x%x)->DELETE",this); }
+int OSSVPV::EXISTS(char *) { croak("OSSVPV(0x%x)->EXISTS",this); return 0; }
+char *OSSVPV::GETSTR(char *key) { croak("OSSVPV(0x%x)->GETSTR",this); return 0; }
 
 // sack
-SV *OSSVPV::ADD(SV *) { croak("OSSVPV::ADD"); return 0; }
-int OSSVPV::CONTAINS(SV *) { croak("OSSVPV::CONTAINS"); return 0; }
-void OSSVPV::REMOVE(SV *) { croak("OSSVPV::REMOVE"); }
+SV *OSSVPV::ADD(SV *) { croak("OSSVPV(0x%x)->ADD",this); return 0; }
+int OSSVPV::CONTAINS(SV *) { croak("OSSVPV(0x%x)->CONTAINS",this); return 0; }
+void OSSVPV::REMOVE(SV *) { croak("OSSVPV(0x%x)->REMOVE",this); }
 
 // array (preliminary)
-OSSV *OSSVPV::FETCHi(int) { croak("OSSVPV::FETCH"); return 0; }
-SV *OSSVPV::STOREi(int, SV *) { croak("OSSVPV::STORE"); return 0; }
+SV *OSSVPV::FETCHi(int) { croak("OSSVPV(0x%x)->FETCHi", this); return 0; }
+SV *OSSVPV::STOREi(int, SV *) { croak("OSSVPV(0x%x)->STOREi",this); return 0; }
 
 

@@ -16,12 +16,9 @@ extern "C" {
 #endif
 
 #include <ostore/ostore.hh>
-#include <ostore/coll.hh>
-#include <ostore/coll/dict_pt.hh>
 
 #undef DEBUG   // where did this get defined?
 //#define DEBUG
-#include "splash.h"
 
 enum ossvtype {
   ossv_undef=1,
@@ -31,7 +28,7 @@ enum ossvtype {
   ossv_obj=5	// ref counted objects (containers or complex objects)
 };
 
-struct ossv_magic;
+struct ossv_bridge;
 struct OSSVPV;
 
 // 8 bytes
@@ -54,7 +51,6 @@ struct OSSV {
   OSSV *operator=(const OSSV &);
   int operator==(OSSV &);
   int operator==(OSSVPV *pv);
-  void new_object(char *, os_unsigned_int32);
   //what
   os_int32 discriminant();
   int morph(ossvtype nty);
@@ -75,7 +71,7 @@ struct OSSV {
   void s(char *, os_unsigned_int32 len);
   void s(OSSV *);
   void s(OSSVPV *);
-  void s(ossv_magic *mg);
+  void s(ossv_bridge *mg);
   void bless(char *);
   //get
   os_int32 as_iv();
@@ -141,13 +137,13 @@ struct OSSVPV : os_virtual_behavior {
   virtual int get_perl_type();
   virtual double cardinality();
   virtual double percent_unused();
-  virtual ossv_magic *NEW_MAGIC(OSSV *, OSSVPV *);
+  virtual ossv_bridge *NEW_BRIDGE(OSSV *, OSSVPV *);
   virtual void BLESS(char *nval);
   virtual void CLEAR();
-  virtual SV *FIRST(ossv_magic*);
-  virtual SV *NEXT(ossv_magic*);
+  virtual SV *FIRST(ossv_bridge*);
+  virtual SV *NEXT(ossv_bridge*);
   // hash
-  virtual SV *ATp(char *key);
+  virtual char *GETSTR(char *key);
   virtual SV *FETCHp(char *key);
   virtual SV *STOREp(char *key, SV *value);
   virtual void DELETE(char *key);
@@ -157,120 +153,40 @@ struct OSSVPV : os_virtual_behavior {
   virtual int CONTAINS(SV *);
   virtual void REMOVE(SV *);
   // array (preliminary)
-  virtual OSSV *FETCHi(int xx);
+  virtual SV *FETCHi(int xx);
   virtual SV *STOREi(int xx, SV *value);
 };
 
-struct ossv_magic {
+struct ossv_bridge {
   OSSV *sv;
   OSSVPV *pv;
-  ossv_magic(OSSV *_sv, OSSVPV *_pv);
-  virtual ~ossv_magic();
+  ossv_bridge(OSSV *_sv, OSSVPV *_pv);
+  virtual ~ossv_bridge();
   void dump();
   void *get_location();
   OSSV *force_ossv();
   OSSVPV *ospv();
-  // store transient cursors in your subclass of ossv_magic
-};
-
-struct OSPV_setarray : OSSVPV {
-  static os_typespec *get_os_typespec();
-  SPList < OSSV > cv;
-  OSPV_setarray(int size);
-  virtual ossv_magic *NEW_MAGIC(OSSV *, OSSVPV *);
-  virtual char *base_class();
-  int first(int start);
-  virtual ~OSPV_setarray();
-  virtual SV *ADD(SV *);
-  virtual int CONTAINS(SV *);
-  virtual void REMOVE(SV *);
-  virtual SV *FIRST(ossv_magic*);
-  virtual SV *NEXT(ossv_magic*);
-  virtual void CLEAR();
-  virtual double cardinality();
-  virtual double percent_unused();
-};
-
-struct OSPV_sethash : OSSVPV {
-  static os_typespec *get_os_typespec();
-  os_set set;
-  OSPV_sethash(os_unsigned_int32 size);
-  virtual ossv_magic *NEW_MAGIC(OSSV *, OSSVPV *);
-  virtual char *base_class();
-  virtual ~OSPV_sethash();
-  virtual SV *ADD(SV *);
-  virtual int CONTAINS(SV *);
-  virtual void REMOVE(SV *);
-  virtual SV *FIRST(ossv_magic*);
-  virtual SV *NEXT(ossv_magic*);
-  virtual void CLEAR();
-  virtual double cardinality();
-  virtual double percent_unused();
-};
-
-struct OSPV_hvdict : OSSVPV {
-  static os_typespec *get_os_typespec();
-  os_Dictionary < hkey, OSSV* > hv;
-  OSPV_hvdict(os_unsigned_int32);
-  virtual ossv_magic *NEW_MAGIC(OSSV *, OSSVPV *);
-  virtual char *base_class();
-  virtual int get_perl_type();
-  virtual ~OSPV_hvdict();
-  virtual SV *FETCHp(char *key);
-  virtual SV *ATp(char *key);
-  virtual SV *STOREp(char *key, SV *value);
-  virtual void DELETE(char *key);
-  virtual void CLEAR();
-  virtual int EXISTS(char *key);
-  virtual SV *FIRST(ossv_magic*);
-  virtual SV *NEXT(ossv_magic*);
-  virtual double cardinality();
-  virtual double percent_unused();
-};
-
-struct OSPV_hvarray : OSSVPV {
-  static os_typespec *get_os_typespec();
-  SPList < hent > hv;
-  OSPV_hvarray(int);
-  virtual ossv_magic *NEW_MAGIC(OSSV *, OSSVPV *);
-  virtual ~OSPV_hvarray();
-  virtual char *base_class();
-  virtual int get_perl_type();
-  int index_of(char *key);
-  int first(int start);
-  virtual SV *FETCHp(char *key);
-  virtual SV *STOREp(char *key, SV *value);
-  virtual void DELETE(char *key);
-  virtual void CLEAR();
-  virtual int EXISTS(char *key);
-  virtual SV *FIRST(ossv_magic*);
-  virtual SV *NEXT(ossv_magic*);
-  virtual double cardinality();
-  virtual double percent_unused();
-};
-
-struct osperl_ospec {
-  static os_typespec *get_os_typespec();
-  osperl_ospec *operator=(const osperl_ospec &);
-  char *name;
-  void *fun;
+  // store transient cursors in your subclass of ossv_bridge
 };
 
 #if !OSSG
+
+typedef char RAW_STRING;
+
 typedef void *(*MkOSPerlObj_t)(os_segment *seg, char *name, os_unsigned_int32 card);
 
-// private global utilities
+// private global utilities (should be per-thread?)
 struct osperl {
   //private
-  static SV *wrap_object(OSSV *ossv, OSSVPV *ospv);
+  static void boot_thread();
   static int enable_blessings;
-  static SPList < osperl_ospec > *ospecs;
+  static HV *CLASSLOAD;
+  static SV *wrap_object(OSSV *ossv, OSSVPV *ospv);
   //??
   static SV *gateway;
   //public
-  static void register_spec(char *name, MkOSPerlObj_t fun);
-  static ossv_magic *sv_2magic(SV *);
-  static ossv_magic *force_sv_2magic(os_segment *seg, SV *nval);
+  static ossv_bridge *sv_2bridge(SV *);
+  static ossv_bridge *force_sv_2bridge(os_segment *seg, SV *nval);
   static os_segment *sv_2segment(SV *);
   static SV *ossv_2sv(OSSV *);
   static SV *ospv_2sv(OSSV *);
@@ -279,9 +195,3 @@ struct osperl {
 };
 #endif
 
-//#define DEBUG_OSSV_VALUES 1
-//#define DEBUG_MEM_OSSVPV 1
-//#define DEBUG_NEW_OSSV 1
-//#define DEBUG_REFCNT 1
-//#define DEBUG_HVDICT 1
-//#define DEBUG_DESTROY 1

@@ -9,14 +9,14 @@ BEGIN { $| = 1; $tx=1; print "1..5\n"; }
 sub ok { print "ok $tx\n"; $tx++; }
 sub not_ok { print "not ok $tx\n"; $tx++; }
 
-my $DB = ObjStore::Database->open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
+my $DB = ObjStore::open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
 
 sub chk1 {
     my ($john, $rep) = @_;
 
     my $ok=1;
     
-    my $ah = $john->{$rep} = new ObjStore::HV($DB, $rep);
+    my $ah = $john->{$rep} = new ObjStore::HV($DB, $rep, 7);
     die $ah if !$ah;
     for (1..8) {
       $ah->{$_} = 1;
@@ -51,8 +51,9 @@ sub chk1 {
 	my $john = $DB->root('John');
 	$john ? ok : not_ok;
 
-	chk1($john, 'array');
-	chk1($john, 'dict');
+	for my $rep (keys %ObjStore::HV::REP) {
+	    chk1($john, $rep);
+	}
     };
     print "[Abort] $@\n" if $@;
 }

@@ -7,11 +7,11 @@ BEGIN { $| = 1; $tx=1; print "1..3\n"; }
 sub ok { print "ok $tx\n"; $tx++; }
 sub not_ok { print "not ok $tx\n"; $tx++; }
 
-use ObjStore;
+use ObjStore ':ALL';
 
 {
     my $osdir = ObjStore->schema_dir;
-    my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
+    my $DB = ObjStore::open($osdir . "/perltest.db", 0, 0666);
     
     my $junk = {
 	'nums' => { 1..50 },

@@ -3,6 +3,16 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 08-16-97 Released 1.11
+
+- Update refcnts for transient referers in update & abort_only
+transactions.  Persistent memory leaks now impossible.
+
+- ospeek restricted to show only three instances per class.
+
+- No schema changes.
+
+
 ** 08-11-97 Released 1.10
 
 - Overloaded the '""' (stringify) operator for persistent objects.
@@ -17,10 +27,6 @@ modify it under the same terms as Perl itself.
 ** 08-06-97 Released 1.09
 
 - At our site we are now using osperl for about 2GB worth of data!
-
-- Now built to a shared library!!  Anyone up for Apache/Perl/ObjectStore?
-
-- New, Improved Documentation.
 
 - Persistent blessings now fully tested and working.
 
@@ -46,13 +52,6 @@ evolve databases in the event of future schema enhancements.
 - Static functions (e.g. ObjStore::Segment::of) are now called with ::
 instead of -> for greater efficiency.
 
-- Plus hundreds of fixes...
-
-
-** 08-02-97 Released 1.08
-
-- Release canidate for 1.09.
-
 
 ** 07-05-97 Released 1.06 
 
@@ -60,24 +59,8 @@ instead of -> for greater efficiency.
 
 - Database::get_all_roots Root::get_name
 
-- Fixes...
-
-
-** 07-03-97 Released 1.05
-
-- ObjectStore exceptions trigger a dump of the perl call stack.
-
-- Peek on sacks.
-
-- Bug fixes.
-
-- $store->set_fetch_policy(os_fetch_policy, os_int32)
-
 
 ** Released 1.03
-
-- Investigated schema evolution.  Will provide a database evolver
-going forward.
 
 - Can't wait for reasonable tied arrays!  Added array-based Sacks.
 They're not tied, but at least they're inefficient.
@@ -85,25 +68,10 @@ They're not tied, but at least they're inefficient.
 - Found and fixed problems with reference counting.  Now the tests
 can be run and the database does not grow.
 
-- Blessings are now persistent!  (Untested)
-
-- Re-designed the make system again.
-
-- Started writing documentation.  (Yawn.)
+- Blessings now persistent!  (Untested)
 
 
 ** Released 1.02
-
-- Improved make file.  Fixed blib.  Usage now looks like this:
-
-perl ./be [-nop] [-silent] [-verbose] <cmd>
-   checked      - verify that the package is complete
-   made         - run the compiler, toast the pop-tarts, etc.
-   installed    - copy files to final install area
-   uninstalled  - delete any files that were installed
-   cleaned      - delete all temporary files
-   manifest     - update the MANIFEST file
-   dist         - create a tar.gz distribution file
 
 - Fixed version numbering for Exporter.  1.2 => 1.02
 
@@ -112,10 +80,8 @@ on gigantic databases.  Only three elements are printed from large hashes,
 while small hashes are printed completely.  The meaning of 'large' can be
 customized (not yet).
 
-- Installs PoweredByOS.gif and publishes the path.
-
 
 ** Released 1.00
 
-- The first release, written during our ObjectStore 60 day evaluation.
-Why does anyone think that ObjectStore is difficult to work with?
+- The first release, written during our 60 day ObjectStore evaluation.
+Why ObjectStore have a reputation of being difficult to work with?

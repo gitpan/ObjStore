@@ -46,26 +46,29 @@ See $SchemaDir in ./be.
 	$r->opt(1);
 #	$r->flags('ossg', '-padc', '-arch','set1');
 	$r->flags('ld-dl', '-ztext');   # SunPro specific?
+	my $build =
+	    new Maker::Seq(new Maker::Phase('parallel',
+					    ($linkage eq 'static' ?
+					     ($r->cxx('perlmain.c'),
+					      $r->embed_perl('ObjStore')) :
+					     ()),
+					    $r->objstore($SchemaDir, 'osperl-04',
+							 ['collections']),
+					    $r->cxx('osperl.c'),
+					    $r->cxx('hv_builtin.c'),
+					    $r->cxx('set_builtin.c'),
+					    $r->xs('ObjStore.xs'),
+					    ),
+			   ($linkage eq 'dyn'?
+			    $r->dlink('cxx', './blib/arch/auto/ObjStore/ObjStore.so') :
+			    $r->link('cxx', './blib/bin/osperl')));
+
 	$pk->a(new Maker::Seq($r->blib($inst), 
-			      new Maker::Phase('parallel',
-					       ($linkage eq 'static' ?
-						($r->cxx('perlmain.c'),
-						 $r->embed_perl('ObjStore')) :
-						()),
-					       $r->objstore($SchemaDir, 'osperl-04',
-							    ['collections']),
-					       $r->cxx('osperl.c'),
-					       $r->cxx('hv_builtin.c'),
-					       $r->cxx('set_builtin.c'),
-					       $r->xs('ObjStore.xs'),
-					       ),
-			      ($linkage eq 'dyn'?
-			       $r->dlink('cxx', './blib/arch/auto/ObjStore/ObjStore.so') :
-			       $r->link('cxx', './blib/bin/osperl')),
-			      $r->pod2man('ObjStore.pod', 3),
-			      $r->pod2man('Eval.pm', 3),
-			      $r->pod2man('PHTML.pm', 3),
-			      $r->pod2html('ObjStore.pod', 'Eval.pm', 'PHTML.pm'),
+			      new Maker::Phase($build,
+					       $r->pod2man('ObjStore.pod', 3),
+					       $r->pod2man('Eval.pm', 3),
+					       $r->pod2man('PHTML.pm', 3),
+					       $r->pod2html('ObjStore.pod', 'Eval.pm', 'PHTML.pm')),
 			      $r->populate_blib($inst),
 			      new Maker::Unit('osperl', sub {}),
 			      ),

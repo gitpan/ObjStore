@@ -40,8 +40,6 @@ Support for notification, database access control?
 
 Support for the database utility API, os_object_cursor?  Who cares?
 
-Programmer friendly C++ / Java access to persistent perl data structures
-
 ospeek option to re-bless all classes?
 
 Does anyone want ObjectStore pvars?
@@ -66,8 +64,6 @@ Make 'reftype' an official built-in!
 
 Split out representations into their own shared libraries.  Requires
 support for multiple application schemas.
-
-Mesh with Java.
 
 Arrays.  Maybe wait until perl-porters fix the TIEARRAY interface.
 Add support for parts of the TimeSeries Object Manager?

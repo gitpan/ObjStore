@@ -27,40 +27,36 @@ ObjStore - Perl extension for ObjectStore OODBMS
 
 The new SQL and the sunset of relational databases.
 
-ObjectStore is the leading object-oriented database.  It is produced
+ObjectStore is the leading object-oriented database.  It is engineered
 by Object Design, Inc. (http://www.odi.com) (NASDAQ: ODIS).  The
 database uses the virtual memory mechanism to make persistent data
-available in the most efficient manner possible.  Object Design's
-Persistent Storage Engine has been licensed by Microsoft, Netscape,
-and Symantic for inclusion in their Java development environments.
+available in the most efficient manner possible.
 
-Prior to this joining of forces, ObjectStore was too radical a design
-decision for many applications.  And Perl5 did not have a simple way
-of storing complex data persistently.
+In case you didn't know, Object Design's Persistent Storage Engine has
+been licensed by Sun, Microsoft, Netscape, and Symantic for inclusion in
+their Java development environments.
 
-I<Now there is an easy way to build databases, especially in the
-circumstance that the schema changes rapidly.>
+Prior to this joining of forces,
 
-=head1 OBJECTSTORE PHILOSOPHY
+=over 4
 
-ObjectStore is outrageously powerful, sophisticated, even
-over-engineered.  It does way too much for the average
-get-the-job-done programmer.  The theme of this interface for
-ObjectStore is simplicity and easy of use.  I<If it's not fun, why
-bother?> Life is suppose to be fun and exciting, all the time!  And the
-performance of raw ObjectStore is so good that even with a gunky Perl
-layer, benchmarks will show that relational databases can be safely
-left on the bookshelf where they belong.
+=item *
 
-Specifically, this module is optimized for flexibility, then memory
-performance, then speed.  If you really want speed, wait 3-6 months
-for Perl5 to get support for kernel threads.  Or see the TODO list
-about dynamic linking your own custom C++ objects.
+ObjectStore was too radical a design decision for many applications.
 
-=head1 OBJECTSTORE API
+=item *
 
-Much of this API is a direct interface to the C++ API.  Refer to the
-ObjectStore documentation for exact symantics.
+Perl5 did not have a simple way of storing complex data persistently.
+
+=back
+
+I<Now there is an easy way to build databases, especially if you care about
+preserving your ideals of data encapsulation.  (See below!)>
+
+=head1 API
+
+Much of the Perl API is a direct interface to the C++ API.  Refer to
+the ObjectStore documentation for exact symantics.
 
 =head2 OBJSTORE
 
@@ -148,8 +144,9 @@ Policy can be one of C<as_used>, C<read>, or C<write>.
 
 =item * $value = $DB->root($root_name[, $new_value]);
 
-If the given root is not found, creates a new one.  Sets the root's
-value if $new_value is defined.  Returns the root's current value.
+This is the recommended API.  If the given root is not found, creates
+a new one.  Sets the root's value if $new_value is defined.  Returns
+the root's current value.
 
 =item * $DB->destroy_root($root_name);
 
@@ -247,14 +244,14 @@ lots segments when it makes sense.  Segments are a good thing.  They
 improve locality of reference and can be a unit of locking or caching.
 
 When you create a container you must specify the segment in which it
-is to be allocated.  All containers are created via the form C<'new
+is to be allocated.  All containers are created using the form C<'new
 ObjStore::$type($store, $cardinality)'>.  You may pass any persistent
 object in place of $store and the new container will be created in the
 same segment as the $store object!
 
 =item * BLESS
 
-The ObjStore module overloads C<'bless'>.  Once you create a
+The ObjStore module overloads C<bless>.  Once you create a
 container, you may C<bless> it in your own package.  The blessing is
 persistent.  For example,
 
@@ -297,7 +294,7 @@ has undefined results.
 =head2 ARRAYS
 
 Arrays will be available as soon as Larry and friends fix the TIEARRAY
-interface.  (See perltie(3) or http://www.perl.org more info.)
+interface.  (See perltie(3) or http://www.perl.com more info.)
 
 =head2 HASHES
 
@@ -312,8 +309,8 @@ scale well, but they do afford a compact representation.
 ObjectStore's C<os_Dictionary> is used for large cardinalities.
 
 Hashes are created implicitly during assignment.  Implicitly created
-hashes assume an expected cardinality of around ten and are created in
-the same segment as the enclosing hash.
+hashes assume an expected cardinality of around ten.  They are created
+in the same segment as the enclosing hash.
 
     $dict->{foo} = { 'fwaz'=> { 1=>'blort', 'snorf'=>3 }, b=>'ouph' };
 
@@ -329,11 +326,43 @@ Perl saves us again!  Relief.
 
 =head1 OSPEEK
 
-While no official schema is need to create a database, the C<ospeek>
-utility can be used to generate a sample of data content and
-structure.  The following output was snapped from a database that
-supports a CGI application we have developed.  Note how circular
-references and pointers between objects are summarized.
+While there is no official schema for a database, the C<ospeek>
+utility generates a sample of data content and structure.  The
+following output was snapped from a database that supports a CGI
+application we have developed.  Note how circular references and
+pointers between objects are summarized.
+
+=head2 WAIT!  NO SCHEMA?!  HOW CAN THIS WORK?
+
+When you write down a central schema, you are violating the principle
+of encapsulation.  This is dumb.  None of the usual database
+operations require a central schema.  Why create artificial
+dependencies between your classes when you can avoid it?
+
+=head2 LAZY EVOLUTION
+
+Even schema evolution can be done piecemeal.  Give all your objects an
+C<evolve> method that insures that the representation is up-to-date.
+
+=over 4
+
+=item *
+
+Either version stamp your objects.
+
+=item *
+
+Or intelligently figure out how to evolve objects by examining their
+current structure.
+
+=back
+
+The main thing is to keep an archive of prior formats of object
+instances to regression test your new C<evolve> methods.  If you can
+do extracts to a mini-database, that would do the trick.  Then just
+run your new code over a historical collection of mini-databases.
+
+=head2 OSPEEK EXAMPLE
 
  ObjStore::Root=SCALAR(0x18aa6c) Bright = Node {
     VERSION => 5,
@@ -502,13 +531,116 @@ references and pointers between objects are summarized.
   },
 
 
+=head1 WHY IS PERL BETTER FOR DATABASES THAN C++, JAVA, OR SQL?
+
+When you write a structure declaration in C++ or Java you are
+assigning both field-names, field-types, and field-order.
+
+  struct CXX {
+	char *name;
+	char *title;
+	double size;
+  };
+
+Programs almost always require a recompile to change any of these
+attributes.  This is fine for small to medium size applications but is
+not suitable for large databases.  It is too inflexible.  An SQL-type
+language is needed.
+
+When you create a table in SQL you are assigning only field-names and
+field-types.
+
+  create table CXX
+  (name varchar(80),
+   title varchar(80),
+   size double)
+
+This is a more flexible data declaration, but SQL gives you far less
+expressive power than C++ or Java.  Applications end up being written
+in C++ or Java while their data is stored in SQL.  Managing the
+syncronization between the two languages creates a lot of extra
+complexity.  So much so that there are many software companies that
+exist solely to help address this headache.
+
+Perl is better because it spans all the requirements in a single
+language.  For example, this is similar to an SQL table:
+
+  my $h1 = { name => undef, title => undef, size => undef };
+
+Only the field-names are specified.
+
+To address the other side of the spectrum, Malcolm Beattie is working
+on a Perl compiler which is currently in beta-test.  Here is his brief
+description of a new hybrid hash-array that is supported:
+
+	An array ref $a can be dereferenced as if it were a hash
+ref.  $a->{foo} looks up the key "foo" in %{$a->[0]}. The value is the
+index in the true underlying array @$a. As an addition, if the array
+ref is in a lexical variable tagged with a classname ("my CXX $obj" to
+match your example above) then constant key dereferences of the form
+$obj->{foo} are mapped to $obj->[123] at compile time by looking up
+the index in %CXX::FIELDS.
+
+For example:
+
+  my $schema_hashref = { 'field1' => 1, 'field2' => 2 };
+  my $arr = [$schema_hashref, 'fwaz', 'snorf'];
+  print "$arr->{field1} : $arr->{field2}\n";      # "fwaz : snorf"
+
+=head2 SUMMARY
+
+Perl can store data
+
+=over 4
+
+=item *
+
+optimized for flexibility or for speed
+
+=item * 
+
+in transient memory or persistent memory
+
+=back
+
+without a loss of programmer friendiness.
+
 =head1 PERSISTENT REPRESENTATION
+
+You don't have to understand anything about the persistent
+representation.  Just know that:
+
+=over 4
+
+=item *
+
+ObjectStore is outrageously powerful, sophisticated, even
+over-engineered.
+
+=item *
+
+The Perl interface is optimized for simplicity and easy of use.  I<(If it's
+not fun, why bother?)>
+
+=back
+
+The performance of raw ObjectStore is so good that even with a gunky
+Perl layer, benchmarks will show that relational databases can be
+safely left on the bookshelf where they belong.
+
+=head2 NEED MORE SPEED?
+
+If you need more speed, wait 1-4 months for Perl5 to get a compiler
+and kernel threads.  Or keep reading and learn about dynamically
+linking your own custom C++ objects.
+
+=head2 UNDER THE HOOD
 
 It is not practical to simply make perl's internal data structures
 persistent.  For one thing, there are horrendous technical problems.
 But more importantly, values in the database have different
-requirements than transient values.  Upscale, New York style attire is
-needed.
+requirements than transient values.  The dress code is upscale, New
+York style attire.
 
 =over 4
 
@@ -520,24 +652,22 @@ megabytes, a few percent difference in compactness can mean a lot.
 
 =item * REFERENCE COUNTING
 
-Persistent data is reference counted differently from transient data.
+Persistent data is reference counted separately from transient data.
 
 =back
 
-Fortunately, you don't have to think about or understand anything
-about the persistent representation unless you want to have precise
-control of your database activities.
+Sounds like New York, yes?
 
-=head1 GO BEYOND
-
-Here is an outline of how to go extension crazy.
+=head2 GO EXTENSION CRAZY
 
 C<ObjStore::UNIVERSAL> is the base class for all persistent types.
 
-In general, you cannot directly access persistent scalars from Perl;
-they are always immediately copied into transient scalars.  So the
-C<ObjStore::UNIVERSAL> base class is only used for objects (or
-collections).  The C<'_at'> method can be used to access scalars as
+You cannot directly access persistent scalars from Perl. They are
+always immediately copied into transient scalars.  So the
+C<ObjStore::UNIVERSAL> base class is only for objects (or
+collections).
+
+The C<'_at'> method can be used to access scalars as
 C<'ObjStore::Raw'> objects in certain cases, but there are no methods
 to manipulate them except from C++.  Currently, only C<bless> makes
 use of the C<_at> method.
@@ -547,6 +677,8 @@ C<ObjStore::Set> is the base class for sets.
 C<ObjStore::HV> is the base class for tied hashes.
 
 C<ObjStore::AV> is the base class for tied arrays.
+
+C<ObjStore::Text> will be the base class for large binary data.
 
 When an ObjectStore exception occurs, C<$ObjStore::Exception> is
 called with an explaination.  You can replace the default handler with
@@ -558,7 +690,7 @@ and returns a persistent object of the appropriate configuration.  If
 you'd like, you can replace the default function with your own!
 
 How does the ObjStore module know how to translate nested transient
-structures into nested persistent structures?  By default,
+structures into nested persistent structures?
 C<ObjStore::DEFAULT_GATEWAY> makes the determination.  You can replace
 it with your own code by using C<my $oldgw =
 ObjStore::gateway($coderef)>.
@@ -569,10 +701,10 @@ built-in representations (C<*_builtin.c>).
 
 You can add new types of objects that inherit from
 C<ObjStore::UNIVERSAL>.  Suppose you want highly optimized, persistent
-bit vectors or matrics?  These would not be difficult to add.
+bit vectors?  Or matrics?  These would not be difficult to add.
 Especially once Object Design figures out how to support multiple
 application schemas within the same executable.  They claim that this
-facility will be available in the next release.
+tonal facility will be available in the next release.
 
 =head2 OSSV_MAGIC
 
@@ -594,19 +726,20 @@ cases, the C<OSSVPV> should be used.
 
 =over 4
 
-=item * Text objects implemented using osmmtype and subclassed from
-IO::Handle.  Support for the Verity Text Object Manager.
+=item * MORE BUILT-IN DATA TYPES
 
-=item * Support for notification, database access control, and any
+Text objects implemented using osmmtype and subclassed from
+IO::Handle.  Support for one of Object Design's Text Object Managers.
+Support for bit vectors and matrics.
+
+=item * MORE APIS
+
+Support for notification, database access control, and any
 other interesting ObjectStore APIs.
-
-=item * Java integration.
-
-=item * Better documentation.
 
 =back
 
-=head1 QUIRKS & MISFEATURES
+=head1 QUIRKS
 
 =over 4
 
@@ -626,7 +759,8 @@ release.
 
 Numbers (integers and doubles) are stored in separately allocated
 memory blocks.  This is probably not as efficient as a union, but
-unions are nearly impossible to manage in ObjectStore.
+unions are nearly impossible to manage in ObjectStore.  Would pool
+allocation be a good trade-off?
 
 =item * CURSED OBJECTS
 
@@ -653,14 +787,17 @@ Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
 This package is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  Perl / ObjectStore is available
 via any CPAN mirror site.  See
-http://www.perl.org/CPAN/modules/by-module/ObjStore
+http://www.perl.com/CPAN/modules/by-module/ObjStore
 
 Portions of the collection code snapped from I<splash>, Jim Morris's
 delightful C++ library ftp://ftp.wolfman.com/users/morris/public/splash .
 
+Also, a poignant thanks to all the wonderful teachers with which I've
+had the opportunity of studying.
+
 =head1 SEE ALSO
 
-Examples in the t/ directory, sack.pl, Perl5, ObjectStore, I<and fortunately not SQL!>
+Examples in the t/ directory, Perl5, ObjectStore, I<and happily not
+SQL!>
 
 =cut
-

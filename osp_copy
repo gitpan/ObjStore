@@ -1,4 +1,4 @@
-#!perl -w
+#!/nw/dev/usr/bin/perl -w
 
 package ObjStore::Copier;
 use strict;

@@ -24,7 +24,6 @@ begin 'update', sub {
 	my $hv = new ObjStore::HV($db, 'splash_array', 7);
 	$john = $db->root('John', $hv);
     }
-    
     if (ref $john eq 'ObjStore::HV') {ok}
     else {
 	print "perl: " . join(" ", unpack("c*", 'ObjStore::HV')) . "\n";

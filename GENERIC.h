@@ -28,6 +28,7 @@ struct hent {
   OSSV hv;
   hent *operator=(int);
   hent *operator=(const hent &);
+  void FORCEUNDEF();
 };
 
 struct OSPV_hvarray : OSPV_Generic {
@@ -36,14 +37,14 @@ struct OSPV_hvarray : OSPV_Generic {
   OSPV_hvarray(int);
   virtual ~OSPV_hvarray();
   static void _boot(HV *);
-  virtual OSPV_Cursor *new_cursor(os_segment *seg);
-  virtual ossv_bridge *_new_bridge(OSSVPV *);
+  virtual OSSVPV *new_cursor(os_segment *seg);
+  virtual ossv_bridge *new_bridge();
   virtual char *os_class(STRLEN *);
   virtual int get_perl_type();
   int index_of(char *key);
   int first(int start);
-  virtual SV *FETCHp(char *key);
-  virtual SV *STOREp(char *key, SV *value);
+  virtual OSSV *FETCHp(char *key);
+  virtual OSSV *STOREp(char *key, SV *value);
   virtual void DELETE(char *key);
   virtual void CLEAR();
   virtual int EXISTS(char *key);
@@ -51,6 +52,7 @@ struct OSPV_hvarray : OSPV_Generic {
   virtual SV *NEXT(ossv_bridge*);
   virtual double _percent_filled();
   virtual int _count();
+  virtual OSSV *traverse(char *keyish);
 };
 
 struct OSPV_hvarray_cs : OSPV_Cursor {
@@ -68,13 +70,13 @@ struct OSPV_setarray : OSPV_Generic {
   OSPV_setarray(int size);
   virtual ~OSPV_setarray();
   static void _boot(HV *);
-  virtual OSPV_Cursor *new_cursor(os_segment *seg);
-  virtual ossv_bridge *_new_bridge(OSSVPV *);
+  virtual OSSVPV *new_cursor(os_segment *seg);
+  virtual ossv_bridge *new_bridge();
   virtual char *os_class(STRLEN *);
   int first(int start);
-  virtual void add(SV *);
-  virtual int contains(SV *);
-  virtual void rm(SV *);
+  virtual void set_add(SV *);
+  virtual int set_contains(SV *);
+  virtual void set_rm(SV *);
   virtual SV *FIRST(ossv_bridge*);
   virtual SV *NEXT(ossv_bridge*);
   virtual void CLEAR();
@@ -102,18 +104,19 @@ struct OSPV_hvdict : OSPV_Generic {
   OSPV_hvdict(os_unsigned_int32);
   virtual ~OSPV_hvdict();
   static void _boot(HV *);
-  virtual ossv_bridge *_new_bridge(OSSVPV *);
-  virtual OSPV_Cursor *new_cursor(os_segment *seg);
+  virtual ossv_bridge *new_bridge();
+  virtual OSSVPV *new_cursor(os_segment *seg);
   virtual char *os_class(STRLEN *);
   virtual int get_perl_type();
-  virtual SV *FETCHp(char *key);
-  virtual SV *STOREp(char *key, SV *value);
+  virtual OSSV *FETCHp(char *key);
+  virtual OSSV *STOREp(char *key, SV *value);
   virtual void DELETE(char *key);
   virtual void CLEAR();
   virtual int EXISTS(char *key);
   virtual SV *FIRST(ossv_bridge*);
   virtual SV *NEXT(ossv_bridge*);
   virtual int _count();
+  virtual OSSV *traverse(char *keyish);
 };
 
 struct OSPV_hvdict_cs : OSPV_Cursor {
@@ -132,12 +135,12 @@ struct OSPV_sethash : OSPV_Generic {
   OSPV_sethash(os_unsigned_int32 size);
   virtual ~OSPV_sethash();
   static void _boot(HV *);
-  virtual ossv_bridge *_new_bridge(OSSVPV *);
-  virtual OSPV_Cursor *new_cursor(os_segment *seg);
+  virtual ossv_bridge *new_bridge();
+  virtual OSSVPV *new_cursor(os_segment *seg);
   virtual char *os_class(STRLEN *);
-  virtual void add(SV *);
-  virtual int contains(SV *);
-  virtual void rm(SV *);
+  virtual void set_add(SV *);
+  virtual int set_contains(SV *);
+  virtual void set_rm(SV *);
   virtual SV *FIRST(ossv_bridge*);
   virtual SV *NEXT(ossv_bridge*);
   virtual void CLEAR();
@@ -162,6 +165,7 @@ struct hvent2 {
   OSSV hv;
   hvent2();
   ~hvent2();
+  void FORCEUNDEF();
   void set_undef();
   int valid() const;
   void set_key(char *nkey);
@@ -179,7 +183,7 @@ struct OSPV_avarray : OSPV_Generic {
   OSPV_avarray(int);
   virtual ~OSPV_avarray();
   static void _boot(HV *);
-  virtual OSPV_Cursor *new_cursor(os_segment *seg);
+  virtual OSSVPV *new_cursor(os_segment *seg);
   virtual char *os_class(STRLEN *);
   virtual int get_perl_type();
   virtual OSSV *FETCHi(int xx);
@@ -190,6 +194,7 @@ struct OSPV_avarray : OSPV_Generic {
   virtual void CLEAR();
   virtual double _percent_filled();
   virtual int _count();
+  virtual OSSV *traverse(char *keyish);
 };
 
 struct OSPV_avarray_cs : OSPV_Cursor {
@@ -207,14 +212,14 @@ struct OSPV_hvarray2 : OSPV_Generic {
   OSPV_hvarray2(int);
   virtual ~OSPV_hvarray2();
   static void _boot(HV *);
-  virtual OSPV_Cursor *new_cursor(os_segment *seg);
-  virtual ossv_bridge *_new_bridge(OSSVPV *);
+  virtual OSSVPV *new_cursor(os_segment *seg);
+  virtual ossv_bridge *new_bridge();
   virtual char *os_class(STRLEN *);
   virtual int get_perl_type();
   int index_of(char *key);
   int first(int start);
-  virtual SV *FETCHp(char *key);
-  virtual SV *STOREp(char *key, SV *value);
+  virtual OSSV *FETCHp(char *key);
+  virtual OSSV *STOREp(char *key, SV *value);
   virtual void DELETE(char *key);
   virtual void CLEAR();
   virtual int EXISTS(char *key);
@@ -222,6 +227,7 @@ struct OSPV_hvarray2 : OSPV_Generic {
   virtual SV *NEXT(ossv_bridge*);
   virtual double _percent_filled();
   virtual int _count();
+  virtual OSSV *traverse(char *keyish);
 };
 
 struct OSPV_hvarray2_cs : OSPV_Cursor {

@@ -1,9 +1,15 @@
-Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
-This package is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
+** 11-21-97 RELEASE 1.20
+
+- 'bless' now stores the @ISA tree at bless-time.  Use $o->isa($class)
+to query it.  For the transient @ISA, use $o->UNIVERSAL::isa($class).
+
+- Reference support revamped.  Transient references and unprotected
+references are now supported.
+
+- Basic import/export of 2D structure via CSV files (Excel format).
 
 
-** 10-31-97 Released 1.19 (Haloween Edition)
+** 10-31-97 RELEASE 1.19 (Haloween Edition)
 
 - Emulation of RDBMS tables.  Unstructured perl databases are, well,
 unstructured.  The RDBMS table paradigm is a surprisingly good way to
@@ -23,7 +29,7 @@ transactions are now fully supported.
 - Bless is now non-intrusive and customizable.
 
 
-** 10-11-97 Released 1.17
+** 10-11-97 RELEASE 1.17
 
 - PERL / OBJECTSTORE SHELL !!
 
@@ -33,13 +39,11 @@ transactions are now fully supported.
 
 - Support for cross database references.
 
-- Simplified 'open' API.
-
 - Sets depreciated.  The interface is there, but they are
 re-implemented with hashes.
 
 
-** 10-03-97 Released 1.16
+** 10-03-97 RELEASE 1.16
 
 - All transient data related to persistent memory is now garbage
 collected immediately after a transaction finishes.  This should fix
@@ -53,7 +57,7 @@ into the database.  This is necessary to prevent the inadvertant
 creation of uncollectable cyclic structures.
 
 
-** 09-27-97 Released 1.15
+** 09-27-97 RELEASE 1.15
 
 - Expanded analysis of Perl, Java, C++, and SQL as database languages.
 
@@ -65,28 +69,21 @@ creation of uncollectable cyclic structures.
 are instantiated in transient memory.
 
 
-** 08-16-97 Released 1.11
-
-- Update refcnts for transient referers in update & abort_only
-transactions.  Persistent memory leaks no longer possible.
+** 08-16-97 RELEASE 1.11
 
 - ospeek restricted to show only three instances per class.
 
 
-** 08-11-97 Released 1.10
+** 08-11-97 RELEASE 1.10
 
 - Overloaded the stringify operator for persistent objects.
-
-- ospeek [-addr]
 
 - Important typemap fixes plus other minor stuff.
 
 
-** 08-06-97 Released 1.09
+** 08-06-97 RELEASE 1.09
 
 - At our site we are now using osperl for about 2GB worth of data!
-
-- Persistent blessings now fully tested and working.
 
 - ObjectStore transactions and exceptions now fully integrated into
 Perl.  Cursors have been removed from persistent data; read_only
@@ -99,25 +96,24 @@ blazingly fast!
 - Regularized peristent typing in preparation for extensibility.
 
 - Peek rewrite with ideas from Data::Dumper.  Peek on circular data
-structures.  Peek reports percent utilization to the delight of
-accountants everywhere.
+structures.
 
 - Unions removed from the schema.  This fix makes it easy to evolve
-databases in the event of future schema enhancements.
+in the event of future schema enhancements.
 
-- Reference counts are now 32bits wide and check for overflow.
+- Reference counts are now 32bits wide (and check for overflow :-).
 
 - Static functions (e.g. ObjStore::Segment::of) are now called with ::
 instead of -> for greater efficiency.  You wouldn't want to subclass
 the core classes anyway.
 
 
-** 07-05-97 Released 1.06 
+** 07-05-97 RELEASE 1.06 
 
 - Improved peek.  Now peek from the command line - 'ospeek <database>'!
 
 
-** Released 1.03
+** RELEASE 1.03
 
 - Can't wait for reasonable tied arrays!  Added array-based Sets.
 They're not tied, but at least they're inefficient.
@@ -128,7 +124,7 @@ can be run and the database does not grow.
 - Blessings now persistent!  (Untested)
 
 
-** Released 1.02
+** RELEASE 1.02
 
 - Added ObjStore::peek($var) - like Data::Dumper except that it works
 better on gigantic databases.  Only three elements are printed from
@@ -136,11 +132,10 @@ large hashes, while small hashes are printed completely.  The meaning
 of 'large' can be customized (not yet).
 
 
-** Released 1.00
+** RELEASE 1.00
 
-- The first release, written during our 60 day ObjectStore evaluation.
-Why does ObjectStore have a reputation of being difficult to work
-with?  With over ten years of self-directed study I knew this
-combination would be fantastic and I finally had a chance!
+- The first release, written during our 60 day ObjectStore evaluation!
+Why does ObjectStore have a reputation of being difficult?  (Given my
+self-directed study I knew an OS/perl combination would be fantastic!)
 Apparently, it is my mission to save the world from the unspeakable
 torture of relational databases!

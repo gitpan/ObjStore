@@ -67,8 +67,9 @@ sub new_cursor {
 }
 
 package ObjStore::SetEmulation::Cursor;
+use ObjStore;
 use vars '@ISA';
-@ISA = 'ObjStore::UNIVERSAL::Cursor';
+@ISA = 'ObjStore::Cursor';
 
 sub at {
     my ($o) = @_;

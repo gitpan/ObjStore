@@ -9,7 +9,7 @@ use test;
 #ObjStore::debug qw(PANIC);
 
 &open_db;
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     $john? ok:not_ok;
     my $a = $john->{'array'} = new ObjStore::AV($db);
@@ -29,7 +29,7 @@ try_update {
     for my $x (1..10) { $a->[$x + 4] = $x }
 };
 
-try_read {
+begin sub {
     my $john = $db->root('John');
     my $a = $john->{'array'};
     ($a->[0] == 1.5 and
@@ -43,7 +43,7 @@ try_read {
     "$a->[4]{zip}" eq "$a" ? ok:not_ok;
 };
 
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     $john->{'array'}[4] = undef;  #break circular link
     delete $john->{'array'};

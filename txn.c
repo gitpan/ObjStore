@@ -1,5 +1,21 @@
 #include "osperl.h"
 
+void osp_croak(const char* pat, ...)
+{
+  dSP;
+  va_list args;
+  va_start(args, pat);
+  char *message = mess(pat, &args);
+  va_end(args);
+  SV *msg = newSVpv(message, 0);
+  SvREADONLY_on(msg);
+  SAVEFREESV(msg);
+  PUSHMARK(sp);
+  XPUSHs(msg);
+  PUTBACK;
+  perl_call_pv("Carp::croak", G_DISCARD);
+}
+
 // Since perl_exception has no parent and is never signalled, we always
 // get an unhandled exception when ObjectStore throws.
 DEFINE_EXCEPTION(perl_exception,"Perl/ObjStore Exception",0);
@@ -20,7 +36,7 @@ osp_thr *osp_thr::fetch()
   SV *info = * av_fetch(thr->specific, info_key, 1);
   assert(info);
   if (!SvIOK(info)) {
-    DEBUG_thread(warn("ObjStore: creating info for thread %p at %d",
+    DEBUG_thread(warn("ObjStore: creating info for thread %p at [%d]",
 		      thr, info_key));
     sv_setiv(info, (IV) new osp_thr);
     SvREFCNT_inc(info);
@@ -116,7 +132,6 @@ ossv_bridge::ossv_bridge(OSSVPV *_pv)
   : pv(_pv)
 {
   is_transient = os_segment::of(pv) == os_segment::of(0);
-  is_strong_ref = 1;
   can_delete = 0;
 
   dOSP ; dTXN ;
@@ -137,22 +152,6 @@ ossv_bridge::~ossv_bridge()
   DEBUG_bridge(warn("ossv_bridge(0x%x)->DESTROY", this));
 }
 
-/*
-void ossv_bridge::HOLD()
-{
-  if (is_strong_ref) return;
-  if (!pv) croak("%p->HOLD(): too late; already lost reference", this);
-  dOSP ; dTXN ;
-  if (txn->can_update()) {
-    DEBUG_bridge(warn("ossv_bridge 0x%x->HOLD(pv=0x%x) updt=%d",
-		      this, pv, txn->can_update()));
-    ++ is_strong_ref;
-    pv->REF_inc();
-    pv->wREF_dec();
-  }
-}
-*/
-
 int ossv_bridge::ready()
 { return can_delete && !pv; }
 
@@ -172,8 +171,7 @@ void ossv_bridge::unref()
   DEBUG_bridge(warn("ossv_bridge 0x%x->unref(pv=0x%x) updt=%d",
 		    this, copy, txn->can_update()));
   if (txn->can_update()) {
-    if (is_strong_ref) copy->REF_dec();
-//    else               copy->wREF_dec();
+    copy->REF_dec();
   }
 }
 

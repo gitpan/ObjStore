@@ -1,6 +1,42 @@
 What do you get when you cross a mission-critical enterprise-class
 database with a camel?
 
+#!/usr/local/bin/perl -w
+
+# SQL Challenge
+#
+# 1. Create a new database or use the existing one.
+# 2. Populate a table with questions.
+# 3. Print them out in the general pattern: 1 1,2 1,2,3 ...
+
+use ObjStore;
+use ObjStore::Config;
+
+my $db = ObjStore::open(TMP_DBDIR . "/challenge", 'update', 0666);
+
+begin 'update', sub {
+    $db->root('questions' => sub { 
+		  my $i = new ObjStore::Index($db);
+		  $i->configure(path => 'msg', unique => 1);
+
+		  $i->add({ msg => "Do you want some orange juice?" });
+		  $i->add({ msg => "Are you hungry?" });
+		  $i->add({ msg => "How about pizza?" });
+		  $i->add({ msg => "SQL is the best language ever!" });
+		  $i;
+	      });
+};
+
+begin sub {
+    my $c = $db->root('questions')->new_cursor;
+    for (my $e=1; $e <= $c->count; $e++) {
+	$c->moveto(-1);
+	for (1..$e) { print $c->each(1)->{msg}."\n"; }
+	print "\n";
+    }
+};
+
+
 Name           DSLI  Description                                  Info
 -----------    ----  -------------------------------------------- -----
 ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
@@ -8,7 +44,7 @@ ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 - Requires ObjectStore OODBMS (http://www.odi.com) & perl 5.004_04.
 - Perl 5.004_54 or better recommended.
 
-Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
+Get it via http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 
 ##################
@@ -16,7 +52,24 @@ Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
 ##################
 
 
-** 12-13-97 Released 1.21
+** 01-06-98 RELEASE 1.22 - HAPPY NEW YEAR!
+
+- Real indices!  Queries such as /date between qw(Nov97 Jan98)/ are
+now easy!  And you can index on multiple keys: $index->configure(path
+=> "last_name, first_name").
+
+- No longer ignores -MCarp=verbose!
+
+- posh: both cd & ls now use the same path resolver.
+
+- Builds via Makefile.PL.  Ported to Digital Unix 4.0 (Alpha).
+
+- The stargate no longer destroys data as it is copied.
+
+- 'new_cursor' now defaults to transient memory.
+
+
+** 12-13-97 RELEASE 1.21
 
 - THE TUTORIAL IS DONE!  See ObjStore::Tutorial!
 
@@ -28,19 +81,6 @@ ObjStore::CSV; untested support for kernel threads.
 - 'Table' redesigned for performance.  See ObjStore::Table2.
 
 - The documentation is updated & re-written!
-
-
-** 11-21-97 Released 1.20
-
-- 'bless' now stores the @ISA tree at bless-time.  Use $o->isa($class)
-to query it.  For the transient @ISA, use $o->UNIVERSAL::isa($class).
-
-- Reference support is revamped.  Transient references and unprotected
-references are now supported.
-
-- 'posh' is vastly enhanced.
-
-- Basic export of 2D structure to CSV format files (Excel format).
 
 
 see ./INSTALL for hints on installation
@@ -57,7 +97,9 @@ majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
 "perl -MObjStore=PANIC" and mail the output to the mailing list.)
 
 -------------------------------------------------------------------
-Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
-This software is provided "as is" without express or implied warranty.
-This package is free software; you can redistribute it and/or modify
-it under the same terms as perl itself.
+Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
+
+This package is free software and is provided "as is" without express
+or implied warranty.  It may be used, redistributed and/or modified
+under the terms of the Perl Artistic License (see
+http://www.perl.com/perl/misc/Artistic.html)

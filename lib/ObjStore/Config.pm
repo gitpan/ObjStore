@@ -2,13 +2,8 @@ package ObjStore::Config;
 require Exporter;
 @ISA       = 'Exporter';
 @EXPORT    = qw(&TMP_DBDIR);
-@EXPORT_OK = qw(&SCHEMA_DBDIR &LINKAGE);
+@EXPORT_OK = qw(&SCHEMA_DBDIR);
 %EXPORT_TAGS = (ALL => [@EXPORT, @EXPORT_OK]);
-
-
-# Specify linkage (and recompile):
-
-sub LINKAGE() { 'dyn' }  #'dyn' or 'static'
 
 
 # Paths should have no trailing slash.

@@ -6,6 +6,7 @@ package Winner;
 package main;
 
 use strict;
+use Carp;
 use ObjStore ':ADV';
 use lib './t';
 use test;
@@ -19,8 +20,27 @@ ref $db eq 'TestDB'? ok:not_ok;
 
 # fold duplicated code XXX
 
+sub _isa {
+    no strict 'refs';
+    my ($o, $c, $loop) = @_;
+    my $err=0;
+    $loop ||= 0;
+    die "recursion $c" if $loop++ > 100;
+    if (! $o->isa($c)) {
+	warn "$o is not a $c\n";
+	$err++;
+    }
+    for my $c (@{"$c\::ISA"}) { $err += _isa($o, $c, $loop); }
+    $err;
+}
+
 sub isa_matches {
-    # check whole tree XXX
+    no strict 'refs';
+    my ($o) = @_;
+    my $class = ref $o;
+    my $err=0;
+    for my $c (@{"$class\::ISA"}) { $err += _isa($o, $c); }
+    !$err;
 }
 
 sub isa_test {
@@ -40,13 +60,13 @@ sub isa_test {
     $bs2 = $o->_blessto_slot;
 #    ObjStore::peek($bs2);
     $bs1 == $bs2 ? not_ok:ok;
-    $o->isa('Winner') ? ok:not_ok; #6
+    isa_matches($o)? ok:not_ok;
 
     pop @{"$pkg\::ISA"};
     $o->isa('Winner') ? ok:not_ok; #7
 #    $o->UNIVERSAL::isa('Winner') ? not_ok:ok; #XXX
     bless $o, $pkg;
-    $o->isa('Winner') ? not_ok:ok;
+    isa_matches($o)? ok:not_ok;
 }
 
 begin 'update', sub {

@@ -1,0 +1,81 @@
+/* Be careful to only edit the *.tmpl file. [-*-C-*- source] */
+
+#ifndef _tv_setup_
+#define _tv_setup_
+
+#include "osperl.h"
+
+/*
+  Why 19?
+  - Trade-off between array operations and tree operations.
+  - 19 slots gives 1 byte per element average overhead & 19 is a prime number
+*/
+#define TnWIDTH		19
+
+/* Make structures a multiple of 4 bytes & add extra space for the future */
+#define TV_PAD /**/
+
+#define TV_PANIC		croak
+
+/* You should not call these directly. */
+#define NEW_TN(near)\
+	new(os_segment::of(near), TN::get_os_typespec()) TN
+#define NEW_TCE(near,xx) \
+	new(os_segment::of(near), TCE::get_os_typespec(), xx) TCE[xx]
+#define FREE_XPVTV(tv)
+#define FREE_XPVTC(tc)
+#define FREE_TN(tn)		delete tn
+#define FREE_TCE(tce)		delete [] tce
+#define dTYPESPEC(t) \
+	static os_typespec *get_os_typespec();
+
+#define TnDATA_T		OSSVPV*
+#define TV_PLANT_DAT(d)
+#define TV_UPROOT_DAT(d)
+
+#define TcTV_T			OSSVPV*
+#define TC_DECLARE_MYTV		OSSVPV *xtc_tv;
+#define TcOSPV(tc)		((OSPV_fatindex*)(tc)->xtc_tv)
+#define TcTV(tc,tv)				\
+STMT_START {					\
+	assert(tc->xtc_tv);			\
+	tv = &(TcOSPV(tc))->fi_tv;		\
+	assert(tv);				\
+} STMT_END
+
+#define TC_INIT_MYTV(tc)	tc->xtc_tv = 0
+#define TC_UNSET_TV(tc)
+
+// The magic involved here is rather thick and spongie.
+
+#define DEXTV_MAXKEYS 8
+
+#define TV_ESEEK_FDECL \
+int dextc_seek(dexXPVTC *tc, int keycnt, OSPV_Generic **pcache, OSSV **keys)
+
+#define TV_ESEEK_LDECL \
+  int kx;
+
+#define TV_ESEEK_SETUP \
+  DEBUG_index(warn("seek [%d]", keycnt)); \
+  for (kx=0; kx < keycnt; kx++) { \
+    DEBUG_index(warn("key = %s", keys[kx]->stringify())); \
+  }
+
+#define TV_ESEEK_CMP(cmp,k,d)						\
+  for (kx=0; kx < keycnt; kx++) {					\
+    OSSV *zk = OSPV_Generic::path_2key((OSSVPV*)d, pcache[kx]);		\
+    cmp = keys[kx]->compare(zk);					\
+    if (cmp) break;							\
+  }
+
+#include "tv.public"
+#include "FatTree.h"
+
+#define dDEXTMPCURSOR(dex)			\
+  FatTree_thr *gl;				\
+  THRINFO(FatTree, gl);				\
+  gl->tc.xtc_tv = dex;				\
+  dextc_reset(&gl->tc)
+
+#endif

@@ -16,12 +16,12 @@ eval { &ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
 $@ =~ m/does not exist/? ok:not_ok;
 
 # make sure the tripwire is ready
-try_update {
+begin 'update', sub {
     $db->root("tripwire", sub {new ObjStore::HV($db->create_segment, 7)});
 };
 die if $@;
 
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     $john->{right} = 69;
 };
@@ -79,7 +79,7 @@ begin 'update', sub {
 	&$code;
 	die "Didn't get deadlock";
     } elsif ($attempt == 2) {
-	try_update(\&$code);
+	begin 'update', \&$code;
 	die if $@;
     } else { 1 }
 };

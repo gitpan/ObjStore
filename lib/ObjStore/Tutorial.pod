@@ -1,5 +1,3 @@
-use strict;
-
 =head1 NAME
 
   ObjStore::Tutorial - A Gentle Introduction
@@ -9,6 +7,9 @@ use strict;
 This silly tutorial will help you become familiar with OS/Perl!
 
 The HTML version is easier to read than the man page version.
+
+Once you have won a few times, make sure to read the source code to
+see how easy it is to put stuff like this together.
 
 =head1 DESCRIPTION
 
@@ -400,15 +401,6 @@ C<I<$at = Worker=REF(0xe3980f48)%> B<>>
 
 =head1 API REFERENCE
 
-=cut
-
-#------------------------------------------------------------
-package Worker;
-package ObjStore::Tutorial;
-use ObjStore;
-use ObjStore::Table2;
-use base 'ObjStore::Table2::Database';
-
 =head2 C<ObjStore::Tutorial>
 
  $db = ObjStore::Tutorial[/export2/os/tmp/tutor, update] {
@@ -423,111 +415,23 @@ use base 'ObjStore::Table2::Database';
 
 =over 4
 
-=cut
-
-sub new {
-    my $class = shift;
-    my $db = $class->SUPER::new(@_);
-    $db->reset;
-    $db;
-}
-
 =item * $db->me
 
 Returns yourself.
-
-=cut
-
-sub me { shift->array->[0] }
 
 =item * $db->report
 
 Print a CSV style report of who works for whom.
 
-=cut
-
-sub report {
-    use ObjStore::CSV;
-    print_csv(shift->array,
-	      calc => {
-		       'boss_name' => sub {
-			   my $boss = shift->boss;
-			   $boss? $boss->name : 'nobody'
-		       },
-		      },
-	     );
-    ()
-}
-
 =item * $db->won
 
 Checks to see if you have won the tutorial.
-
-=cut
-
-sub won {
-    my ($o, $me) = @_;
-    $me ||= $o->array->[0];
-    print "Checking to see if $me->{name} has won...\n";
-    my $a = $o->array;
-    my $win=1;
-    my $loser;
-    my $boss;
-    for (my $x=0; $x < $a->_count; $x++) {
-	$loser = $a->[$x];
-	$boss = $loser->boss || 'nobody';
-	my $loop=0;
-	while ($loop < 100 && ref $boss && $boss->boss) {
-	    die "Loop detected at $boss->{name}" if ++$loop > 100;
-	    $boss = $boss->boss; 
-	}
-	next if $loser == $me && !ref($boss);
-	if ($boss != $me) { $win=0; last }
-    }
-    if ($win) { print "  Congratuations!  $me->{name} wins!\n"; }
-    else {
-	$boss = $boss->name if ref $boss;
-	print "  '$loser->{name}' works for '$boss' instead of you;\n";
-	print "  You haven't won until everybody works for you.\n";
-    }
-    ()
-}
 
 =item * $db->reset
 
 Resets the state of the tutorial.
 
-=cut
-
-sub reset {
-    my ($db) = @_;
-    my $t = $db->table;
-    $t->new_index('Field', 'name');
-
-    my $ar = $db->array;
-    while ($ar->_count) { $ar->_Pop }
-    for my $name (qw(subject subliminal submersible
-		     subrogation subservient subsidiary subsidy subsistent
-		     substantial substantive substituent substitute substrate
-		     subterfuge subterran
-		     subtracter subtrahend subvert)) {
-	$ar->_Push(new Worker($db, (rand()>.5?"Mr. ":"Ms. "). ucfirst($name)));
-    }
-    for (my $x=0; $x < $ar->_count; $x++) {
-	$ar->[$x]->boss($ar->[int(rand($ar->_count))]);
-    }
-    $t->rebuild_indices;
-    $db;
-}
-
 =back
-
-=cut
-
-#------------------------------------------------------------
-package Worker;
-use ObjStore;
-use base 'ObjStore::HV';
 
 =head2 C<Worker>
 
@@ -538,49 +442,17 @@ use base 'ObjStore::HV';
 
 =over 4
 
-=cut
-
-sub new {
-    my ($class, $where, $name) = @_;
-    my $o = $class->SUPER::new($where, 3);
-    $o->{name} = $name;
-    $o;
-}
-
 =item * $w->name([$new_name])
 
 Returns the current name of the worker.  If $new_name is given,
 does the re-assignment first.
-
-=cut
-
-sub name {
-    my ($o, $nn) = @_;
-    $o->{name} = $nn if @_ == 2;
-    $o->{name}
-}
 
 =item * $w->boss([$new_boss])
 
 Returns the current boss.  If a $new_boss is given, does the
 re-assignment first.
 
-=cut
-
-sub boss {
-    my ($o, $nb) = @_;
-    if (@_ == 2) {
-	if ($o == $nb) { delete $o->{boss}; }
-	else           { $o->{boss} = $nb;  }
-    }
-    $o->{boss};
-}
-
 =back
-
-=cut
-
-1;
 
 =head1 BUGS
 
@@ -589,10 +461,12 @@ change slightly as perl supports more overload-type features.
 
 =head1 AUTHOR
 
-Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
+Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
 
-This package is free software; you can redistribute it and/or modify
-it under the same terms as perl itself.  This software is provided "as
-is" without express or implied warranty.
+This package is free software and is provided "as is" without express
+or implied warranty.  It may be used, redistributed and/or modified
+under the terms of the Perl Artistic License (see
+http://www.perl.com/perl/misc/Artistic.html)
 
 =cut
+

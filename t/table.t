@@ -35,16 +35,15 @@ begin 'update', sub {
     $tbl->new_index('Field', 'e2', 'f2');
     $tbl->new_index('Field', 'long', 'f3->0');
 
-    $tbl->index('e1')->build;
-    $tbl->index('e2')->build;
-    $tbl->index('long')->build;
-
     bless $tbl, 'ObjStore::Table2';
     if ($tbl->is_corrupted(1)) {
 	not_ok; ObjStore::peek($tbl);
     } else {ok}
 
-    $tbl->rebuild_indices;
+    $tbl->add(new Row($tbl));
+    $tbl->remove($ar->[16]);
+
+#    $tbl->rebuild_indices;
     if ($tbl->is_corrupted(1)) {
 	not_ok; ObjStore::peek($tbl);
     } else {ok}

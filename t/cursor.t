@@ -42,7 +42,7 @@ sub chk1 {
     $ok? ok : not_ok;
 }
 
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     $john ? ok : not_ok;
     

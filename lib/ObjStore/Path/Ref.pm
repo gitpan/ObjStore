@@ -16,15 +16,19 @@ sub open {
     my $cnt = $o->_count;
     for (my $x=0; $x < $cnt; $x++) {
 	my $db = $o->[$x]->get_database();
-	$db->open($how) or die "$db->open: $@";
+	$db->open($how);
+	$o->[$x]->focus();  #must deref to check
     }
 }
 
-sub depth { my ($o) = @_; $o->_count; }
+sub depth {
+#    carp "$o->depth is depreciated";
+    my ($o) = @_; $o->_count;
+}
 
 sub focus {
     my ($o, $xx) = @_;
-    croak "Cursor unset" if $o->depth == 0;
+    return if $o->depth == 0;
     $xx = $o->depth - 1 if !defined $xx;
     $o->[$xx]->focus;
 }

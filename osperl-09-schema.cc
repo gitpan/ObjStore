@@ -1,8 +1,9 @@
 #include "osperl.h"
 #include "GENERIC.h"
+#include "FatTree.h"
 #include <ostore/manschem.hh>
 
-// OSSV is painful to evolve; everything else is e-z.
+// OSSV is painful to evolve; Everything else is ez!
 OS_MARK_SCHEMA_TYPE(OSSV);
 // scalars
 OS_MARK_SCHEMA_TYPE(OSPV_iv);
@@ -11,7 +12,6 @@ OS_MARK_SCHEMA_TYPE(OSPV_nv);
 OS_MARK_SCHEMA_TYPE(OSPV_Container);
 OS_MARK_SCHEMA_TYPE(OSPV_Generic);
 OS_MARK_SCHEMA_TYPE(OSPV_Ref2);
-OS_MARK_SCHEMA_TYPE(OSPV_Cursor);  // in limbo
 OS_MARK_SCHEMA_TYPE(OSPV_Cursor2);
 
 //-------------------------------- REFERENCES
@@ -25,9 +25,17 @@ OS_MARK_SCHEMA_TYPE(OSPV_avarray);
 OS_MARK_SCHEMA_TYPE(OSPV_avarray_cs);
 OS_MARK_SCHEMA_TYPE(OSPV_hvarray2);
 OS_MARK_SCHEMA_TYPE(OSPV_hvarray2_cs);
+// fat tree
+OS_MARK_SCHEMA_TYPE(dextn);
+OS_MARK_SCHEMA_TYPE(dexxpvtv);
+OS_MARK_SCHEMA_TYPE(dextce);
+OS_MARK_SCHEMA_TYPE(dexxpvtc);
+OS_MARK_SCHEMA_TYPE(OSPV_fatindex);
+OS_MARK_SCHEMA_TYPE(OSPV_fatindex_cs);
 
 //-------------------------------- DEPRECIATED
 OS_MARK_SCHEMA_TYPE(OSPV_Ref);
+OS_MARK_SCHEMA_TYPE(OSPV_Cursor);  // in limbo
 OS_MARK_SCHEMA_TYPE(hkey);
 OS_MARK_SCHEMA_TYPE(hent);
 // splash

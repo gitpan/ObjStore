@@ -56,8 +56,8 @@ improve locality and can be a unit of locking or caching.
 
 When you create a database object you must specify the segment in
 which it is to be allocated.  All objects use the form C<'new
-$class($where, ...)'>.  You may pass any persistent object
-(or database, or segment) in place of $where and the new object will
+$class($near, ...)'>.  You may pass any persistent object
+(or database, or segment) in place of $near and the new object will
 be created appropriately!
 
 =head2 Hashes
@@ -130,19 +130,21 @@ that have already been deleted.  C<SEGV> or garbled data can result.
 
 =head2 Cursors
 
-First-class cursors are incomplete and under construction.  If you can
-avoid them, do so!
+All containers have a method, C<new_cursor($near)>, that creates a
+persistent cursor for the given container.  The following methods are
+available.
 
-Containers have a method, C<new_cursor($segment)>, that creates a
-persistent cursor for the given container.  Think of a cursor as a
-heavy-weight reference.  The following methods are available, in
-addition to the methods for references.
-
-  $cs->seek_pole($pole);        # seek to the first or last element
+  $cs->focus();                 # returns the cursor's collection
+  $cs->moveto($pos);            # seek to the nth element
   ($k,$v) = $cs->at;            # returns the current element
-  ($k,$v) = $cs->next;          # returns the next element
+  ($k,$v) = $cs->each(1);       # returns the next element
 
 =over 4
+
+=item *
+
+First-class cursors for arrays & hashes are incomplete and under
+construction.  If you can avoid them, do so!
 
 =item *
 
@@ -152,38 +154,61 @@ elements are available.
 
 =item *
 
-You should not assume the order of iteration will follow any
-particular pattern (but it probably will).
+For hashes & arrays, you should not assume the order of iteration will
+follow any particular pattern (but it probably will).
 
 =item *
 
 If you change membership of a collection while you're iterating
 through it, something could break, so don't.
 
-=item *
-
-Depending on the collection representation, cursors may have
-additional useful behavior.  Currently, there is no way to test for
-this.
-
 =back
 
-In the future, cursors may be extended to support the following
-functionality:
+=head2 Indices
 
-=over 4
+SQL has this great facility called indices.  C<ObjStore> does too and
+they work in almost same!
 
-=item * MORE METHODS
+  my $nx = ObjStore::Index->new($near);
+  $nx->configure(unique => 1, path=>"name");
 
-  $en = $cs->prev;
-  $cs = $key;              # seek to $key
-  $dist = $cs - $cs2;      # return the distance between two cursors
+  $nx->add({name=> 'Square'}, {name=> 'Round'}, {name=> 'Triangular'});
 
-=item * FEATURE TESTS
+  my $c = $nx->new_cursor;
+  $c->seek('T');
+  $c->step(1);
+  warn $c->at()->{name}; # Triangular
 
-E.g. C<can_chicken_walk>
+Index cursors are a lot more powerful than hash or array cursors.
+Here are the available methods:
 
-=back
+  $c->focus();
+  $c->moveto();
+  $c->step($delta);
+  $c->seek(@keys);
+  my $pos = $c->pos();            
+  my @keys = $c->keys();
+  my $v = $c->at();
+  my $v = $c->each($delta);
+
+Where the following invariants hold:
+
+  $c->moveto($c->pos() + $delta) is $c->step($delta)
+  $c->each($delta) is { $c->step($delta); $c->at(); }
+
+To eliminate the possibility of indices becoming out-of-sync with the
+actual data, the data is marked read-only as it is indexed.  This
+happens at a per-field level until you start using longer paths.  For
+example,
+
+  my $category = { name => 'Bath Toy' };
+  my $row = { name => 'Rubber Ducky', category => $category };
+
+  $index->configure(path => 'category/name, name');
+
+The first key is the category's name.  The second key is the row's
+name.  When this record is added, the entire category object is marked
+read-only (key 1) and the row's name is marked read-only (key 2).
 
 =head2 And Access Paths (Oh My!)
 
@@ -206,6 +231,10 @@ While there is no formalized schema for a perl database, the C<ospeek>
 utility generates a sample of data content and structure.  C<ospeek>
 never outputs more than a short summary, without regard to the size of
 your database.
+
+You can also get the same thing from within perl:
+
+  ObjStore::peek($whatever);
 
 =head2 Wait!  No Schema?!  How Can This Scale?
 
@@ -262,7 +291,7 @@ Un-structured perl databases are probably under-constrained for most
 applications.  Fortunately, RDBMS style tables have been adapted,
 adopted, and included with this package.  While they are a little
 different from traditional tables, hopefully relational developers
-will feel right at home.  See C<ObjStore::Table2>.
+will feel right at home.  See C<ObjStore::Table3>.
 
 =head1 API REFERENCE
 
@@ -275,9 +304,36 @@ interest to ex-C<C++> developers.  If you need a function that isn't
 available in perl, send mail to the OS/Perl mailing list (see the
 README).
 
+=head2 Quick Start!
+
+  #!/usr/local/bin/perl -w
+ 
+  use ObjStore;
+  use ObjStore::Config;
+ 
+  my $db = ObjStore::open(TMP_DBDIR."/myjunk", 'update', 0666);
+ 
+  begin 'update', sub {
+
+    # $junk might be any arbitrary non-circular structure up to 2GB
+    my $junk = { 
+                  pork => [1,2,3],
+                  chicken => [1,2,3],
+                  wheat => [1,2,3],
+               };
+
+    $db->root("junk", sub { $junk });
+    
+    ObjStore::peek($db);
+  };
+
 =head2 C<ObjStore>
 
 =over 4
+
+=item * $db = ObjStore::open($pathname, $read_only, $mode);
+
+Also see C<ObjStore::HV::Database> & C<ObjStore::Table3::Database>.
 
 =item * $name = ObjStore::release_name()
 
@@ -296,8 +352,6 @@ README).
 =item * @Servers = ObjStore::get_all_servers();
 
 =item * $in_abort = ObjStore::abort_in_progress();
-
-=item * $db = ObjStore::open($pathname, $read_only, $mode);
 
 =item * $num = ObjStore::get_n_databases();
 
@@ -321,9 +375,26 @@ README).
 
 =head2 C<::Database>
 
-See C<ObjStore::HV::Database>, C<ObjStore::Table2::Database>
+See C<ObjStore::HV::Database>, C<ObjStore::Table3::Database>
 
 =over 4
+
+=item * $open_mode = $db->is_open();
+
+=item * $Seg = $db->create_segment();
+
+=item * $value = $db->root($root_name => sub{ $new_value });
+
+This is the recommended API for roots.  If the given root is not
+found, creates a new one.  Returns the root's current value.
+
+=item * $Seg = $db->get_segment($segment_number);
+
+Note that this method (correctly) never returns an error.  The only
+way to know which segments are actually created in a database is to
+iterate through C<get_all_segments>.
+
+=item * @Segments = $db->get_all_segments();
 
 =item * $db->close();
 
@@ -339,8 +410,6 @@ See C<ObjStore::HV::Database>, C<ObjStore::Table2::Database>
 
 =item * $ctime = $db->time_created();
 
-=item * $open_mode = $db->is_open();
-
 =item * $can_write = $db->is_writable();
 
 =item * $db->set_fetch_policy(policy[, blocksize]);
@@ -351,22 +420,11 @@ Policy can be one of C<segment>, C<page>, or C<stream>.
 
 Policy can be one of C<as_used>, C<read>, or C<write>.
 
-=item * $Seg = $db->create_segment();
-
-=item * $Seg = $db->get_segment($segment_number);
-
-=item * @Segments = $db->get_all_segments();
-
 =item * @Roots = $db->get_all_roots();
 
 =item * $root = $db->create_root($root_name);
 
 =item * $root = $db->find_root($root_name);
-
-=item * $value = $db->root($root_name => sub{ $new_value });
-
-This is the recommended API for roots.  If the given root is not
-found, creates a new one.  Returns the root's current value.
 
 =item * $db->destroy_root($root_name);
 
@@ -451,6 +509,8 @@ blindingly fast.
 
 =over 4
 
+=item * $Seg->set_comment($comment);
+
 =item * $Seg->destroy();
 
 =item * $size = $Seg->size();
@@ -462,8 +522,6 @@ blindingly fast.
 =item * $num = $Seg->get_number();
 
 =item * $comment = $Seg->get_comment();
-
-=item * $Seg->set_comment($comment);
 
 =item * $Seg->lock_into_cache();
 
@@ -664,12 +722,11 @@ locks are released only at the top-level [OS 4-5.0].)
 Create hashes and arrays pre-sized to exactly the right number of
 slots:
 
-  new ObjStore::HV($where, { key => 'value' });  # 1 slot
-  new ObjStore::AV($where, [1..3]);              # 3 slots
+  new ObjStore::HV($near, { key => 'value' });  # 1 slot
+  new ObjStore::AV($near, [1..3]);              # 3 slots
 
-Be aware, however, that any transient structures you pass through the
-stargate are dismembered as they are copied to insure that they can be
-transiently garbage collected.  [MAYCHANGE]
+(Be aware that any transient structures you pass through the stargate
+are I<no longer> dismembered as they are copied.)
 
 You can use the stargate directly:
 
@@ -944,21 +1001,27 @@ tonal facility will be available in the next release.
 
 =over 4
 
+=item * PERFECT NATURAL CLARITY
+
+The overwhelming top priority is to make this extension work
+seemlessly, obviously, and effortlessly.  Really, the only difference
+between lisp and perl is ease of use.  No detail will be overlooked,
+I<all> must conform to effortless styistic ecstasy.
+
 =item * APIs
 
 Support for notification, database access control, and any other
 interesting C<ObjectStore> APIs.
 
-=item * INTEGRATION WITH STANDARD PERL EXCEPTIONS
-
-Once there I<are> standard perl exceptions.
-
 =item * LEANER COLLECTIONS
 
-The C<ObjectStore> collections are weighted down with embedded index and
-query support.  Worse, C<ObjectStore> cursors cannot use references, only
-pointers.  I'd like to find a suite of lean representations for large
-cardinality collections to compliment the Splash collections.
+The C<ObjectStore> collections are weighted down with embedded index
+and query support.  Worse, C<ObjectStore> cursors do not even have
+half the features I want.  I'd like to find a suite of lean
+representations for large cardinality collections to compliment the
+Splash collections.  Source code availability is a must.  B-Trees are
+an obvious choice.  Is someone interested in reverse engineering
+www.plover.com/~mjd/perl into optimized C<C++>?
 
 =item * MORE BUILT-IN DATA TYPES
 
@@ -1112,6 +1175,10 @@ C<try_*> functions are depreciated.
 
 =over 4
 
+=item * LEAKS TRANSIENT C<XPVRV>s
+
+Work-arounds or a real fix are being considered.
+
 =item * TRANSACTIONS
 
 Transaction hold onto transient memory longer than necessary.
@@ -1134,13 +1201,15 @@ I didn't get a Ph.D in English.  Sorry!
 
 =head1 AUTHOR
 
-Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
+Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
 
-This package is free software; you can redistribute it and/or modify
-it under the same terms as perl itself.  This software is provided "as
-is" without express or implied warranty.  Perl / C<ObjectStore> is
-available via any CPAN mirror site.  See
-http://www.perl.com/CPAN/modules/by-module/ObjStore
+This package is free software and is provided "as is" without express
+or implied warranty.  It may be used, redistributed and/or modified
+under the terms of the Perl Artistic License (see
+http://www.perl.com/perl/misc/Artistic.html)
+
+Perl / C<ObjectStore> extension is available via any CPAN mirror site.
+See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 Portions of the collection code snapped from I<splash>, Jim Morris's
 delightful C<C++> library ftp://ftp.wolfman.com/users/morris/public/splash .
@@ -1151,7 +1220,7 @@ highly recommend it!
 
 =head1 SEE ALSO
 
-C<ObjStore::Tutorial>, C<ObjStore::Table2>, examples in the t/
+C<ObjStore::Tutorial>, C<ObjStore::Table3>, examples in the t/
 directory, I<and never again C<SQL>!>
 
 =cut

@@ -97,7 +97,7 @@ sub destroy {
 
 =head1 NAME
 
-ObjStore::AppInstance
+  ObjStore::AppInstance - A helper class for interactive ObjStore tools.
 
 =head1 SYNOPSIS
 

@@ -11,7 +11,7 @@ use test;
 
 &open_db;
 for my $rep (10, 100) {
-    try_update {
+    begin 'update', sub {
 	my $john = $db->root('John');
 	die "No database" if !$john;
     

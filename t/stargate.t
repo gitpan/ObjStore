@@ -17,19 +17,19 @@ sub chk_refs {
 my $refs;
 
 &open_db;
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     $refs = $john->_refcnt;
     chk_refs($john->_refcnt, $refs); #1
 
     my $c = [$john, {1=>\$john}];
     $john->STORE('gated', $c);
-    @$c == 0? ok:not_ok; #2
+    @$c == 0? not_ok:ok; #2
 
     chk_refs($john->_refcnt, $refs+1); #3
 };
 
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     chk_refs($john->_refcnt, $refs+1);
     $john->DELETE('gated');

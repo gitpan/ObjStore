@@ -34,7 +34,6 @@ sub print_csv {
     }
 
     my $skipsave = $st->{skip};
-    my $type = ObjStore::reftype($top);
     my $typehead;
 
     my $dorow;
@@ -98,9 +97,9 @@ sub print_csv {
 	}
     };
 
-    if (!$type) {
-	$st->{fh}->print("No records.\n");
-    } elsif ($type eq 'HASH') {
+#	$st->{fh}->print("No records.\n");
+
+    if ($top->isa('ObjStore::HV')) {
 	$typehead = 'key';
 	while (my($k,$v) = each %$top) {
 	    if ($st->{skip}) { --$st->{skip}; next; }
@@ -109,7 +108,7 @@ sub print_csv {
 	}
 	$dorow->();
 
-    } elsif ($type eq 'ARRAY') {
+    } elsif ($top->isa('ObjStore::AV') or $top->isa('ObjStore::Index')) {
 	$typehead = 'index';
 	my $arlen = $top->can("_count")? $top->_count() : scalar(@$top);
 	for (my $x=0; $x < $arlen; $x++) {

@@ -19,7 +19,7 @@ my $seg = shift @ARGV;
 
 if ($cmd eq 'dump') {
     my $db = ObjStore::open($path, 'mvcc');
-    try_read {
+    begin sub {
 	my $s = $db->get_segment($seg);
 	die "Database $path doesn't contain segment $seg" if !$s;
 	my $c = $s->new_cursor;
@@ -35,7 +35,7 @@ if ($cmd eq 'dump') {
     };
 } elsif ($cmd eq 'destroy') {
     my $db = ObjStore::open($path, 'update');
-    try_update {
+    begin 'update', sub {
 	my $s = $db->get_segment($seg);
 	die "Database $path doesn't contain segment $seg" if !$s;
 	$s->_destroy;

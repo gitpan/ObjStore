@@ -12,7 +12,7 @@ my $junk = {
     'strs' => { qw(a b  c d  e f  g h), i => [ 'a', 1 ] },
 };
 
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     $john ? ok : not_ok;
     
@@ -38,7 +38,7 @@ try_update {
     $nseg->get_number() == $seg->get_number()? ok : not_ok;
 };
 
-try_update {
+begin 'update', sub {
     for my $s ($db->get_all_segments) {
 	$s->destroy if $s->is_empty;
     }

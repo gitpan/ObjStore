@@ -201,9 +201,10 @@ int newfirst;
     newfirst= (allocated>>1) - (newcnt>>1);
     DEBUG_splash(warn("SPListBase(0x%x)->grow(): old= %p, a= %p, allocinc= %d, newfirst= %d, amnt= %d, cnt= %d, allocated= %d\n",
 		      this, a, tmp, allocinc, newfirst, amnt, cnt, allocated));
-    for(int i=0;i<cnt;i++) tmp[newfirst+i].operator=(a[first+i]);
+    memcpy(tmp+newfirst, a+first, cnt*sizeof(T));
+    for(int i=0;i<cnt;i++) a[first+i].FORCEUNDEF();
     DEBUG_splash(warn("SPListBase(0x%x)->grow(): done copying\n", this));
-    delete [] a;
+    delete [] a;  //prefer not to call destructors...
     a= tmp;
     first= newfirst;
 }

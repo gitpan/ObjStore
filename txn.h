@@ -1,3 +1,5 @@
+void osp_croak(const char* pat, ...);
+
 // per-thread globals
 struct osp_thr {
   osp_thr();

@@ -1,4 +1,4 @@
-#!perl -w
+#!/nw/dev/usr/bin/perl -w
 # It would be cool if this file could be put inside a /Safe/ object...
 use strict;
 
@@ -8,17 +8,18 @@ use vars qw($at $db $cursor $view);
 
 package Posh::View;
 BEGIN { require Cwd; *cwd = \&Cwd::fastcwd; }
-use ObjStore;
+use ObjStore ':ADV';
 use ObjStore::Peeker;
 require ObjStore::Path::Ref;
-use vars qw(@ISA $view $at);
-@ISA = 'ObjStore::HV';
+use base 'ObjStore::HV';
 
 # Refcnts are wildly inaccurate unless you are in read_only mode? XXX
 
 my $Lser    = new ObjStore::Peeker(depth => 0);
 my $Peeker  = new ObjStore::Peeker(to => 'stdout', depth => 0);
 my $Results = new ObjStore::Peeker(to => 'stdout', vareq => 1);
+
+my $eval_setup = "no strict; package input;\n#line 1 \"input\"\n"; #XXX
 
 sub new {
     my ($class, $mom) = @_;
@@ -30,7 +31,6 @@ sub new {
 sub init {
     my ($o, $prev) = @_;
     # copy from $prev by default ?
-    $o->{where} ||= 'ufs';
     $o->{'cwd'} ||= cwd;
     $o->{db} ||= '';
     $o->{cursor} ||= new ObjStore::Path::Ref($o);
@@ -45,19 +45,16 @@ sub enter {
     my ($o) = @_;
     $o->init;
     chdir($o->{'cwd'}) or $o->{'cwd'} = cwd;
-    if ($o->{where} eq 'os') {
-	begin sub { $o->{cursor}->open; };
+    if ($o->{db}) {
+	begin sub {
+	    $o->fetch_db;
+	    $o->{cursor}->open() if $o->{cursor};
+	};
 	if ($@) {
 	    warn "** An error occured while re-entering '$o->{db}':\n";
 	    warn $@;
 	    $o->{cursor} = new ObjStore::Path::Ref($o);
-	    $o->{where} = 'ufs';
-	} elsif ($o->{cursor}->depth == 0) {
-	    $o->{where} = 'ufs';
-	}
-    } elsif ($o->{where} eq 'db') {
-	if (!-r $o->{db}) {
-	    $o->{where} = 'ufs';
+	    $o->{db} = '';
 	}
     }
     $o->prompt;
@@ -65,32 +62,25 @@ sub enter {
 
 sub prompt {
     my ($o) = @_;
-    local($input::db, $input::at, $input::view, $input::cursor);
-    local($at);
-    local($view);
-    $o->pre_eval;
-    my $p = '';
-    if ($o->{where} eq 'ufs' ) {
-	$p = $o->{'cwd'};
-#	$p =~ s,^.+?\/([^/]+\/[^/]+\/[^/]+)$,$1,;  #? XXX
-    } elsif ($o->{where} eq 'db') {
-	$Lser->reset;
-	$o->{db} =~ m,/([^/]+)$,;
-        $p = "$o->{'cwd'}/$1";
-    } elsif ($o->{where} eq 'os') {
-	$p = "\$at = ".$o->{cursor}->focus;
+    my $p;
+    if ($o->{db}) {
+	my $db = $o->fetch_db();
+	my $cs = $o->{cursor};
+	if ($cs and $cs->focus) {
+	    $p = "\$at = ".$cs->focus;
+	} else {
+	    $p = $o->{db};
+	}
     } else {
-	print("You goofball!\n") if $o->{where} eq 'moon';
-	$o->{where} = 'ufs';
-	$p = $o->enter;
+	$p = $o->{'cwd'};
     }
     $p;
 }
 
 sub fetch_db {
+    my $view = shift;
     my $db;
-    eval { $db = ObjStore::lookup($view->{db}); };
-    die if $@;
+    $db = ObjStore::lookup($view->{db});
     if (!$db->is_open) {
 	$db->open('update');
 	$db->import if $db->can('import');
@@ -99,26 +89,61 @@ sub fetch_db {
 }
 
 sub pre_eval {
-    $view = shift;
+    my $view = shift;
+    confess $view if !ref $view;
     $input::view = $view;
-    if ($view->{where} eq 'os') {
+    if ($view->{cursor}->_count) {
 	$input::cursor = $view->{cursor};
-	$at = $view->{cursor}->focus;
-	$input::db = $at->database_of;
+	$input::at = $view->{cursor}->focus;
+	$input::db = $input::at->database_of;
     }
-    elsif ($view->{where} eq 'db') {
-	$at = fetch_db();
-	$input::db = $at;
+    elsif ($view->{db}) {
+	$input::at = $view->fetch_db();
+	$input::db = $input::at;
     }
-    $input::at = $at;
+}
+
+sub resolve {
+    my ($o, $path) = @_;
+    my $db = $o->fetch_db;
+    my $cs = $o->{cursor};
+    my @at = ('/', $db, $cs->map(sub { shift->focus }));
+    if ($path =~ m/^\s*$/) {
+	('/', $db)
+    } elsif ($path =~ m,^[\w/.]+$,) { 
+	my @path = split(m'/+', $path);
+	for my $c (@path) {
+	    next if $c eq '.';
+	    if ($c eq '..') {
+		pop @at if @at;
+	    } else {
+		my $at = $at[$#at];
+		if ($at->can('POSH_CD')) {
+		    $at = $at->POSH_CD($c);
+		    return if !defined $at;
+		    $at = $at->POSH_ENTER()
+			if blessed $at && $at->can('POSH_ENTER');
+		}
+		push(@at, $at);
+	    }
+	}
+	@at;
+    } else {
+	local($input::db, $input::at, $input::view, $input::cursor);
+	$o->pre_eval;
+	my @r = eval $eval_setup.$path;
+	if ($@) {
+	    print $@;
+	    print "# Type 'help' for help!\n";
+	    return;
+	}
+	(@at,(@r>1?\@r:@r));
+    }
 }
 
 sub execute {
     local($input::db, $input::at, $input::view, $input::cursor);
-    local($at);
     my ($o, $input) = @_;
-    local($view);
-    $o->pre_eval;
 
     if (ref $input) {
 	# This code ref did not come from the user.
@@ -127,12 +152,10 @@ sub execute {
 	return;
     }
 
-    my $eval_setup = "no strict; package input;\n#line 1 \"input\"\n";
-
     # Any commands that are not straight perl syntax are
     # parsed and executed here.  (cd, ls)
 
-    if ($view->{where} eq 'ufs') {
+    if (!$o->{db}) {
 
 	if ($input =~ m/^ls(.*)$/s) {   #ls
 	    my @ls = `ls -C $1`;		#osls XXX
@@ -144,9 +167,11 @@ sub execute {
 	} elsif ($input =~ m/^cd\s*(.*)\s*$/s) {  #cd
 	    my $path = $1;
 	    $path = $ENV{HOME} if !$path;
+
 	    if (-d $path) {
-		if (chdir($path)) { $view->{'cwd'} = cwd; }
-		else { print("posh: cd $path: No such directory\n"); }
+		chdir($path) or warn "chdir $path: $@";
+		$o->{'cwd'} = cwd;
+
 	    } else {
 		my ($dbname, $class, $inc) = split(m/\s+/, $path);
 		my $db;
@@ -160,68 +185,68 @@ sub execute {
 		    $db = $class->new(cwd . "/$dbname", 'update', 0666);
 		    $db->get_INC->[0] = $inc if $inc;
 		}
-		$view->{db} = $db->get_pathname;
-		$view->{where} = 'db';
+		$o->{db} = $db->get_pathname;
 	    }
-	    if ($view->{where} eq 'db') {
-		my $at = fetch_db();
-		my $cs = $view->{cursor};
+
+	    if ($o->{db}) {
+		my $at = $o->fetch_db();
+		my $cs = $o->{cursor};
 		if ($at->can("POSH_ENTER")) {
 		    $at = $at->POSH_ENTER();
 		    $cs->_Push($at->new_ref($cs, 'unsafe'));
-		    $view->{where} = 'os';
 		}
 	    }
 	    return;
 	}
 	
-    } elsif ($view->{where} eq 'db' or
-	     $view->{where} eq 'os') {
+    } elsif ($o->{db}) {
 
-	my $cs = $view->{cursor};
+	my $cs = $o->{cursor};
 	if ($input =~ m/^cd\s*(.*)$/s) {   #cd
 	    my $path = $1;
-	    if ($path eq '') {
-		if ($view->{where} eq 'os') {
-		    while ($cs->depth) { $cs->_Pop }
-		}
-	    } elsif ($path =~ m,^\.\.(/\.\.)*\s*$,) {
-		if ($view->{where} eq 'db') {
-		    my $db = ObjStore::lookup($view->{db});
-		    $db->close if ($db and $db->is_open);
-		    $view->{where} = 'ufs';
-		} else {
-		    while ($path =~ s/\.\.// and
-			   $cs->depth) { $cs->_Pop }
-		}
-	    } elsif ($path =~ m/^\w+$/) {
-		if ($at->can("POSH_CD")) {
-		    my $y = $at->POSH_CD($path);
-		    return if !ref $y;
-		    $y = $y->POSH_ENTER() if $y->can("POSH_ENTER");
-		    if (ref $y) { $cs->_Push($y->new_ref($cs, 'unsafe')); }
-		    else        { print "posh: can't cd through $path\n"; }
-		} else {
-		    print "posh: don't know how to cd through $at\n";
-		}
+	    my $db = ObjStore::lookup($o->{db});
+	    my @at = $o->resolve($path);
+
+	    if (! @at) {
+		print "posh: attempt to resolve '$path' failed\n";
+		print "# Type 'help' for help!\n";
+
+	    } elsif (@at == 1) {
+		while ($cs->depth) { $cs->_Pop }
+		$db->close() if $db && $db->is_open;
+		$o->{db} = '';
+
+	    } elsif (@at == 2) {
+		while ($cs->depth) { $cs->_Pop }
+
 	    } else {
-		&pre_eval;
-		my $z = eval $eval_setup.$path;
-		if ($@) {
-		    print $@;
-		    print "# Type 'help' for help!\n";
+		my $ok=1;
+		my $new = new ObjStore::Path::Ref($o);
+		shift @at;
+		shift @at;
+		for my $at (@at) {
+		    if (!blessed $at or !$at->isa('ObjStore::UNIVERSAL')) {
+			$ok=0;
+			print "posh: cannot cd into $at\n";
+			last;
+		    }
+		    $new->_Push($at->new_ref($new, 'unsafe'));
 		}
-		else    {
-		    if (ref $z) { $cs->_Push($z->new_ref($cs, 'unsafe')); }
-		    else        { print "posh: cannot cd into $z\n"; }
-		}
+		$o->{cursor} = $new if $ok;
 	    }
-	    if ($view->{where} eq 'os' and $cs->depth == 0) {
-		$view->{where} = 'db';
-	    }
-	    if ($view->{where} eq 'db' and $cs->depth > 0) {
-		$view->{where} = 'os';
-	    }
+
+	    return;
+
+	} elsif ($input =~ m/^(ls|peek|raw)\s*(.*)$/s) {
+	    my $cmd = $1;
+	    my $path = $2;
+	    my @at = (length $path or !$cs->_count)? $o->resolve($path):$cs->focus;
+	    my $at = $at[$#at];
+	    $Peeker->reset();
+	    local $Peeker->{depth} = 10 if $cmd eq 'raw' || $cmd eq 'peek';
+	    local $Peeker->{pretty} = 0 if $cmd eq 'raw';
+	    $Peeker->Peek($at);
+	    # print join(' ', sort grep(!/^_/, keys %{ methods($fo) }))."\n"; XXX
 	    return;
 	}
     }
@@ -255,7 +280,7 @@ Inside of databases:
    cd ..               # what you expect
    ls
    peek                # ls but more
-   rawpeek             # ignore special POSH_PEEK methods
+   raw                 # ignore special POSH_PEEK methods
    pwd
    <or any perl statement!>
 
@@ -274,12 +299,9 @@ sub debug {
 }
 
 sub pwd {
-    if ($view->{where} eq 'ufs') {
+    if (!$view->{db}) {
 	print("$view->{'cwd'}\n");
-    } elsif ($view->{where} eq 'db') {
-	$Lser->reset;
-	print '$db = '.$Lser->Peek($db);
-    } elsif ($view->{where} eq 'os') {
+    } else {
 	$Lser->reset;
 	print '$db = '.$Lser->Peek($db);
 	for (my $z=0; $z < $view->{cursor}->depth; $z++) {
@@ -287,35 +309,6 @@ sub pwd {
 	    print '$cursor->['."$z] = ".$Lser->Peek($cursor->focus($z));
 	}
     }
-    ();
-}
-
-sub ls {
-    $Peeker->reset;
-    if (@_) { 
-	print "\n";
-	for (my $x=0; $x < @_; $x++) {
-	    print "[$x] = ";
-	    $Peeker->Peek($_[$x]);
-	}
-    } else {
-	print "\n\$at = ";
-	$Peeker->Peek($at);
-#	print join(' ', sort grep(!/^_/, keys %{ methods($fo) }))."\n";
-    }
-    ();
-}
-
-sub peek {
-    local $Peeker->{depth} = 10;
-    &ls;
-    ();
-}
-
-sub rawpeek {
-    local $Peeker->{depth} = 10;
-    local $Peeker->{pretty} = 0;
-    &ls;
     ();
 }
 

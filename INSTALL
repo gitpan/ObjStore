@@ -1,6 +1,6 @@
 ------------------------------------------------------------ INSTALLATION
 
-Tested Systems:
+Tested Configurations:
 
    perl 5.004_04, 5.004_53-5.004_54
 
@@ -8,35 +8,23 @@ Tested Systems:
      SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1, 4.0.2
      SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0.0, 5.0.1
 
+   Digital Unix V4.0 (Alpha)
+     Dec C++ Compiler / ObjectStore 5.0
+
 -------------------------------------------------------------------------
 
-The build process is non-standard and needs some explaination.
+./t/z_ospeek.t is very sensitive to the success of the other tests.
 
-1. xemacs ./Config.pm
+'make test' twice!  Since the test database now has data, different
+code is exercised the second time.
 
-2. perl ./be
-
-  If you have a problem with objectstore::get_unassigned_address_space(),
-  just delete the code chunk and keep going.  This API is only available
-  with OS 5.0 service pack #2.
-
-  ./t/z_ospeek.t is very sensitive to the success of the other tests.
-
-3. perl ./be test
-
-     Since the test database now has data, this exercises different code.
-
-4. perl ./be installed
+If you have a problem with objectstore::get_unassigned_address_space(), 
+just delete the code chunk and keep going.  This API is only available
+with OS 5.0 service pack #2.
 
 -------------------------------------------------------------------------
 
 If you succeed on a system that is not listed in above, please send
 a note to perl-objectstore@parallax.co.uk announcing your success!
-
--------------------------------------------------------------------------
-
-While 'be' was great for development, I acknowledge the need to move
-to a Makefile.PL.  If somebody could contribute one, that'd be great.
-For an example of a clean build, see 'solaris.out'.
 
 -------------------------------------------------------------------------

@@ -9,13 +9,13 @@ use test;
 
 my $sid;
 
-try_update {
+begin 'update', sub {
     my $seg = $db->create_segment;
     $sid = $seg->get_number;
     $db->root("tripwire", [1,2,3,'Oops, tripped!']);
 };
 
-try_update {
+begin 'update', sub {
     $db->destroy_root('tripwire');
 
     my $rt = $db->find_root('_osperl_private');
@@ -26,13 +26,13 @@ try_update {
     $rt? not_ok : ok;
 };
 
-try_update {
+begin 'update', sub {
     my $seg = $db->get_segment($sid);
     $seg->is_empty? ok:not_ok;
     $seg->destroy;
 };
 
-try_update {
+begin 'update', sub {
     my $ok=1;
     for ($db->get_all_roots()) {
 	$ok=0 if $_->get_name eq '_osperl_private';

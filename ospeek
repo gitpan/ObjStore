@@ -1,4 +1,4 @@
-#!perl -w
+#!/nw/dev/usr/bin/perl -w
 
 use strict;
 use ObjStore ':ADV';

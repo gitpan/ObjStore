@@ -8,7 +8,7 @@ use integer;
 use test;
 
 &open_db;
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     my $fatty = $john->{'fatty'} ||= new ObjStore::AV($db, 100);
 

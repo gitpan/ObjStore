@@ -1,4 +1,4 @@
-# Please contribute more better tests!
+# Please feel free to contribute more better tests!
 
 package test;
 use Carp;
@@ -15,9 +15,13 @@ require Exporter;
 sub test_db() { TMP_DBDIR . "/perltest" }
 
 sub ok {
-    my ($guess) = @_;
+    my ($ok, $guess) = @_;
+    $ok = 1 if @_ == 0;
     carp "This is ok $tx" if $guess && $guess != $tx;
-    print "ok $tx\n"; $tx++;
+    print(($ok? '':'not ')."ok $tx\n");
+#    croak $tx if !$ok;
+    ++ $tx;
+    $ok;
 }
 
 sub not_ok {
@@ -28,7 +32,7 @@ sub not_ok {
 }
 
 sub open_db() {
-    $db = ObjStore::open(test_db(), 'update') or die $@;
+    $db = ObjStore::open(test_db(), 'update');
     die if $@; #extra paranoia
     $db;
 }
@@ -37,17 +41,17 @@ END {
 #    $db->close;
     
     my $ok=1;
-   if (0) {
-    use IO::Pipe;
-    $pipe = new IO::Pipe;
-    $pipe->reader("osverifydb", TMP_DBDIR . "/perltest");
-    while (defined(my $l = <$pipe>)) {
-	if ($l =~ /illegal value/) {
-	    print $l;
-	    $ok=0;
+    if (0) {
+	use IO::Pipe;
+	$pipe = new IO::Pipe;
+	$pipe->reader("osverifydb", TMP_DBDIR . "/perltest");
+	while (defined(my $l = <$pipe>)) {
+	    if ($l =~ /illegal value/) {
+		print $l;
+		$ok=0;
+	    }
 	}
     }
-}
     $ok? ok:not_ok;
 }
 

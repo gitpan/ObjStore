@@ -1,5 +1,5 @@
 /*
-Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
+Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
 This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 */
@@ -45,6 +45,7 @@ XS(XS_ObjStore_translate)
 
 // lookup static symbol (not needed if dynamically linked)
 extern "C" XS(boot_ObjStore__GENERIC);
+extern "C" XS(boot_ObjStore__REP__FatTree);
 
 //----------------------------- ObjStore
 
@@ -53,8 +54,9 @@ MODULE = ObjStore	PACKAGE = ObjStore
 BOOT:
   if (items < 3)
     croak("ObjStore::boot(): too few arguments");
-  // Nuke the following line if you are dynamic-linking ObjStore::GENERIC
+  // Nuke the following line if you are dynamic-linking
   newXS("ObjStore::GENERIC::bootstrap", boot_ObjStore__GENERIC, file);
+  newXS("ObjStore::REP::FatTree::bootstrap", boot_ObjStore__REP__FatTree, file);
   //
   SV* me = perl_get_sv("0", FALSE);  //fetch $0
   assert(me);
@@ -87,13 +89,21 @@ blessed(sv)
 	SV *sv
 	CODE:
 {
-    if(!sv_isobject(sv)) {
+    if(!sv_isobject(sv)) {  /*snarfed from builtin:GBARR*/
         XSRETURN_UNDEF;
     }
     RETVAL = sv_reftype(SvRV(sv),TRUE);
 }
 OUTPUT:
 	RETVAL
+
+void
+readonly(sv)
+	SV *sv
+	PPCODE:
+	if (!sv || !SvANY(sv)) XSRETURN_NO;
+	if (SvREADONLY(sv)) XSRETURN_YES;
+	XSRETURN_NO;
 
 int
 _debug(mask)
@@ -120,7 +130,7 @@ set_stargate(code)
 	SV *code
 	CODE:
 	dOSP ;
-	ST(0) = osp->stargate? sv_2mortal(newSVsv(osp->stargate)):&sv_undef;
+	ST(0) = osp->stargate? sv_mortalcopy(osp->stargate):&sv_undef;
 	if (!osp->stargate) { osp->stargate = newSVsv(code); }
 	else { sv_setsv(osp->stargate, code); }
 
@@ -209,7 +219,7 @@ get_all_servers()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv(sv_newmortal() , CLASS, svrs[xx] ));
+		PUSHs(sv_setref_pv(sv_newmortal(), CLASS, svrs[xx] ));
 	}
 	delete [] svrs;
 
@@ -383,7 +393,7 @@ os_server::get_databases()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv( sv_newmortal() , CLASS, dbs[xx] ));
+		PUSHs(sv_setref_pv(sv_newmortal(), CLASS, dbs[xx] ));
 	}
 	delete [] dbs;
 
@@ -542,7 +552,7 @@ os_database::get_all_segments()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv( sv_newmortal() , CLASS, segs[xx] ));
+		PUSHs(sv_setref_pv(sv_newmortal(), CLASS, segs[xx] ));
 	}
 	delete [] segs;
 
@@ -570,7 +580,7 @@ os_database::get_all_roots()
 	  assert(roots[xx]);
 	  char *nm = roots[xx]->get_name();
 	  int priv = strEQ(nm, private_root_name);
-	  if (!priv) XPUSHs(sv_setref_pv( sv_newmortal(), CLASS, roots[xx] ));
+	  if (!priv) XPUSHs(sv_setref_pv(sv_newmortal(), CLASS, roots[xx] ));
 	}
 	delete [] roots;
 
@@ -858,7 +868,7 @@ _pneq(a1, a2, ign)
 void
 OSSVPV::_refcnt()
 	PPCODE:
-	XPUSHs(sv_2mortal(newSViv(THIS->_refs + THIS->_weak_refs)));
+	XPUSHs(sv_2mortal(newSViv(THIS->_refs)));
 
 void
 OSSVPV::_blessto_slot(...)
@@ -869,13 +879,13 @@ OSSVPV::_blessto_slot(...)
 	  ossv_bridge *br = osp->sv_2bridge(ST(1), 1);
 	  OSSVPV *nval = (OSSVPV*) br->ospv();
 	  nval->REF_inc();
-	  if (PvBLESS2(THIS) && THIS->classname)
+	  if (OSPvBLESS2(THIS) && THIS->classname)
 	    ((OSSVPV*)THIS->classname)->REF_dec();
-	  PvBLESS2_on(THIS);
+	  OSPvBLESS2_on(THIS);
 	  THIS->classname = (char*)nval;
 	  ((OSSVPV*)THIS->classname)->REF_inc();
 	}
-	if (!PvBLESS2(THIS) || GIMME_V == G_VOID) return;
+	if (!OSPvBLESS2(THIS) || GIMME_V == G_VOID) return;
 	SV *ret = osp->ospv_2sv((OSSVPV*)THIS->classname);
 	SPAGAIN;
 	XPUSHs(ret);
@@ -904,11 +914,34 @@ OSSVPV::os_class()
 	XPUSHs(sv_2mortal(newSVpv(str, len)));
 
 void
+OSSVPV::rep_class()
+	PPCODE:
+	STRLEN len;
+	char *str = THIS->rep_class(&len);
+	XPUSHs(sv_2mortal(newSVpv(str, len)));
+
+void
 OSSVPV::get_pointer_numbers()
 	PPCODE:
 	os_unsigned_int32 n1,n2,n3;
 	objectstore::get_pointer_numbers(THIS, n1, n2, n3);
 	XPUSHs(sv_2mortal(newSVpvf("%08p%08p", n1, n3)));
+
+void
+OSSVPV::const()
+	PPCODE:
+	OSPvREADONLY(THIS) = ~0;
+
+void
+OSSVPV::POSH_CD(keyish)
+	char *keyish
+	PPCODE:
+	PUTBACK;
+	OSSV *sv = THIS->traverse(keyish);
+	if (!sv) croak("OSSVPV(%p)->traverse(%s) failed", THIS, keyish);
+	SV *ret = osp->ossv_2sv(sv);
+	SPAGAIN;
+	XPUSHs(ret);
 
 void
 OSSVPV::_new_ref(type, sv1)
@@ -974,7 +1007,8 @@ OSPV_Generic::STORE(xx, nval)
 	SV *nval;
 	PPCODE:
 	SV **savesp = SP;
-	PUTBACK ;
+	PUTBACK;
+	OSPvTRYWRITE(THIS);
 	SV *ret = osp->ossv_2sv(THIS->STOREi(xx, nval));
 	SPAGAIN ;
 	assert(SP == savesp);
@@ -984,6 +1018,7 @@ void
 OSPV_Generic::_Pop()
 	PPCODE:
 	PUTBACK ;
+	OSPvTRYWRITE(THIS);
 	SV *ret = THIS->Pop();
 	SPAGAIN ;
 	if (ret) XPUSHs(ret);
@@ -992,12 +1027,14 @@ void
 OSPV_Generic::_Push(nval)
 	SV *nval;
 	CODE:
+	OSPvTRYWRITE(THIS);
 	THIS->Push(nval);
 
 void
 OSPV_Generic::_Shift(nval)
 	SV *nval;
 	CODE:
+	OSPvTRYWRITE(THIS);
 	THIS->Shift(nval);
 
 #-----------------------------# HV
@@ -1010,7 +1047,7 @@ OSPV_Generic::FETCH(key)
 	PPCODE:
 	SV **savesp = SP;
 	PUTBACK ;
-	SV *ret = THIS->FETCHp(key);
+	SV *ret = osp->ossv_2sv(THIS->FETCHp(key));
 	SPAGAIN ;
 	assert(SP == savesp);
 	if (ret) XPUSHs(ret);
@@ -1022,7 +1059,8 @@ OSPV_Generic::STORE(key, nval)
 	PPCODE:
 	SV **savesp = SP;
 	PUTBACK ;
-	SV *ret = THIS->STOREp(key, nval);
+	OSPvTRYWRITE(THIS);
+	SV *ret = osp->ossv_2sv(THIS->STOREp(key, nval));
 	SPAGAIN ;
 	assert(SP == savesp);
 	if (ret) XPUSHs(ret);
@@ -1030,6 +1068,9 @@ OSPV_Generic::STORE(key, nval)
 void
 OSPV_Generic::DELETE(key)
 	char *key
+	CODE:
+	OSPvTRYWRITE(THIS);
+	THIS->DELETE(key);
 
 int
 OSPV_Generic::EXISTS(key)
@@ -1054,33 +1095,58 @@ OSPV_Generic::NEXTKEY(...)
 
 void
 OSPV_Generic::CLEAR()
+	CODE:
+	OSPvTRYWRITE(THIS);
+	THIS->CLEAR();
 
-#-----------------------------# Set
+#-----------------------------# Index
 
-MODULE = ObjStore	PACKAGE = ObjStore::Set
+MODULE = ObjStore	PACKAGE = ObjStore::Index
 
 void
-OSPV_Generic::add(...)
-	CODE:
-	for (int xx=1; xx < items; xx++) THIS->add(ST(xx));
-
-int
-OSPV_Generic::contains(val)
-	SV *val;
+OSPV_Generic::add(sv)
+	SV *sv;
+	PPCODE:
+	OSPvTRYWRITE(THIS);
+	PUTBACK;
+	ossv_bridge *br = osp->sv_2bridge(sv, 1, os_segment::of(THIS));
+	THIS->add(br->ospv());
+	SPAGAIN;
+	if (GIMME_V != G_VOID) PUSHs(sv);
 
 void
-OSPV_Generic::rm(nval)
-	SV *nval
+OSPV_Generic::remove(sv)
+	SV *sv
+	PPCODE:
+	OSPvTRYWRITE(THIS);
+	PUTBACK;
+	ossv_bridge *br = osp->sv_2bridge(sv, 1);
+	THIS->remove(br->ospv());
+	return;
 
-SV *
-OSPV_Generic::first()
-	CODE:
-	ST(0) = THIS->FIRST( THIS_bridge );  //buggy
+void
+OSPV_Generic::configure(...)
+	PPCODE:
+	SV **top = &ST(0);
+	PUTBACK;
+	OSPvTRYWRITE(THIS);
+	THIS->configure(top, items);
+	return;
 
-SV *
-OSPV_Generic::next()
+void
+OSPV_Generic::FETCH(xx)
+	int xx;
+	PPCODE:
+	PUTBACK ;
+	SV *ret = osp->ospv_2sv(THIS->FETCHx(xx));
+	SPAGAIN ;
+	XPUSHs(ret);
+
+void
+OSPV_Generic::CLEAR()
 	CODE:
-	ST(0) = THIS->NEXT( THIS_bridge );  //buggy
+	OSPvTRYWRITE(THIS);
+	THIS->CLEAR();
 
 #-----------------------------# Ref
 
@@ -1147,6 +1213,115 @@ _load(CLASS, sv1, type, dump, db)
 MODULE = ObjStore	PACKAGE = ObjStore::Cursor
 
 void
+OSPV_Cursor2::focus()
+	PPCODE:
+	PUTBACK;
+	SV *sv = osp->ospv_2sv(THIS->focus());
+	SPAGAIN;
+	XPUSHs(sv);
+
+void
+OSPV_Cursor2::moveto(where)
+	int where
+	CODE:
+	THIS->moveto(where);
+
+void
+OSPV_Cursor2::step(delta)
+	int delta
+	PPCODE:
+	PUTBACK;
+	THIS->step(delta);
+	return;
+
+void
+OSPV_Cursor2::each(...)
+	PROTOTYPE: ;$
+	PPCODE:
+	int delta = 1;
+	if (items == 2) {
+	  if (!SvIOK(ST(1))) croak("each takes an integer step size");
+	  delta = SvIV(ST(1));
+	}
+	PUTBACK;
+	THIS->step(delta);
+	THIS->at();
+	return;
+
+void
+OSPV_Cursor2::at()
+	PPCODE:
+	PUTBACK;
+	THIS->at();
+	return;
+
+void
+OSPV_Cursor2::store(nval)
+	SV *nval
+	PPCODE:
+	PUTBACK;
+	THIS->store(nval);
+	return;
+
+void
+OSPV_Cursor2::seek(...)
+	PPCODE:
+	SV **top = &ST(0);
+	PUTBACK;
+	int ret = THIS->seek(top, items);
+	SPAGAIN;
+	XPUSHs(sv_2mortal(newSViv(ret)));
+
+int
+OSPV_Cursor2::pos()
+	CODE:
+	RETVAL = THIS->pos();
+	OUTPUT:
+	RETVAL
+
+void
+OSPV_Cursor2::keys()
+	PPCODE:
+	PUTBACK;
+	THIS->keys();
+	return;
+
+#-----------------------------# Set - DEPRECIATED!!
+
+MODULE = ObjStore	PACKAGE = ObjStore::Set
+
+void
+OSPV_Generic::add(...)
+	CODE:
+	for (int xx=1; xx < items; xx++) THIS->set_add(ST(xx));
+
+int
+OSPV_Generic::contains(val)
+	SV *val;
+	CODE:
+	THIS->set_contains(val);
+
+void
+OSPV_Generic::rm(nval)
+	SV *nval
+	CODE:
+	THIS->set_rm(nval);
+
+SV *
+OSPV_Generic::first()
+	CODE:
+	ST(0) = THIS->FIRST( THIS_bridge );  //buggy
+
+SV *
+OSPV_Generic::next()
+	CODE:
+	ST(0) = THIS->NEXT( THIS_bridge );  //buggy
+
+#-----------------------------# Cursor
+
+MODULE = ObjStore	PACKAGE = ObjStore::DEPRECIATED::Cursor
+
+void
 OSPV_Cursor::seek_pole(side)
 	SV *side
 	CODE:
@@ -1158,12 +1333,28 @@ OSPV_Cursor::seek_pole(side)
 	} else croak("seek_pole");
 
 void
+OSPV_Cursor::moveto(side)
+	SV *side
+	CODE:
+	if (SvPOKp(side)) {
+	  char *str = SvPV(side, na);
+	  if (strEQ(str, "end")) THIS->seek_pole(1);
+	} else if (SvIOK(side) && SvIV(side)==0) {
+	  THIS->seek_pole(0);
+	} else croak("moveto");
+
+void
 OSPV_Cursor::at()
 	PPCODE:
 	PUTBACK; THIS->at(); return;
 
 void
 OSPV_Cursor::next()
+	PPCODE:
+	PUTBACK; THIS->next(); return;
+
+void
+OSPV_Cursor::step(...)
 	PPCODE:
 	PUTBACK; THIS->next(); return;
 

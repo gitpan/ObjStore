@@ -13,7 +13,7 @@ use vars qw(@ISA);
 
 sub NOREFS {
     my $o = shift;
-    ok;  # should be called exactly twice
+    ok(1);  # should be called exactly twice
     if ($main::saver->[0]) {
 	$main::saver->[1] = $o;
     }
@@ -23,7 +23,7 @@ package main;
 use vars qw($saver);
 
 ObjStore::fatal_exceptions(0);
-#ObjStore::debug qw( bridge);
+#ObjStore::debug qw(bridge);
 #use Devel::Peek;
 
 &open_db;
@@ -40,7 +40,7 @@ begin('update', sub {
     for (my $x=0; $x < @$toast; $x++) {
 	for my $type ('safe', 'unsafe') {
 	     my $r = $toast->[$x]->new_ref('transient', $type);
-	     $r->deleted? not_ok:ok;
+	     ok(! $r->deleted);
 	     $t->[$x]{$type} = $r;
 	}
     }
@@ -59,11 +59,11 @@ begin sub {
     my $j = $db->root('John');
 
     # $t->[0] should be deleted now
-    $t->[0]{safe}->deleted ? ok:not_ok;
+    ok($t->[0]{safe}->deleted);
     begin sub { $t->[0]{safe}->focus };
-    $@ =~ m/err_reference_not_found/s? ok:not_ok;
+    ok($@ =~ m/err_reference_not_found/s) or warn $@;
 
-    $t->[1]{safe}->deleted ? not_ok:ok;
+    ok(!$t->[1]{safe}->deleted);
 
     my $toast = $j->{'toast'};
 
@@ -78,6 +78,7 @@ begin('update', sub {
     my $j = $db->root('John');
     delete $j->{'toast'};
 });
-$@? not_ok:ok;
+die if $@;
+ok(1);
 
 # Also should test broken cross-database ref XXX

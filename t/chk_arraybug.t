@@ -5,7 +5,7 @@ use lib './t';
 use test;
 
 &open_db;
-try_abort_only {
+begin 'abort_only', sub {
     my $mess = new ObjStore::HV($db, 'splash_array', 7);
     my $dict = $mess->{dict} = new ObjStore::HV($mess);
     for (1..200) { $mess->{$_} = $_; }

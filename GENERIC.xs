@@ -1,9 +1,4 @@
-/*-*-c++-*-
-Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
-This package is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-*/
-
+// -*-C++-*- mode
 #include "osperl.h"
 #include "GENERIC.h"
 
@@ -148,10 +143,13 @@ hent *hent::operator=(const hent &nval)
   return this;
 }
 
+void hent::FORCEUNDEF()
+{}
+
 XS(XS_ObjStore__HV__new_splash_array)
 {
   dXSARGS;
-  if (items != 3) croak("Usage: &$create('ObjStore::HV', $segment, $card)");
+  if (items != 3) osp_croak("Usage: &$create('ObjStore::HV', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -160,7 +158,7 @@ XS(XS_ObjStore__HV__new_splash_array)
   PUTBACK;
   
   if (card <= 0) {
-    croak("Non-positive cardinality");
+    osp_croak("Non-positive cardinality");
   } else if (card > 1000) {
     card = 1000;
     warn("Cardinality > 1000; try a more suitable representation");
@@ -178,7 +176,7 @@ OSPV_hvarray::OSPV_hvarray(int sz)
 {}
 
 OSPV_hvarray::~OSPV_hvarray()
-{ CLEAR(); }
+{}
 
 double OSPV_hvarray::_percent_filled()
 {
@@ -207,18 +205,20 @@ int OSPV_hvarray::index_of(char *key)
   return -1;
 }
 
-SV *OSPV_hvarray::FETCHp(char *key)
+OSSV *OSPV_hvarray::FETCHp(char *key)
 {
   int xx = index_of(key);
   if (xx == -1) {
     return 0;
   } else {
-    dOSP ;
-    return osp->ossv_2sv(&hv[xx].hv);
+    return &hv[xx].hv;
   }
 }
 
-SV *OSPV_hvarray::STOREp(char *key, SV *value)
+OSSV *OSPV_hvarray::traverse(char *keyish)
+{ return FETCHp(keyish); }
+
+OSSV *OSPV_hvarray::STOREp(char *key, SV *value)
 {
   int xx = index_of(key);
   if (xx == -1) {
@@ -228,8 +228,7 @@ SV *OSPV_hvarray::STOREp(char *key, SV *value)
   hv[xx].hv = value;
   dTHR;
   if (GIMME_V == G_VOID) return 0;
-  dOSP;
-  return osp->ossv_2sv(&hv[xx].hv);
+  return &hv[xx].hv;
 }
 
 void OSPV_hvarray::DELETE(char *key)
@@ -270,8 +269,8 @@ struct hvarray_bridge : ossv_bridge {
 hvarray_bridge::hvarray_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cursor(0)
 {}
 
-ossv_bridge *OSPV_hvarray::_new_bridge(OSSVPV *pv)
-{ return new hvarray_bridge(pv); }
+ossv_bridge *OSPV_hvarray::new_bridge()
+{ return new hvarray_bridge(this); }
 
 SV *OSPV_hvarray::FIRST(ossv_bridge *vmg)
 {
@@ -300,7 +299,7 @@ SV *OSPV_hvarray::NEXT(ossv_bridge *vmg)
   return out;
 }
 
-OSPV_Cursor *OSPV_hvarray::new_cursor(os_segment *seg)
+OSSVPV *OSPV_hvarray::new_cursor(os_segment *seg)
 { return new(seg, OSPV_hvarray_cs::get_os_typespec()) OSPV_hvarray_cs(this); }
 
 OSPV_hvarray_cs::OSPV_hvarray_cs(OSPV_hvarray *_at)
@@ -336,7 +335,7 @@ void OSPV_hvarray_cs::next()
 XS(XS_ObjStore__Set__new_splash_array)
 {
   dXSARGS;
-  if (items != 3) croak("Usage: &$create('ObjStore::Set', $segment, $card)");
+  if (items != 3) osp_croak("Usage: &$create('ObjStore::Set', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -345,7 +344,7 @@ XS(XS_ObjStore__Set__new_splash_array)
   PUTBACK;
 
   if (card <= 0) {
-    croak("Non-positive cardinality");
+    osp_croak("Non-positive cardinality");
   } else if (card > 1000) {
     card = 1000;
     warn("Cardinality > 1000; try a more suitable representation");
@@ -365,7 +364,7 @@ OSPV_setarray::OSPV_setarray(int size)
 }
 
 OSPV_setarray::~OSPV_setarray()
-{ CLEAR(); }
+{}
 
 double OSPV_setarray::_percent_filled()
 {
@@ -384,24 +383,24 @@ int OSPV_setarray::first(int start)
 {
   int xx;
   for (xx=start; xx < cv.count(); xx++) {
-    if (cv[xx].natural() != ossv_undef) return xx;
+    if (cv[xx].natural() != OSVt_UNDEF) return xx;
   }
   return -1;
 }
 
-void OSPV_setarray::add(SV *nval)
+void OSPV_setarray::set_add(SV *nval)
 {
   int spot=-1;
   // stupid, but definitely correct
   for (int xx=0; xx < cv.count(); xx++) {
-    if (cv[xx].natural() != ossv_undef) continue;
+    if (cv[xx].natural() != OSVt_UNDEF) continue;
     spot = xx;
     break;
   }
   if (spot == -1) spot = cv.count();
   cv[spot] = nval;
-  if (cv[spot].natural() != ossv_obj)
-    croak("OSPV_setarray::add(nval): sets can only contain objects");
+  if (cv[spot].natural() != OSVt_RV)
+    osp_croak("OSPV_setarray::add(nval): sets can only contain objects");
 
   //  warn("added %s", cv[spot].stringify());
   /*
@@ -411,13 +410,13 @@ void OSPV_setarray::add(SV *nval)
   */
 }
 
-int OSPV_setarray::contains(SV *val)
+int OSPV_setarray::set_contains(SV *val)
 {
   dOSP ;
   OSSVPV *pv = 0;
   ossv_bridge *mg = osp->sv_2bridge(val, 0);
   if (mg) pv = mg->ospv();
-  if (!pv) croak("OSPV_setarray::contains(SV *val): must be persistent object");
+  if (!pv) osp_croak("OSPV_setarray::contains(SV *val): must be persistent object");
 
   for (int xx=0; xx < cv.count(); xx++) {
     if (cv[xx] == pv) return 1;
@@ -425,13 +424,13 @@ int OSPV_setarray::contains(SV *val)
   return 0;
 }
 
-void OSPV_setarray::rm(SV *nval)
+void OSPV_setarray::set_rm(SV *nval)
 {
   dOSP ;
   OSSVPV *pv = 0;
   ossv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) pv = mg->ospv();
-  if (!pv) croak("OSPV_setarray::rm(SV *val): must be persistent object");
+  if (!pv) osp_croak("OSPV_setarray::rm(SV *val): must be persistent object");
 
   // stupid, but definitely correct
   for (int xx=0; xx < cv.count(); xx++) {
@@ -449,8 +448,8 @@ struct setarray_bridge : ossv_bridge {
 setarray_bridge::setarray_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cursor(0)
 {}
 
-ossv_bridge *OSPV_setarray::_new_bridge(OSSVPV *pv)
-{ return new setarray_bridge(pv); }
+ossv_bridge *OSPV_setarray::new_bridge()
+{ return new setarray_bridge(this); }
 
 SV *OSPV_setarray::FIRST(ossv_bridge *vmg)
 {
@@ -491,7 +490,7 @@ void OSPV_setarray::CLEAR()
   for (int xx=0; xx < cv.count(); xx++) { cv[xx].set_undef(); }
 }
 
-OSPV_Cursor *OSPV_setarray::new_cursor(os_segment *seg)
+OSSVPV *OSPV_setarray::new_cursor(os_segment *seg)
 { return new(seg, OSPV_setarray_cs::get_os_typespec()) OSPV_setarray_cs(this); }
 
 OSPV_setarray_cs::OSPV_setarray_cs(OSPV_setarray *_at)
@@ -530,7 +529,7 @@ void OSPV_setarray_cs::next()
 XS(XS_ObjStore__HV__new_os_dictionary)
 {
   dXSARGS;
-  if (items != 3) croak("Usage: &$create('ObjStore::HV', $segment, $card)");
+  if (items != 3) osp_croak("Usage: &$create('ObjStore::HV', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -538,7 +537,7 @@ XS(XS_ObjStore__HV__new_os_dictionary)
   int card = (int)SvIV(ST(2));
   PUTBACK;
   
-  if (card <= 0) croak("Non-positive cardinality");
+  if (card <= 0) osp_croak("Non-positive cardinality");
   
   OSSVPV *pv = new(area, OSPV_hvdict::get_os_typespec()) OSPV_hvdict(card);
   pv->bless(ST(0));
@@ -566,18 +565,20 @@ char *OSPV_hvdict::os_class(STRLEN *len)
 int OSPV_hvdict::get_perl_type()
 { return SVt_PVHV; }
 
-SV *OSPV_hvdict::FETCHp(char *key)
+OSSV *OSPV_hvdict::FETCHp(char *key)
 {
   OSSV *ret = hv.pick(key);
   DEBUG_hash(warn("OSPV_hvdict::FETCH %s => %s", key, ret? ret->stringify() : "<0x0>"));
-  dOSP ;
-  return osp->ossv_2sv(ret);
+  return ret;
 }
 
-SV *OSPV_hvdict::STOREp(char *key, SV *nval)
+OSSV *OSPV_hvdict::traverse(char *keyish)
+{ return FETCHp(keyish); }
+
+OSSV *OSPV_hvdict::STOREp(char *key, SV *nval)
 {
   if (*key == 0)
-    croak("ObjStore: os_dictionary cannot store a zero length hash key");
+    osp_croak("ObjStore: os_dictionary cannot store a zero length hash key");
   OSSV *ossv = (OSSV*) hv.pick(key);
   dOSP ;
   if (ossv) {
@@ -589,7 +590,7 @@ SV *OSPV_hvdict::STOREp(char *key, SV *nval)
   DEBUG_hash(warn("OSPV_hvdict::INSERT(%s=%s)", key, ossv->stringify()));
   dTHR;
   if (GIMME_V == G_VOID) return 0;
-  return osp->ossv_2sv(ossv);
+  return ossv;
 }
 
 void OSPV_hvdict::DELETE(char *key)
@@ -631,8 +632,8 @@ hvdict_bridge::hvdict_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cs(0)
 hvdict_bridge::~hvdict_bridge()
 { if (cs) delete cs; }
 
-ossv_bridge *OSPV_hvdict::_new_bridge(OSSVPV *_pv)
-{ return new hvdict_bridge(_pv); }
+ossv_bridge *OSPV_hvdict::new_bridge()
+{ return new hvdict_bridge(this); }
 
 SV *OSPV_hvdict::FIRST(ossv_bridge *vmg)
 {
@@ -660,7 +661,7 @@ SV *OSPV_hvdict::NEXT(ossv_bridge *vmg)
   return hkey_2sv(k1);
 }
 
-OSPV_Cursor *OSPV_hvdict::new_cursor(os_segment *seg)
+OSSVPV *OSPV_hvdict::new_cursor(os_segment *seg)
 { return new(seg, OSPV_hvdict_cs::get_os_typespec()) OSPV_hvdict_cs(this); }
 
 OSPV_hvdict_cs::OSPV_hvdict_cs(OSPV_hvdict *_at)
@@ -674,7 +675,7 @@ void OSPV_hvdict_cs::at()
 {
   if (reset_2pole != -1) {
     if (reset_2pole == 0) cs.first();
-    else croak("nope");
+    else osp_croak("nope");
     reset_2pole = -1;
   }
   if (cs.null()) return;
@@ -691,7 +692,7 @@ void OSPV_hvdict_cs::next()
 XS(XS_ObjStore__Set__new_os_set)
 {
   dXSARGS;
-  if (items != 3) croak("Usage: &$create('ObjStore::Set', $segment, $card)");
+  if (items != 3) osp_croak("Usage: &$create('ObjStore::Set', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -699,7 +700,7 @@ XS(XS_ObjStore__Set__new_os_set)
   int card = (int)SvIV(ST(2));
   PUTBACK;
 
-  if (card <= 0) croak("Non-positive cardinality");
+  if (card <= 0) osp_croak("Non-positive cardinality");
 
   OSSVPV *pv = new(area, OSPV_sethash::get_os_typespec()) OSPV_sethash(card);
   pv->bless(ST(0));
@@ -723,34 +724,34 @@ int OSPV_sethash::_count()
 char *OSPV_sethash::os_class(STRLEN *len)
 { *len = 13; return "ObjStore::Set"; }
 
-void OSPV_sethash::add(SV *nval)
+void OSPV_sethash::set_add(SV *nval)
 {
   dOSP ;
   ossv_bridge *mg = osp->sv_2bridge(nval, 1, os_segment::of(this));
   OSSVPV *ospv = mg->ospv();
-  if (!ospv) croak("OSPV_sethash::add(SV*): cannot add non-object");
+  if (!ospv) osp_croak("OSPV_sethash::add(SV*): cannot add non-object");
   ospv->REF_inc();
 
   set.insert(ospv);
 }
 
-int OSPV_sethash::contains(SV *nval)
+int OSPV_sethash::set_contains(SV *nval)
 {
   dOSP ;
   OSSVPV *ospv=0;
   ossv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) ospv = mg->ospv();
-  if (!ospv) croak("OSPV_sethash::contains(SV *nval): cannot test non-object");
+  if (!ospv) osp_croak("OSPV_sethash::contains(SV *nval): cannot test non-object");
   return set.contains(ospv);
 }
 
-void OSPV_sethash::rm(SV *nval)
+void OSPV_sethash::set_rm(SV *nval)
 {
   dOSP ;
   OSSVPV *ospv=0;
   ossv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) ospv = mg->ospv();
-  if (!ospv) croak("OSPV_sethash::rm(SV *nval): cannot remove non-object");
+  if (!ospv) osp_croak("OSPV_sethash::rm(SV *nval): cannot remove non-object");
   if (set.remove(ospv)) ospv->REF_dec();
 }
 
@@ -761,8 +762,8 @@ struct sethash_bridge : ossv_bridge {
 sethash_bridge::sethash_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cs(0)
 {}
 
-ossv_bridge *OSPV_sethash::_new_bridge(OSSVPV *pv)
-{ return new sethash_bridge(pv); }
+ossv_bridge *OSPV_sethash::new_bridge()
+{ return new sethash_bridge(this); }
 
 SV *OSPV_sethash::FIRST(ossv_bridge *vmg)
 {
@@ -791,7 +792,7 @@ void OSPV_sethash::CLEAR()
   }
 }
 
-OSPV_Cursor *OSPV_sethash::new_cursor(os_segment *seg)
+OSSVPV *OSPV_sethash::new_cursor(os_segment *seg)
 { return new(seg, OSPV_sethash_cs::get_os_typespec()) OSPV_sethash_cs(this); }
 
 OSPV_sethash_cs::OSPV_sethash_cs(OSPV_sethash *_at)
@@ -802,13 +803,13 @@ void OSPV_sethash_cs::seek_pole(int end)
 { reset_2pole = end; }
 
 void OSPV_sethash_cs::at()
-{ croak("OSPV_sethash_cs::at() not implemented"); }
+{ osp_croak("OSPV_sethash_cs::at() not implemented"); }
 
 void OSPV_sethash_cs::next()
 {
   if (reset_2pole != -1) {
     if (reset_2pole == 0) cs.first();
-    else croak("not supported");
+    else osp_croak("not supported");
     reset_2pole = -1;
   }
   if (cs.null()) return;
@@ -827,6 +828,9 @@ hvent2::hvent2() : hk(0)
 
 hvent2::~hvent2()
 { set_undef(); }
+
+void hvent2::FORCEUNDEF()
+{ hk=0; hv.FORCEUNDEF(); }
 
 void hvent2::set_undef()
 { if (hk) delete [] hk; hk=0; hv.set_undef(); }
@@ -878,7 +882,7 @@ int hvent2::rank(const char *v2)
 XS(XS_ObjStore__AV__new_splash_array)
 {
   dXSARGS;
-  if (items != 3) croak("Usage: &$create($class, $segment, $card)");
+  if (items != 3) osp_croak("Usage: &$create($class, $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -887,7 +891,7 @@ XS(XS_ObjStore__AV__new_splash_array)
   PUTBACK;
 
   if (card <= 0) {
-    croak("Non-positive cardinality");
+    osp_croak("Non-positive cardinality");
   } else if (card > 100000) {
     card = 100000;
     warn("Cardinality > 100000; try a more suitable representation");
@@ -902,7 +906,7 @@ OSPV_avarray::OSPV_avarray(int sz)
 {}
 
 OSPV_avarray::~OSPV_avarray()
-{ CLEAR(); }
+{}
 
 void OSPV_avarray::_boot(HV *hv)
 { install_rep(hv, file, "splash_array", XS_ObjStore__AV__new_splash_array); }
@@ -928,6 +932,36 @@ OSSV *OSPV_avarray::FETCHi(int xx)
   if (xx < 0 || xx >= av.count()) return 0;
   DEBUG_array(warn("OSPV_avarray(0x%x)->FETCHi(%d)", this, xx));
   return &av[xx];
+}
+
+OSSV *OSPV_avarray::traverse(char *keyish)
+{
+  if (_is_blessed()) {
+    // This will be optimized once overload '%' works XXX
+    STRLEN bslen;
+    char *bs = blessed_to(&bslen);
+    assert(bs);
+    SV *meth = (SV*) gv_fetchmethod(gv_stashpv("UNIVERSAL",0), "isa"); //XXX wrong
+    assert(meth);
+    dSP;
+    PUSHMARK(SP);
+    XPUSHs(sv_2mortal(newSVpv(bs, bslen)));
+    XPUSHs(sv_2mortal(newSVpv("ObjStore::AVHV", 0)));
+    PUTBACK;
+    int items = perl_call_sv(meth, G_SCALAR);
+    assert(items == 1);
+    SPAGAIN;
+    int avhv = SvTRUEx(POPs);
+    PUTBACK;
+    if (avhv) {
+      OSPV_Generic *layout = (OSPV_Generic *) FETCHi(0)->get_ospv();
+      assert(layout && layout->is_hash());
+      OSSV *ki = layout->FETCHp(keyish);
+      if (!ki || ki->natural() != OSVt_IV16) return 0;
+      return FETCHi(OSvIV16(ki));
+    }
+  }
+  return FETCHi(atol(keyish));
 }
 
 OSSV *OSPV_avarray::STOREi(int xx, SV *value)
@@ -969,7 +1003,7 @@ void OSPV_avarray::Push(SV *nval)
 void OSPV_avarray::CLEAR()
 { for (int xx=0; xx < av.count(); xx++) { av[xx].set_undef(); } }
 
-OSPV_Cursor *OSPV_avarray::new_cursor(os_segment *seg)
+OSSVPV *OSPV_avarray::new_cursor(os_segment *seg)
 { return new(seg, OSPV_avarray_cs::get_os_typespec()) OSPV_avarray_cs(this); }
 
 OSPV_avarray_cs::OSPV_avarray_cs(OSPV_avarray *_at)
@@ -1004,7 +1038,7 @@ void OSPV_avarray_cs::next()
 XS(XS_ObjStore__HV__new_splash_array2)
 {
   dXSARGS;
-  if (items != 3) croak("Usage: &$create('ObjStore::HV', $segment, $card)");
+  if (items != 3) osp_croak("Usage: &$create('ObjStore::HV', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -1013,7 +1047,7 @@ XS(XS_ObjStore__HV__new_splash_array2)
   PUTBACK;
   
   if (card <= 0) {
-    croak("Non-positive cardinality");
+    osp_croak("Non-positive cardinality");
   } else if (card > 1000) {
     card = 1000;
     warn("Cardinality > 1000; try a more suitable representation");
@@ -1031,7 +1065,7 @@ OSPV_hvarray2::OSPV_hvarray2(int sz)
 {}
 
 OSPV_hvarray2::~OSPV_hvarray2()
-{ CLEAR(); }
+{}
 
 double OSPV_hvarray2::_percent_filled()
 {
@@ -1059,17 +1093,19 @@ int OSPV_hvarray2::index_of(char *key)
   return -1;
 }
 
-SV *OSPV_hvarray2::FETCHp(char *key)
+OSSV *OSPV_hvarray2::FETCHp(char *key)
 {
   int xx = index_of(key);
   OSSV *ret = xx==-1? 0 : &hv[xx].hv;
   DEBUG_hash(warn("OSPV_hvarray2::FETCH[%d] %s => %s",
 		  xx, key, ret?ret->stringify():"undef"));
-  dOSP ;
-  return osp->ossv_2sv(ret);
+  return ret;
 }
 
-SV *OSPV_hvarray2::STOREp(char *key, SV *value)
+OSSV *OSPV_hvarray2::traverse(char *keyish)
+{ return FETCHp(keyish); }
+
+OSSV *OSPV_hvarray2::STOREp(char *key, SV *value)
 {
   int xx = index_of(key);
   if (xx == -1) {
@@ -1081,8 +1117,7 @@ SV *OSPV_hvarray2::STOREp(char *key, SV *value)
 		  xx, key, hv[xx].hv.stringify()));
   dTHR;
   if (GIMME_V == G_VOID) return 0;
-  dOSP;
-  return osp->ossv_2sv(&hv[xx].hv);
+  return &hv[xx].hv;
 }
 
 void OSPV_hvarray2::DELETE(char *key)
@@ -1119,8 +1154,8 @@ struct hvarray2_bridge : ossv_bridge {
 hvarray2_bridge::hvarray2_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cursor(0)
 {}
 
-ossv_bridge *OSPV_hvarray2::_new_bridge(OSSVPV *pv)
-{ return new hvarray2_bridge(pv); }
+ossv_bridge *OSPV_hvarray2::new_bridge()
+{ return new hvarray2_bridge(this); }
 
 SV *OSPV_hvarray2::FIRST(ossv_bridge *vmg)
 {
@@ -1149,7 +1184,7 @@ SV *OSPV_hvarray2::NEXT(ossv_bridge *vmg)
   return out;
 }
 
-OSPV_Cursor *OSPV_hvarray2::new_cursor(os_segment *seg)
+OSSVPV *OSPV_hvarray2::new_cursor(os_segment *seg)
 { return new(seg, OSPV_hvarray2_cs::get_os_typespec()) OSPV_hvarray2_cs(this); }
 
 OSPV_hvarray2_cs::OSPV_hvarray2_cs(OSPV_hvarray2 *_at)
@@ -1184,7 +1219,6 @@ MODULE = ObjStore::GENERIC	PACKAGE = ObjStore::GENERIC
 
 BOOT:
   SV *rep;
-  char *tag;
 #ifdef USE_THREADS
   os_collection::set_thread_locking(1);
 #else

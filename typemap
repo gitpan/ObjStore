@@ -17,8 +17,10 @@ os_object_cursor *	O_OBJECT
 OSSVPV *		O_OSSVPV
 OSPV_Container *	O_OSSVPV
 OSPV_Generic *		O_OSSVPV
-OSPV_Ref *		O_OSSVPV
+OSPV_fatindex *		O_OSSVPV
 OSPV_Ref2 *		O_OSSVPV
+OSPV_Cursor2 *		O_OSSVPV
+OSPV_Ref *		O_OSSVPV
 OSPV_Cursor *		O_OSSVPV
 ossv_bridge *		T_PTRREF
 osp_txn *		O_OBJECT

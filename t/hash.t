@@ -6,7 +6,7 @@ use lib './t';
 use test;
 
 &open_db;    
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     die 'no john' if !$john;
     

@@ -35,7 +35,7 @@ sub restart {
     $$o{keepalive} ||= 60;  #minimum keepalive time
     $$o{hades} ||= ObjStore::AV->new($o, 20);
     if (my $j = $$o{job}) {
-	if (!$j->runnable or !$j->is_evolved) {
+	if (!$j->runnable) {
 	    $j->cancel;
 	    delete $$o{job};
 	}

@@ -17,7 +17,7 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                         # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.47';
+$VERSION = '1.48';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -322,7 +322,7 @@ sub peek {
     $pk->Peek($_[0]);
 }
 
-sub debug {
+sub debug {  # autoload
     my $mask=0;
     for (@_) {
 	/^off/      and last;
@@ -1249,39 +1249,6 @@ for (qw(new load_path load_args stringify keys load_target compare)) {
     ObjStore::_mark_method($_)
 }
 
-package ObjStore::PathExam::Path;
-use Carp;
-use vars qw(@ISA);
-@ISA='ObjStore::AV';
-
-sub new {
-    use attrs 'method';
-    my ($class, $near, $path) = @_;
-    my @comp = split m",\s*", $path;
-    croak "$class->new($path): invalid" if @comp==0;
-    croak "$class->new($path): too many keys" if @comp >= 8;
-    my $o = $class->SUPER::new($near, scalar @comp);
-    for (my $x=0; $x < @comp; $x++) {
-	my @c = split m"\/", $comp[$x];
-	croak "$class->new($path): '$comp[$x]' too long" if @c > 7;
-	$o->[$x] = [map { "$_\0" } @c];
-    }
-    $o;
-}
-
-sub stringify {
-    use attrs 'method';
-    my $paths = shift;
-    my @ps;
-    $paths->map(sub {
-		    my $path = shift;
-		    my @p;
-		    $path->map(sub { chop(my $s = shift); push(@p, $s) });
-		    push @ps, join('/', @p);
-		});
-    join ', ', @ps;
-}
-
 package ObjStore::AV;
 use Carp;
 use vars qw($VERSION @ISA %REP);
@@ -1314,14 +1281,6 @@ sub map {
 sub _count { 
     carp "_count should be done directly" if $] >= 5.00457;
     $_[0]->FETCHSIZE();
-}
-sub _Push { 
-    carp "_Push should be done directly" if $] >= 5.00457;
-    shift->PUSH(@_) 
-}
-sub _Pop { 
-    carp "_Pop should be done directly" if $] >= 5.00457;
-    shift->POP(@_) 
 }
 
 package ObjStore::HV;

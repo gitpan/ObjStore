@@ -10,7 +10,7 @@ $ObjStore::SCHEMA{'ObjStore::REP::ODI'}->
 package ObjStore::REP::ODI::HashIndex;
 use Carp;
 
-# The HashIndex project is delayed. XXX
+# The HashIndex project has been delayed. XXX
 
 sub configure {
     my $o = shift;

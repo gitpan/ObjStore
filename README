@@ -26,6 +26,19 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 =head1 R!CENT CHANGES
 
 
+** 10-13-98 RELEASE 1.48
+
+- The transient memory leak is finally fixed!!  A patch for 5.005_02
+is bundled with this distribution (see patches/leak.fix).  The patch
+is also planned to be included by default in 5.005_5x.
+
+- Many updates for Event 0.20+.
+
+- Integrated osp_keypack1 into the API.
+
+- Reduced maximum number of keys from eight to four.
+
+
 ** 09-26-98 RELEASE 1.47
 
 - WARNING: the fatal_exceptions option is now always OFF.
@@ -44,32 +57,6 @@ that an object is queued for unconditional destruction.
 
 - Culled more statistics from ObjStore::Serve.  Switched to safe signal
 handling.
-
-
-** 09-12-98 RELEASE 1.46
-
-- Use PERL5PREFIX to install into a different directory tree.
-
-- Improved ObjStore::Index::POSH_PEEK.  Made pretty.
-
-- Shell-style output redirection >> for posh.
-
-- Improved the design of the ObjStore::Serve::defaultLoop.  Reduced
-excessive statistics.
-
-- Improved ObjStore::Table3::fetch in an array context.
-
-- Added cast-to-integer overloading for ObjStore::UNIVERSAL.  For
-example, $hash{ 0+$object }=1.
-
-- Fixed posh reporting of forced-loaded packages.
-
-- Reduced the number of potential "Attempt to free unreferenced scalar
-during global destruction" warnings (hopefully!).
-
-- Improved various diagnostic messages.
-
-- Documentation corrections & updates.
 
 
 see ./INSTALL for hints on installation

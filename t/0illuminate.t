@@ -16,7 +16,7 @@ $loaded = 1;
 
 #$ObjStore::REGRESS = 1;
 #ObjStore::debug 'PANIC';
-#ObjStore::debug qw/schema/;
+#ObjStore::debug qw/wrap/;
 
 $db = ObjStore::open(&test_db, 0, 0666);
 ok($db);

@@ -28,7 +28,7 @@ extern void osp_croak(const char* pat, ...);
 #undef U16
 #define U16 os_unsigned_int16
 
-#define OSPERL_API_VERSION 2
+#define OSPERL_API_VERSION 6
 
 // OSSV has only 16 bits to store type information.  Yikes!
 
@@ -123,9 +123,9 @@ struct OSSV {
   void s(os_int32);
   void s(double);
   void s(char *, os_unsigned_int32 len);
-  void s(OSSV *);
   void s(OSSVPV *);
   void s(ospv_bridge *mg);
+  void s(OSSV &nval);
   //get
   char *stringify(char *tmp = 0);
 };
@@ -219,6 +219,7 @@ private:
 public:
   static os_typespec *get_os_typespec();
   OSPVptr() :rv(0) {}
+  OSPVptr(OSSVPV *setup) : rv(setup) { rv->REF_inc(); }
   ~OSPVptr() { set_undef(); }
   void set_undef() { if (rv) { rv->REF_dec(); rv=0; } }
   void operator=(OSSVPV *npv)
@@ -302,7 +303,7 @@ struct OSPV_Generic : OSPV_Container {
   virtual void SPLICE(int offset, int length, SV **top, int count);
   // index
   virtual int add(OSSVPV *);
-  virtual void remove(OSSVPV *);
+  virtual int remove(OSSVPV *);
   virtual void configure(SV **top, int items);
 
   // the idea is to load in the index's configured path; why do I want this?
@@ -325,6 +326,18 @@ struct hvent2 {
 //  hvent2 *operator=(int zero);
   int rank(const char *v2);
   SV *key_2sv();
+};
+
+#define OSP_PATHEXAM_MAXKEYS 4
+struct osp_keypack1 {
+  static os_typespec *get_os_typespec();
+  static const int max;
+  I16 cnt;
+  I16 pad1;
+  OSSV keys[OSP_PATHEXAM_MAXKEYS];
+
+  osp_keypack1();
+  void set_undef();
 };
 
 #ifdef OSPERL_PRIVATE
@@ -433,12 +446,11 @@ STMT_START {						\
 
 #endif
 
-#define PATHEXAM_MAXKEYS 8
 class osp_pathexam {
 protected:
   int descending;
   int pathcnt;
-  OSSVPV *pcache[PATHEXAM_MAXKEYS];
+  OSSVPV *pcache[OSP_PATHEXAM_MAXKEYS];
   char mode;
   int keycnt;
   char *thru;
@@ -446,8 +458,8 @@ protected:
   int tmpkey;
   // The first set of tmpkeys are used for the loaded target.
   // The seconds and third sets are used for the other records in compare.
-  OSSV tmpkeys[PATHEXAM_MAXKEYS * 3]; //should never be RVs
-  OSSV *keys[PATHEXAM_MAXKEYS];
+  OSSV tmpkeys[OSP_PATHEXAM_MAXKEYS * 3]; //should never be RVs
+  OSSV *keys[OSP_PATHEXAM_MAXKEYS];
   char *conflict;
   OSSVPV *target;
   
@@ -457,14 +469,17 @@ protected:
 public:
   osp_pathexam(int _desc = 0);
   void init(int _desc = 0);
+  void set_descending(int yes);
   void load_path(OSSVPV *_paths);
   void load_args(SV **top, int items);
   int load_target(char _mode, OSSVPV *target);
+  void load_keypack1(OSSVPV *dat, osp_keypack1 &kpk);
   OSSV *mod_ossv(OSSV *sv);
   char *kv_string();
   void push_keys();
   void set_conflict();
   void no_conflict();
+  int compare(osp_keypack1 &kpk, int partial);
   int compare(OSSVPV *, int partial);
   // both must be valid with respect to the loaded paths
   int compare(OSSVPV *d1, OSSVPV *d2);
@@ -512,7 +527,7 @@ struct osp_bridge_ring {
 // per-thread globals
 struct osp_thr {
   static int Version;
-  static void version_check(int ver);
+  static void use(const char *, int ver);
 
   osp_thr();
   ~osp_thr();
@@ -543,6 +558,7 @@ struct osp_thr {
   static void *default_dynacast(void *obj, HV *stash);
   static os_segment *sv_2segment(SV *);
   static ospv_bridge *sv_2bridge(SV *, int force, os_segment *near=0);
+  // sv_2ospv XXX
   static SV *ossv_2sv(OSSV *ossv, int hold=0);
   static SV *ospv_2sv(OSSVPV *, int hold=0);
   static SV *wrap(OSSVPV *ospv, SV *br);
@@ -552,11 +568,6 @@ struct osp_thr {
 
   void push_ospv(OSSVPV *pv); //depreciated?
 };
-
-struct osperl_version_check {
-  osperl_version_check(int ver) { osp_thr::version_check(ver); }
-};
-static osperl_version_check _osperl_version_check(OSPERL_API_VERSION);
 
 struct osp_txn {
   osp_txn(os_transaction::transaction_type_enum,

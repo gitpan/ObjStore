@@ -323,21 +323,30 @@ sub POSH_PEEK {
     my $limit = $big? $o->{summary_width} : $len;
 
     $o->o("$name ");
-    $val->configure()->POSH_PEEK($o);
-    my $exam = ObjStore::PathExam->new();
-    my $path = $val->index_path();
-    $exam->load_path($path)
-	if $path;
+    my $conf = $val->configure();
+    my $exam;
+    if ($conf) {
+	$conf->POSH_PEEK($o);
+	$exam = ObjStore::PathExam->new();
+	my $path = $val->index_path();
+	$exam->load_path($path)
+	    if $path;
+	$o->o(" ");
+    }
     my $elem = sub {
 	my ($x, $at) = @_;
-	$exam->load_target($at);
-	$o->o("[$x] ".join(', ',map {
-	    if (/^-?\d+(\.\d+)?$/) { $_  }
-	    else { "'$_'" }
-	} $exam->keys())." => ");
+	$o->o("[$x] ");
+	if ($exam) {
+	    $exam->load_target($at);
+	    $o->o(join(', ',map {
+		if (/^-?\d+(\.\d+)?$/) { $_  }
+		else { "'$_'" }
+	    } $exam->keys())." ");
+	}
+	$o->o("=> ");
 	$o->peek_any($at);
     };
-    $o->o(" [");
+    $o->o("[");
     $o->nl;
     $o->indent(sub {
 		   for (my $x=0; $x < $limit; $x++) {

@@ -202,6 +202,7 @@ PROTOTYPES: DISABLE
 
 BOOT:
   extern _Application_schema_info ObjStore_REP_ODI_dll_schema_info;
+  osp_thr::use("ObjStore::REP::ODI", OSPERL_API_VERSION);
   osp_thr::register_schema("ObjStore::REP::ODI",
 	&ObjStore_REP_ODI_dll_schema_info);
   HV *hvrep = perl_get_hv("ObjStore::HV::REP", TRUE);

@@ -25,6 +25,6 @@ $TMP_DBDIR = 'elvis:/research/tmp';
 
 #---------------------------------------------------------------#
 
-sub SCHEMA_VERSION() { '13' };  #do not edit!!
+sub SCHEMA_VERSION() { '14' };  #do not edit!!
 
 1;

@@ -15,10 +15,11 @@
 #define SERIOUS warn
 #define RETURN_BADNAME(len) *len=3;return "???"
 
-void osp_thr::version_check(int ver)
+void osp_thr::use(const char *YourName, int ver)
 {
   if (ver != OSPERL_API_VERSION)
-    croak("ObjStore API mismatch (%d != %d); please recompile everything that links with -losperl", OSPERL_API_VERSION, ver);
+    croak("ObjStore API mismatch (%d != %d); please recompile '%s'\n",
+	  OSPERL_API_VERSION, ver, YourName);
 }
 
 /* CCov: on */
@@ -169,7 +170,6 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
     return br;}
   case SVt_PVHV:
   case SVt_PVAV:{
-    // Leaks XPVRV : unavoidable XXX
     SV *tied;
     if (ospv->get_perl_type() == SVt_PVHV) {
       tied = sv_2mortal((SV*) newHV());		// %tied
@@ -179,15 +179,11 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
     sv_bless(br, BridgeStash);
     sv_magic(tied, br, '~', Nullch, 0);		// magic tied, '~', $mgobj
     --SvREFCNT(br);				// like ref_noinc
-    SV *rv = newRV_noinc(tied);			// $rv = \tied
     
-    sv_magic(tied, rv, 'P', Nullch, 0);	// tie tied, CLASS, $rv
-    MAGIC *tie_mg = mg_find(tied, 'P');	// undo tie refcnt (yikes!)
-    assert(tie_mg);
-    tie_mg->mg_flags &= ~(MGf_REFCOUNTED);
-    --SvREFCNT(rv);
-    //sv_2mortal(rv);
+    sv_magic(tied, Nullsv, 'P', Nullch, 0);	// tie tied, CLASS
 
+    SV *rv = newRV_inc(tied);			// $rv = \tied
+    sv_2mortal(rv);
     (void)sv_bless(rv, stash);
     
     DEBUG_wrap({ warn("[av]wrap %p", ospv); Perl_sv_dump(rv); });
@@ -587,21 +583,20 @@ void OSSV::s(ospv_bridge *br)
   croak("OSSV::s(ospv_bridge*): assertion failed");
 }
 
-/*
-void OSSV::s(OSSV *nval)
+void OSSV::s(OSSV &_nval)
 { 
-  assert(nval);
+  OSSV *nval = &_nval;
   switch (nval->natural()) {
-  case OSVt_UNDEF: set_undef(); break;
+  case OSVt_UNDEF: case OSVt_UNDEF2: set_undef(); break;
   case OSVt_IV32:  s(OSvIV32(nval)); break;
   case OSVt_NV:    s(OSvNV(nval)); break;
   case OSVt_PV:    s((char*) nval->vptr, nval->xiv); break;
   case OSVt_RV:    s(OSvRV(nval)); break;
   case OSVt_IV16:  s(OSvIV16(nval)); break;
-  default:         croak("OSSV::s(OSSV*): assertion failed");
+  case OSVt_1CHAR: s((char*)&nval->xiv, 1); break;
+  default:         croak("OSSV::s(OSSV&): assertion failed");
   }
 }
-*/
 
 char OSSV::strrep1[64];
 char *OSSV::stringify(char *buf)    //limited to 63 chars
@@ -824,6 +819,26 @@ void OSSV::verify_correct_compare()
   o1.s("a", 1);
   o2.s("abc", 3);
   assert(o1.compare(&o2) < 0);
+
+  // reconcile s(OSSV&)
+  o1.set_undef();
+  o2.s(o1);
+  assert(o1.compare(&o2) == 0);
+  o1.s(20000);
+  o2.s(o1);
+  assert(o1.compare(&o2) == 0);
+  o1.s(40000);
+  o2.s(o1);
+  assert(o1.compare(&o2) == 0);
+  o1.s(.5);
+  o2.s(o1);
+  assert(o1.compare(&o2) == 0);
+  o1.s("1", 1);
+  o2.s(o1);
+  assert(o1.compare(&o2) == 0);
+  o1.s("string", 1);
+  o2.s(o1);
+  assert(o1.compare(&o2) == 0);
 
   // there's nothing like 100% ...
 }
@@ -1256,7 +1271,7 @@ void OSPV_Generic::SPLICE(int, int, SV **, int) { NOTFOUND("SPLICE"); }
 
 // INDEX
 int OSPV_Generic::add(OSSVPV*) { NOTFOUND("add"); return 0; }
-void OSPV_Generic::remove(OSSVPV*) { NOTFOUND("remove"); }
+int OSPV_Generic::remove(OSSVPV*) { NOTFOUND("remove"); return 0; }
 void OSPV_Generic::configure(SV **top, int items)
 { fwd2rep("configure", top, items); }
 
@@ -1298,6 +1313,19 @@ I32 OSPV_Cursor2::pos() { NOTFOUND("pos"); return -1; }
 void OSPV_Cursor2::stats() { NOTFOUND("stats"); }
 
 //--------------------------------------------------- osp_pathexam
+
+const int osp_keypack1::max = OSP_PATHEXAM_MAXKEYS;
+
+osp_keypack1::osp_keypack1()
+{ cnt=0; pad1=0; }
+
+void osp_keypack1::set_undef()
+{
+  cnt=0;
+  for (int xx=0; xx < max; xx++)
+    keys[xx].set_undef();
+}
+
 osp_pathexam::osp_pathexam(int _desc)
 { init(_desc); }
 
@@ -1310,13 +1338,16 @@ void osp_pathexam::init(int _desc)
   conflict = 0;
 }
 
+void osp_pathexam::set_descending(int yes)
+{ descending = yes; }
+
 void osp_pathexam::load_path(OSSVPV *paths)
 {
   pathcnt = paths->FETCHSIZE();
   if (pathcnt < 1)
     croak("path is empty");
-  if (pathcnt >= PATHEXAM_MAXKEYS)
-    croak("path has too many keys (%d max)", PATHEXAM_MAXKEYS);
+  if (pathcnt > OSP_PATHEXAM_MAXKEYS)
+    croak("path has too many keys (%d max)", OSP_PATHEXAM_MAXKEYS);
 
   for (int xa=0; xa < pathcnt; xa++) {
     OSSVPV *pth;
@@ -1383,7 +1414,7 @@ void osp_pathexam::no_conflict()
 // but getting the right behavior is a hassel.  It's almost not
 // worth it.  Perhaps the current behavior should be documented? XXX
 
-// THE WORK AROUND IS TO GET THE KEYS TWICE; THE FIRST TIME JUST
+// THE WORK-AROUND IS TO GET THE KEYS TWICE; THE FIRST TIME JUST
 // TO SEE IF IT WORKS; THE SECOND TIME TO SET THE INDEX FLAGS.  YUCK.
 
 int osp_pathexam::load_target(char _mode, OSSVPV *pv)
@@ -1423,9 +1454,9 @@ OSSV *osp_pathexam::mod_ossv(OSSV *sv)
 
 void osp_pathexam::load_args(SV **top, int items)
 {
-  SV *copy[PATHEXAM_MAXKEYS];
+  SV *copy[OSP_PATHEXAM_MAXKEYS];
   int xa;
-  if (items >= PATHEXAM_MAXKEYS) items = PATHEXAM_MAXKEYS-1;
+  if (items >= OSP_PATHEXAM_MAXKEYS) items = OSP_PATHEXAM_MAXKEYS-1;
   for (xa=0; xa < items; xa++) {
     copy[xa] = sv_mortalcopy(top[xa]);
   }
@@ -1464,7 +1495,7 @@ char *osp_pathexam::kv_string()
 
 void osp_pathexam::push_keys()
 {
-  SV *sv[PATHEXAM_MAXKEYS];
+  SV *sv[OSP_PATHEXAM_MAXKEYS];
   for (int kx=0; kx < keycnt; kx++) {
     sv[kx] = osp_thr::ossv_2sv(get_key(kx));
   }
@@ -1475,11 +1506,42 @@ void osp_pathexam::push_keys()
   PUTBACK;
 }
 
+int osp_pathexam::compare(osp_keypack1 &kpk, int partial)
+{
+  if (!pathcnt) croak("no path loaded");
+  int cmp;
+  for (int kx=0; kx < pathcnt; kx++) {
+    if (kx >= keycnt) {
+	if (partial) return 0;
+	return descending? 1 : -1;
+    }
+    OSSV *k1 = keys[kx];
+    if (kx >= kpk.cnt) return descending? -1 : 1;
+    OSSV *k2 = &kpk.keys[kx];
+    cmp = k1->compare(k2);
+    if (cmp) break;
+  }
+  return descending? -cmp : cmp;
+}
+
+void osp_pathexam::load_keypack1(OSSVPV *dat, osp_keypack1 &kpk)
+{
+  if (!pathcnt) croak("no path loaded");
+  if (dat->is_OSPV_Ref2()) dat = ((OSPV_Ref2*)dat)->focus();
+  tmpkey = OSP_PATHEXAM_MAXKEYS;
+  kpk.cnt=0;
+  for (int kx=0; kx < pathcnt; kx++) {
+    OSSV *k1 = path_2key(kx, dat);
+    if (!k1) return;
+    kpk.keys[kpk.cnt++].s(*k1); //could be optimized...maybe XXX
+  }
+}
+
 int osp_pathexam::compare(OSSVPV *dat, int partial)
 {
   if (!pathcnt) croak("no path loaded");
   if (dat->is_OSPV_Ref2()) dat = ((OSPV_Ref2*)dat)->focus();
-  tmpkey = PATHEXAM_MAXKEYS;
+  tmpkey = OSP_PATHEXAM_MAXKEYS;
   int cmp;
   for (int kx=0; kx < pathcnt; kx++) {
     if (kx >= keycnt) {
@@ -1503,7 +1565,7 @@ int osp_pathexam::compare(OSSVPV *d1, OSSVPV *d2)
   if (!pathcnt) croak("no path loaded");
   if (d1->is_OSPV_Ref2()) d1 = ((OSPV_Ref2*)d1)->focus();
   if (d2->is_OSPV_Ref2()) d2 = ((OSPV_Ref2*)d2)->focus();
-  tmpkey = PATHEXAM_MAXKEYS;
+  tmpkey = OSP_PATHEXAM_MAXKEYS;
   int cmp;
   for (int kx=0; kx < pathcnt; kx++) {
     OSSV *z1 = path_2key(kx, d1);

@@ -530,6 +530,7 @@ PROTOTYPES: DISABLE
 
 BOOT:
   extern _Application_schema_info ObjStore_REP_Splash_dll_schema_info;
+  osp_thr::use("ObjStore::REP::Splash", OSPERL_API_VERSION);
   osp_thr::register_schema("ObjStore::REP::Splash",
 	&ObjStore_REP_Splash_dll_schema_info);
   HV *avrep = perl_get_hv("ObjStore::AV::REP", TRUE);

@@ -133,6 +133,7 @@ BOOT:
   compile time." -- the perl compiler
   */
   osp_thr::boot();
+  osp_thr::use("ObjStore", OSPERL_API_VERSION);
   OSSV::verify_correct_compare();
 //
 #ifdef _OS_CPP_EXCEPTIONS
@@ -1372,11 +1373,11 @@ OSPV_Generic::SPLICE(...)
 	PUTBACK;
 	int size = THIS->FETCHSIZE();
 	// Mirror the logic in pp_splice; GACK!
-	int offset = SvIV(ST(1));
+	int offset = osp_thr::sv_2aelem(ST(1));
 	if (offset < 0) offset += size;
 	if (offset < 0) croak("Modification of non-creatable array value attempted, subscript %d", offset);
 	if (offset > size) offset = size;
-	int length = items >= 3 ? SvIV(ST(2)) : size+1;
+	int length = items >= 3 ? osp_thr::sv_2aelem(ST(2)) : size+1;
 	if (length < 0) length = 0;
 	int after = size - (offset + length);
 	if (after < 0) length += after;
@@ -1480,8 +1481,9 @@ OSPV_Generic::remove(sv)
 	PPCODE:
 	PUTBACK;
 	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1);
-	THIS->remove(br->ospv());
-	return;
+	int rmd = THIS->remove(br->ospv());
+	SPAGAIN;
+	XPUSHs(boolSV(rmd));
 
 #-----------------------------# Ref
 

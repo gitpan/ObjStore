@@ -4,6 +4,7 @@
 
 use strict;
 package ObjStore::REP::FatTree;
+require ObjStore::PathExam::Path;
 
 use base 'DynaLoader';
 __PACKAGE__->bootstrap($ObjStore::VERSION);
@@ -84,3 +85,12 @@ sub POSH_PEEK {
 }
 
 1;
+__END__
+
+What makes insert slow?
+
+- keys not copied (could be optimized by hand coding push/unshift)
+
+- relaxed depth recalc
+
+- rotations

@@ -1,9 +1,9 @@
 use strict;
 package ObjStore::Job::Table;
 use ObjStore;
-use Event 0.05;
+use Event 0.17;
 use base 'ObjStore::Table3';
-use ObjStore::Serve qw(txretry meter);
+use ObjStore::Serve qw(txretry);
 use builtin qw(max min);           # available via CPAN
 use vars qw($VERSION $Interrupt $WorkLevel $RunningJob);
 $VERSION = '0.02';
@@ -42,26 +42,13 @@ sub restart {
 
     # this should be (more) configurable
     my $jref = $o->new_ref('transient','hard');
-    my $worker;
-    my $work = 0;
-    $worker = Event->idle(desc => 'ObjStore::Job::Table',
-			  callback => sub {
-			      ++$work;
-			      meter('ObjStore::Job::Table->work');
-
-			      my $left = $jref->focus->work();
-
-			      # need more slices?
-			      $worker->again if $left <= 0;
-			  });
-
-    Event->timer(-interval => 1, -callback => sub { $worker->again },
-		 -desc => "ObjStore::Job::Table timer");
-    Event->timer(-interval => 3, -callback => sub {
-		     $worker->now if !$work;
-		     $work = 0;
-		 },
-		 -desc => "ObjStore::Job::Table FORCE");
+    my $min_interval = 1;
+    Event->idle(desc => 'ObjStore::Job::Table',
+		min_interval => \$min_interval, max_interval => 3,
+		callback => sub {
+		    my $left = $jref->focus->work();
+		    $min_interval = $left <= 0 ? 0 : 1;
+		});
 }
 
 # Assumes one Job::Table per database.

@@ -1,5 +1,6 @@
 use strict;
 package ObjStore::REP::Splash;
+require ObjStore::PathExam::Path;
 
 use base 'DynaLoader';
 __PACKAGE__->bootstrap($ObjStore::VERSION);

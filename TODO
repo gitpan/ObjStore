@@ -94,11 +94,9 @@ RE-THINK:
 patches
   PERL_OBJECT / ExCxx !!
   VTBL collections implementation!
-  XSthr.h
-  fold osp_croak back into perl
-  MakeMaker patch for blib shared libraries
-
-arrays using a doubly-linked list representation
+  XSthr.h?
+  fold osp_croak back into perl?
+  MakeMaker patch for blib shared libraries?
 
 Mike Guy writes: How about "die if in a void context"?  That would get
 the best of both worlds.  I'd like to see that style used much more in
@@ -110,10 +108,6 @@ results of open comes particularly to mind.
 
 ObjStore::ServerDB::Top
   POSH_PEEK - maybe try to require stuff before UNLOADED can happen?
-
-more support for DLL schemas?
-  generic scalar object typemap?  XPVMG abstraction?
-  Bit::Vector?
 
 threads
   optional transaction-level mutex to debug data accesses?
@@ -129,8 +123,6 @@ transactions
   prevent more than one thread from using a local transaction? (safe mode?)
   begin('update!',...): force switch to update?
 
-fatal_exceptions(0) by default?  Hard to change!  :-(
-
 qtposh
   AVHV looks different depending whether it goes through resolve??!
   resolve failures seem not to get reported?
@@ -145,8 +137,6 @@ posh
   merge with ObjStore::Posh::Cursor
   display style?  web integration?  cgi-posh?
   hyperlink interface!
-
-~magic ownership check?
 
 $ref->notify('m1', 'batch'); ???
 

@@ -252,12 +252,13 @@ SQL has this fantastic facility called indices.  C<ObjStore> does too!
   $c->step(1);
   warn $c->at()->{name}; # Triangular
 
-All the index representations supplied by default avoid copying
-records' keys.  The keys are used in-place and may be marked
-read-only.  This is an advantage until the data-set cannot fit in the
-client-side cache.  Once you data gets very large, an alternate
-strategy is needed.  Consider enhancing the current representations or
-designing a new one.
+All the index representations supplied by default do not copy records'
+keys.  The keys are used in-place and are (usually) marked read-only.
+Since the keys are not copied, the index is stored in less space and
+can be accessed faster.  Or at least until it grows larger than the
+client-side cache.  None of the indices support key copying at the
+present but the change is not difficult.  If you send email to the
+list, I probably come up with a fix.
 
 Indices should not be used unless other data structures prove
 inadequate.  Some indices cannot be allocated transiently.  Simple
@@ -1020,7 +1021,7 @@ single language.
 Only the field-names are specified.  It should be clear that this
 declaration is even more flexible than C<SQL>.  The field-types are
 left dynamic.  Actually, even the field-names are not fixed.  The
-flexiblity potential is very great.  It might even be too flexible!
+flexibility potential is very great.  It might even be too flexible!
 
 Fortunately, perl anticipated this.  Perl is flexible about how
 flexible it is.  Therefore, if you need rigidity and the speed that

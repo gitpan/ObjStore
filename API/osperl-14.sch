@@ -16,7 +16,8 @@ OS_MARK_SCHEMA_TYPE(OSPV_iv);
 OS_MARK_SCHEMA_TYPE(OSPV_nv);
 
 // useful stuff
-OS_MARK_SCHEMA_TYPE(hvent2);    // too late to add 'osp_' prefix
+OS_MARK_SCHEMA_TYPE(hvent2);    // too late to add 'osp_' prefix :-(
+OS_MARK_SCHEMA_TYPE(osp_keypack1);
 
 OS_MARK_SCHEMA_TYPE(osp_str3);
 OS_MARK_SCHEMA_TYPE(osp_str7);

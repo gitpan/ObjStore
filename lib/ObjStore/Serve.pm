@@ -1,24 +1,20 @@
-use 5.00464; #probably
+use 5.005; #probably
 use strict;
 package ObjStore::Serve;
 use Carp;
 use Exporter ();
-use Event; #0.03 or better recommended
-use IO::Handle;
-use IO::Poll '/POLL/';
-use Time::HiRes qw(gettimeofday tv_interval);
+use Event 0.17 qw(loop unloop);
 use ObjStore;
 use base 'ObjStore::HV';
 use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $SERVE %METERS $Init $TXOpen $VERSION);
-$VERSION = '0.03';
+$VERSION = '0.04';
 push @ISA, 'Exporter', 'osperlserver';
 @EXPORT_OK = qw(&txqueue &txretry &meter &exitloop &seconds_delta
-		$LoopLevel $ExitLevel &init_signals);
-# :meld is EXPERIMENTAL!!
-%EXPORT_TAGS = (meld => [qw($LoopLevel $ExitLevel &init_signals
-			     )]);
+		&init_signals);
 
+my $meter_warn=0;
 sub meter {
+    carp "meter is depreciated" if ++$meter_warn > 5;
 #    ++ $METERS{ $_[$#_] };
 }
 use vars qw(@TXready @TXtodo);
@@ -119,8 +115,6 @@ sub VERSION {
     } else { $v }
 }
 
-use vars qw($Status $LoopLevel $ExitLevel);
-$LoopLevel = $ExitLevel = 0;
 ObjStore::fatal_exceptions(0);
 
 # Don't wait forever! XXX
@@ -129,11 +123,11 @@ for (qw(read write)) { ObjStore::lock_timeout($_,15); }
 sub init_signals {
     for my $sig (qw(INT TERM)) {
 	Event->signal(desc => "ObjStore::Serve $sig handler", signal => $sig,
-		      callback => sub { exitloop("SIG$sig\n"); });
+		      callback => sub { unloop("SIG$sig\n"); });
     }
 }
 
-################################################# STATS
+################################################# UTIL
 
 use vars qw($Aborts $Commits $LoopTime @Commit);
 $LoopTime = 2;
@@ -244,93 +238,35 @@ sub checkpoint {
 use vars qw($Chkpt);
 
 sub defaultLoop {
-    Event->VERSION(0.11);
     require ObjStore::Serve::Notify;
     ObjStore::Serve::Notify::init_autonotify();
     if (!$Init) { &init_signals; ++$Init; }
     checkpoint(1);
-    $Chkpt = Event->timer(desc => "ObjStore::Serve checkpoint", priority => -1,
+    $Chkpt = Event->timer(desc => "ObjStore::Serve checkpoint", nice => -1,
 			  interval => \$LoopTime, callback => \&checkpoint);
     Event->add_hooks(asynccheck => sub {
 			 $Chkpt->now() if ObjStore::Transaction::is_aborted($TXN)
 		     });
     $Event::DIED = sub {
-	my ($e,$err) = @_;
+	my ($e, $why) = @_;
 	$TXN->abort;
-	warn "Event '$e->{desc}' died: $err";
-	$Chkpt->now();
+	my $m = "Event '$e->{desc}' died: $why";
+	$m .= "\n" if $m !~ m/\n$/;
+	warn $m;
+	$Chkpt->{callback}->();
     };
-    Event::Loop::Loop();
+    loop();
 }
 
-################################################# old
-
-sub oldLoop {
-    warn "exitloop is broken for oldLoop; sorry";
-    require ObjStore::Serve::Notify;
-    ObjStore::Serve::Notify::init_autonotify();
-    *Loop = \&Loop_single;
-    shift->Loop();
-}
-
-if ($Event::VERSION >= .03) {
-    # Event >= 0.03
-    *doOneEvent = \&Event::Loop::doOneEvent
-} else {
-    # Event <= 0.02
-    *doOneEvent = \&Event::DoOneEvent
-}
-
-################################################# without threads
-
-# WARNING: please do not call this directly!
-use vars qw($Timer $Checkpoint);
-sub indir_checkpoint {
-    my ($class, $continue) = @_;
-    checkpoint($continue);
-    $Checkpoint=0;
-    if ($continue) {
-	if (!$Timer) {
-	    $Timer = Event->timer(after => $LoopTime,
-				  callback => sub { ++$Checkpoint },
-				  desc => "ObjStore::Serve checkpoint");
-	} else {
-	    $Timer->again;
-	}
-        # don't acquire any unnecessary locks!
-    }
-}
-
-sub Loop_single {
-    my ($o,$waiter) = @_;
-    local $Status = 'abnormal';
-    local $LoopLevel = $LoopLevel+1;
-    ++$ExitLevel;
-#    warn "Loop enter $LoopLevel $ExitLevel";
-    if (!$Init) { &init_signals; ++$Init; }
-
-    $o->indir_checkpoint(1) if !$TXN;
-    while ($ExitLevel >= $LoopLevel) {
-        eval {
-            if ($waiter and $waiter->()) {
-		exitloop('ok');
-            } else {
-                while (!$Checkpoint and !$TXN->is_aborted) { doOneEvent() }
-            }
-        };
-        if ($@) { warn; $TXN->abort }
-        $o->indir_checkpoint($ExitLevel);
-    }
-
-#    warn "Loop exit $LoopLevel $ExitLevel = $Status";
-    $Status;
-}
-
+################################################# VERY EXPERIMENTAL!!
 ################################################# threads (single)
+
+use vars qw($Status $LoopLevel $ExitLevel);
+$LoopLevel = $ExitLevel = 0;
 
 sub Loop_async {
     my ($Q) = @_;
-    local $Status = 'abnormal';
+    local $Status = undef;
     local $LoopLevel = $LoopLevel+1;
     ++$ExitLevel;
     warn 1;
@@ -362,11 +298,12 @@ sub Loop_async {
     $Status
 }
 
+################################################# VERY EXPERIMENTAL!!
 ################################################# threads (multi)
 
 sub Loop_mt {
     my ($o) = @_;
-    local $Status = 'abnormal';
+    local $Status = undef;
     local $LoopLevel = $LoopLevel+1;
     ++$ExitLevel;
     if (!$Init) { &init_signals; ++$Init; }
@@ -422,14 +359,14 @@ sub async_checkpoint {
 
 ################################################# Exit
 
-*exitloop = \&Event::Loop::exitLoop;
+*exitloop = \&Event::Loop::exitLoop; #depreciated
 
 1;
 __END__
 
 =head1 NAME
 
-    ObjStore::Serve - event loop integration
+ObjStore::Serve - event loop integration
 
 =head1 SYNOPSIS
 
@@ -442,6 +379,6 @@ Great service is key.
 
 =head1 SEE ALSO
 
-C<Event>, C<ObjStore>
+L<Event>, L<ObjStore>
 
 =cut

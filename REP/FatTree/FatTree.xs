@@ -310,7 +310,7 @@ int OSPV_fatindex2::add(OSSVPV *target)
   return 1;
 }
 
-void OSPV_fatindex2::remove(OSSVPV *target)
+int OSPV_fatindex2::remove(OSSVPV *target)
 {
   assert(conf_slot);
   int unique = conf_slot->avx(1)->istrue();
@@ -347,6 +347,7 @@ void OSPV_fatindex2::remove(OSSVPV *target)
   DEBUG_index(warn("%p->remove(%p)", this, target));
   dex2tc_delete(&gl->tc);
   target->REF_dec();
+  return 1;
 }
 
 /*
@@ -486,6 +487,7 @@ PROTOTYPES: DISABLE
 
 BOOT:
   extern _Application_schema_info ObjStore_REP_FatTree_dll_schema_info;
+  osp_thr::use("ObjStore::REP::FatTree", OSPERL_API_VERSION);
   osp_thr::register_schema("ObjStore::REP::FatTree",
 	&ObjStore_REP_FatTree_dll_schema_info);
   HV *avrep = perl_get_hv("ObjStore::AV::REP", TRUE);

@@ -309,12 +309,6 @@ which is designed precisely to address this problem.  Refcnts will not
 be updated remotely, but you'll still be protected from accessing
 deleted objects or removed databases.  (Imagine the freedom. :-)
 
-=item * LEAKS TRANSIENT MEMORY
-
-The problem is thoroughly understood.  Work-arounds or a real fix have
-been discussed on the perl5-porters mailing list.  Well designed
-mechanisms are being developed to solve this problem correctly.
-
 =item * C<ObjStore::AVHV> EVOLUTION
 
 Indexed records temporarily cannot be evolved due to const-ness.  For

@@ -4,7 +4,7 @@ API/Makefile.PL
 API/XSthr.h
 API/core.h
 API/osp-preamble.h
-API/osperl-13.sch
+API/osperl-14.sch
 API/osperl.c
 API/osperl.h
 API/txn.c
@@ -72,6 +72,7 @@ lib/ObjStore/Mortician.pm
 lib/ObjStore/NoInit.pm
 lib/ObjStore/Path/Cursor.pm
 lib/ObjStore/Path/Ref.pm
+lib/ObjStore/PathExam/Path.pm
 lib/ObjStore/Peeker.pm
 lib/ObjStore/Posh/Cursor.pm
 lib/ObjStore/Posh/Remote.pm
@@ -97,14 +98,12 @@ notes/hints_on_allocating_large_objects
 notes/mmap
 notes/protected_references_info
 notes/static_linking_and_vector_delete
-notes/tiehash.1
-notes/leak.t
 osp_copy
 ospeek
 osperlserver
 patches/MM
 patches/base.pm.copy
-patches/ovl
+patches/leak.fix
 posh
 qtposh
 t/.psrc
@@ -114,6 +113,7 @@ t/1avsplice.t
 t/1data.t
 t/1hv.t
 t/1hvbugs.t
+t/1leak.t
 t/1overload.t
 t/1pathexam.t
 t/1segment.t

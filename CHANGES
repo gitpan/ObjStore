@@ -1,3 +1,29 @@
+** 09-12-98 RELEASE 1.46
+
+- Use PERL5PREFIX to install into a different directory tree.
+
+- Improved ObjStore::Index::POSH_PEEK.  Made pretty.
+
+- Shell-style output redirection >> for posh.
+
+- Improved the design of the ObjStore::Serve::defaultLoop.  Reduced
+excessive statistics.
+
+- Improved ObjStore::Table3::fetch in an array context.
+
+- Added cast-to-integer overloading for ObjStore::UNIVERSAL.  For
+example, $hash{ 0+$object }=1.
+
+- Fixed posh reporting of forced-loaded packages.
+
+- Reduced the number of potential "Attempt to free unreferenced scalar
+during global destruction" warnings (hopefully!).
+
+- Improved various diagnostic messages.
+
+- Documentation corrections & updates.
+
+
 ** 08-22-98 RELEASE 1.45
 
 - The == and != operators could give incorrect results in some cases.

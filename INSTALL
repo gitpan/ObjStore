@@ -1,0 +1,22 @@
+Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
+This package is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+
+** Installation
+
+
+Supported systems:
+   sun4-solaris / SunPro 4.0 C++ / ObjectStore 5.0
+
+
+The build process is non-standard and needs some hand-holding.  (Sorry!)
+
+1. Type './m help'  This is a new-style makefile!
+
+2. Make the necessary changes and run './m'.
+
+3. It should build an './osperl' binary and run the test scripts.
+   './t/hash.t' fails 2/4 until bugrep015834 is fixed.
+
+4. './m install'

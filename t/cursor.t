@@ -1,22 +1,18 @@
 # This is -*-perl-*- !
-
-use strict;
-use vars qw($tx);
-use ObjStore;
-
 BEGIN { $| = 1; $tx=1; print "1..5\n"; }
 
-sub ok { print "ok $tx\n"; $tx++; }
-sub not_ok { print "not ok $tx\n"; $tx++; }
+use strict;
+use ObjStore;
+use lib './t';
+use test;
 
-my $DB = ObjStore::open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
-
+&open_db;
 sub chk1 {
     my ($john, $rep) = @_;
 
     my $ok=1;
     
-    my $ah = $john->{$rep} = new ObjStore::HV($DB, $rep, 7);
+    my $ah = $john->{$rep} = new ObjStore::HV($db, $rep, 7);
     die $ah if !$ah;
     for (1..8) {
       $ah->{$_} = 1;
@@ -47,7 +43,7 @@ sub chk1 {
 }
 
 try_update {
-    my $john = $DB->root('John');
+    my $john = $db->root('John');
     $john ? ok : not_ok;
     
     for my $rep (keys %ObjStore::HV::REP) {

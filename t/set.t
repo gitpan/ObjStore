@@ -1,27 +1,29 @@
 # set -*-perl-*-
-
 BEGIN { $| = 1; $tx=1; print "1..6\n"; }
-sub ok { print "ok $tx\n"; $tx++; }
-sub not_ok { print "not ok $tx\n"; $tx++; }
 
 use strict;
 use ObjStore;
+use lib './t';
+use test;
 
-my $DB = ObjStore::open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
+#ObjStore::_debug qw(bridge);
+#ObjStore::disable_auto_class_loading();
+use Data::Dumper;
 
-for my $rep (keys %ObjStore::Set::REP) {
+&open_db;
+for my $rep (10, 100) {
     try_update {
-	my $john = $DB->root('John');
-	die if !$john;
+	my $john = $db->root('John');
+	die "No database" if !$john;
     
-	my $set = $john->{c} = new ObjStore::Set($DB, $rep, 7);
+	my $set = $john->{c} = new ObjStore::Set($db, $rep);
 	$set->add({ joe => 1 }, { bob => 2 }, { ed => 3 });
 
 	my (@k,@v,@set);
 	for (my $o = $set->first; $o; $o = $set->next) {
 	    push(@set, $o);
 	    push(@k, keys %$o);
-	    push(@v, values %$o);
+	    for (values %$o) { push(@v, $_); }
 	}
 	@k = sort @k;
 	@v = sort @v;
@@ -39,7 +41,5 @@ for my $rep (keys %ObjStore::Set::REP) {
 	$set->contains($yuk) ? not_ok : ok;
 	$set->add($yuk);
 	$set->contains($yuk) ? ok : not_ok;
-	
-	delete $john->{c};
     };
 };

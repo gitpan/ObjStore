@@ -1,27 +1,25 @@
-# This is obviously -*-perl-*- dontcha-think?
+# This is obviously -*-perl-*- don'tcha-think?
+BEGIN { $| = 1; $tx=1; print "1..4\n"; }
 
-BEGIN { $| = 1; $tx=1; print "1..2\n"; }
-sub ok { print "ok $tx\n"; $tx++; }
-sub not_ok { print "not ok $tx\n"; $tx++; }
-
-package main;
 use strict;
 use ObjStore;
 use lib "./t";
+use test;
 
-my $osdir = ObjStore->schema_dir;
-my $DB = ObjStore::open($osdir . "/perltest.db", 0, 0666);
-    
+&open_db;
 try_update {
     require PTest;
 
-    my $john = $DB->root('John');
+    my $john = $db->root('John');
     $john ? ok : not_ok;
     
-    $john->{obj} = new PTest($DB);
+    $john->{obj} = new PTest($db);
+    ref($john->{obj}) eq 'PTest'? ok:not_ok;
 };
 
 try_update {
-    my $john = $DB->root('John');
-    $john->{obj}->bonk ? ok : not_ok;
+    my $john = $db->root('John');
+    my $o = $john->{obj};
+    ref($o) eq 'PTest'? ok:not_ok;
+    $o->bonk ? ok : not_ok;
 };

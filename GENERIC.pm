@@ -9,7 +9,8 @@ package ObjStore::AV;
 use Carp;
 
 sub new {
-    my ($class, $loc, $rep, @REST) = @_;
+    my ($this, $loc, $rep, @REST) = @_;
+    $class = ref($this) || $this;
     if (!defined $rep) {
 	&{$REP{splash_array}}($class, $loc, 7, @REST);
     } elsif ($rep =~ /^\d+$/) {
@@ -29,38 +30,16 @@ package ObjStore::HV;
 use Carp;
 
 sub new {
-    my ($class, $loc, $rep, @REST) = @_;
+    my ($this, $loc, $rep, @REST) = @_;
+    $class = ref($this) || $this;
     if (!defined $rep) {
 	&{$REP{splash_array}}($class, $loc, 7, @REST);
     } elsif ($rep =~ /^\d+$/) {
-	if ($rep < 20) {
+	confess "$rep < 1" if $rep < 1;
+	if ($rep < 25) {
 	    &{$REP{splash_array}}(@_);
 	} else {
 	    &{$REP{os_dictionary}}(@_);
-	}
-    } elsif (!$rep) {
-	croak "$class->new(loc,rep): defined but false rep";
-    } else {
-	if (ref $REP{$rep} eq 'CODE') {
-	    &{$REP{$rep}}($class, $loc, @REST);
-	} else {
-	    croak "$class->new(loc,rep): unknown rep '$rep'";
-	}
-    }
-}
-
-package ObjStore::Set;
-use Carp;
-
-sub new {
-    my ($class, $loc, $rep, @REST) = @_;
-    if (!defined $rep) {
-	&{$REP{splash_array}}($class, $loc, 7, @REST);
-    } elsif ($rep =~ /^\d+$/) {
-	if ($rep < 20) {
-	    &{$REP{splash_array}}(@_);
-	} else {
-	    &{$REP{os_set}}(@_);
 	}
     } elsif (!$rep) {
 	croak "$class->new(loc,rep): defined but false rep";

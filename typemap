@@ -8,16 +8,18 @@
 
 TYPEMAP
 
+os_transaction *	O_OBJECT
 os_server *		O_OBJECT
 os_database *		O_OBJECT
-os_transaction *	O_OBJECT
 os_database_root *	O_OBJECT
+os_database_reference *	O_OBJECT
 os_segment *		O_OBJECT
 OSSV *			O_OSSV
 OSSVPV *		O_OSSVPV
 OSPV_Container *	O_OSSVPV
-OSPV_Cursor *		O_OSSVPV
 OSPV_Generic *		O_OSSVPV
+OSPV_Ref *		O_OSSVPV
+OSPV_Cursor *		O_OSSVPV
 RAW_STRING *		T_PTRREF
 ossv_bridge *		O_OBJECT
 
@@ -33,7 +35,7 @@ O_OBJECT
 	}
 
 O_OSSV
-	ossv_bridge * ${var}_bridge = osperl::sv_2bridge($arg);
+	ossv_bridge * ${var}_bridge = osp::sv_2bridge($arg);
 	if (! ${var}_bridge ) {
 		warn( \"${Package}::$func_name() -- $var is not a persistent type\" );
 		XSRETURN_UNDEF;
@@ -41,7 +43,7 @@ O_OSSV
 	$var = ${var}_bridge->force_ossv();
 
 O_OSSVPV
-	ossv_bridge * ${var}_bridge = osperl::sv_2bridge($arg);
+	ossv_bridge * ${var}_bridge = osp::sv_2bridge($arg);
 	if (  ${var}_bridge ) $var = ($type) ${var}_bridge->ospv();
 	if (! ${var}_bridge || ! $var ) {
 		warn( \"${Package}::$func_name() -- $var is not a persistent type\" );

@@ -1,0 +1,22 @@
+#!/nw/dist/prod/bin/perl -w
+
+use strict;
+use ObjStore;
+use Getopt::Long;
+
+sub usage {
+    print "osp_rm [-step nn] target [target...]
+   This command will not work on databases with cyclic
+   structure.  You should write your own database remover script or
+   break all your cyclic structures before running this.
+";
+    exit;
+}
+
+my $step = 20;
+GetOptions("step" => \$step) or usage();
+
+for my $path (@ARGV) {
+    my $db= ObjStore::open($path, 0);
+    $db->destroy($step);                     # fixes refcnts
+}

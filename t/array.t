@@ -1,19 +1,20 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..5\n"; }
-
-sub ok { print "ok $tx\n"; $tx++; }
-sub not_ok { print "not ok $tx\n"; $tx++; }
+BEGIN { $| = 1; $tx=1; print "1..6\n"; }
 
 use ObjStore;
+use lib './t';
+use test;
+
 #use Devel::Peek qw(Dump SvREFCNT);
+#ObjStore::_debug qw(assign array splash);
 
-my $DB = ObjStore::open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
+&open_db;
 try_update {
-    my $john = $DB->root('John');
+    my $john = $db->root('John');
     $john? ok:not_ok;
-    my $a = $john->{'array'} = new ObjStore::AV($DB);
+    my $a = $john->{'array'} = new ObjStore::AV($db);
 
-    my $fatty = $john->{'fatty'} = new ObjStore::AV($DB);
+    my $fatty = $john->{'fatty'} = new ObjStore::AV($db);
     $fatty->[0] = 1;
     $fatty->[100] = 100;
 
@@ -21,7 +22,7 @@ try_update {
     { use integer; $a->[1] = 2; }
     $a->[2] = "string";
     $a->[3] = [qw(a b c)];
-#    $a->[4] = {zip => $a};
+    $a->[4] = [];
     $a->[4] = {};
     $a->[4]{zip} = $a;
 
@@ -29,18 +30,23 @@ try_update {
 };
 
 try_read {
-    my $john = $DB->root('John');
+    my $john = $db->root('John');
     my $a = $john->{'array'};
     ($a->[0] == 1.5 and
-     $a->[1] == 2 and
-     $a->[2] eq "string")? ok:not_ok;
+     $a->[1] == 2)? ok:not_ok;
+    if ($a->[2] ne "string") {
+	print "ObjStore: " . join(" ", unpack("c*", $a->[2])) . "\n";
+	print "perl:     " . join(" ", unpack("c*", "string")) . "\n";
+	not_ok;
+    } else {ok}
     $a->[3][1] eq 'b' ? ok:not_ok;
     "$a->[4]{zip}" eq "$a" ? ok:not_ok;
 };
 
 try_update {
-    my $john = $DB->root('John');
+    my $john = $db->root('John');
     $john->{'array'}[4] = undef;  #break circular link
     delete $john->{'array'};
     ok;
 };
+

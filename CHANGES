@@ -3,6 +3,22 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 09-27-97 Released 1.15
+
+- Expanded analysis of Perl, Java, C++, and SQL as database languages.
+
+- Partial arrays.  Mileage may vary.
+
+- Automatic retry in the event of deadlock (69).
+
+- Blessed objects now try to 'require' their class the first time they
+are instantiated in transient memory.
+
+- Renamed $Exception to $EXCEPTION.
+
+- PHTML.pm and Eval.pm moved to their own distribution.
+
+
 ** 08-16-97 Released 1.11
 
 - Update refcnts for transient referers in update & abort_only

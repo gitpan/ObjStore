@@ -4,34 +4,26 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 */
 
-#include <assert.h>
-#include <string.h>
-#include "osperl.hh"
+#include "osperl.h"
+
+/*
+*/
 
 //----------------------------- Constants
 
-static auto_open_mode_enum str_2auto_open(char *str)
-{
-  if (strcmp(str, "read")==0) return objectstore::auto_open_read_only;
-  if (strcmp(str, "mvcc")==0) return objectstore::auto_open_mvcc;
-  if (strcmp(str, "update")==0) return objectstore::auto_open_update;
-  if (strcmp(str, "disable")==0) return objectstore::auto_open_disable;
-  croak("str_2auto_open: %s unrecognized", str);
-}
-
 static os_fetch_policy str_2fetch(char *str)
 {
-  if (strcmp(str, "segment")==0) return os_fetch_segment;
-  if (strcmp(str, "page")==0) return os_fetch_page;
-  if (strcmp(str, "stream")==0) return os_fetch_stream;
+  if (strEQ(str, "segment")) return os_fetch_segment;
+  if (strEQ(str, "page")) return os_fetch_page;
+  if (strEQ(str, "stream")) return os_fetch_stream;
   croak("str_2fetch: %s unrecognized", str);
 }
 
 static objectstore_lock_option str_2lock_option(char *str)
 {
-  if (strcmp(str, "as_used")==0) return objectstore::lock_as_used;
-  if (strcmp(str, "read")==0) return objectstore::lock_segment_read;
-  if (strcmp(str, "write")==0) return objectstore::lock_segment_write;
+  if (strEQ(str, "as_used")) return objectstore::lock_as_used;
+  if (strEQ(str, "read")) return objectstore::lock_segment_read;
+  if (strEQ(str, "write")) return objectstore::lock_segment_write;
   croak("str_2lock_option: %s unrecognized", str);
 }
 
@@ -77,10 +69,32 @@ osperl_abort_top_level()
   }
 }
 
-static int txn_nested;
+static void osp_post_eval_cleanup()
+{
+  if (got_os_exception) {
+    got_os_exception=0;
 
-int osperl::txn_is_ok;
-int osperl::is_update_txn;
+    assert(current_handler);
+    current_handler->_unwind_part_2();  //important
+
+    //deadlock?
+    tix_exception *ex = current_handler->get_exception();
+    if (ex && ex->ancestor_of(&err_deadlock)) {
+      deadlocked=1;
+      DEBUG_deadlock(warn("deadlock detected"));
+    }
+  }
+}
+
+XS(XS_ObjStore__post_eval_cleanup)
+{
+  dXSARGS;
+  SP -= items;
+  PUTBACK;
+  osp_post_eval_cleanup();
+}
+
+static int txn_nested;
 
 static void
 osperl_transaction(os_transaction::transaction_type_enum tt,
@@ -102,23 +116,23 @@ osperl_transaction(os_transaction::transaction_type_enum tt,
     retries=0;
     txn_nested=0;
     deadlocked=0;
-    osperl::txn_is_ok = 1;
+    osp::txn_is_ok = 1;
   }
 
   PUTBACK ;
   
   RETRY: {
     // Since perl_exception has no parent and is never signalled, we always
-    // get an unhandled exception when objectstore tries to throw an exception.
+    // get an unhandled exception if ObjectStore throws.
 
     tix_handler bang(&perl_exception);
     got_os_exception=0;
     tix_handler *old_handler = current_handler;
     current_handler = &bang;
 
-    osperl::is_update_txn = (tt != os_transaction::read_only);
+    osp::is_update_txn = (tt != os_transaction::read_only);
     os_transaction::begin(tt, scope_in, os_transaction::get_current());
-    
+
     SPAGAIN ;
     ENTER ;
     SAVETMPS;
@@ -129,29 +143,24 @@ osperl_transaction(os_transaction::transaction_type_enum tt,
     assert(count==0);
     -- txn_nested;
     txn = os_transaction::get_current();
-    osperl::txn_is_ok = (txn && !txn->is_aborted());
-    osperl::destroy_bridge();
+    osp::txn_is_ok = (txn && !txn->is_aborted());
+    osp::destroy_bridge();
     //    warn("return to level %d", txn_nested);
     FREETMPS ;
     LEAVE ;
     
-    if (got_os_exception) {
-      got_os_exception=0;
-      current_handler->_unwind_part_2();
-      osperl_abort_top_level();
-      tix_exception *ex = current_handler->get_exception();
-      if (ex && ex->ancestor_of(&err_deadlock)) {  //deadlock
-	//	warn("deadlock");
-//	SV *error = GvSV(errgv);
-//	sv_setpv(error, current_handler->get_report());
-	deadlocked=1;
-      }
-    }
-    if (osperl::rethrow_exceptions && !deadlocked && SvTRUE(GvSV(errgv))) {
+    osp_post_eval_cleanup();
+
+    if (txn_nested==0 && deadlocked) osperl_abort_top_level();
+    
+    // rethrow?
+    if (osp::rethrow_exceptions && !deadlocked && SvTRUE(GvSV(errgv))) {
       char *tmps = SvPV(GvSV(errgv), na);
       if (!tmps || !*tmps) tmps = "Died";
       die("%s", tmps);
     }
+
+    // propagate perl eval status to ObjectStore
     current_handler=old_handler;
     txn = os_transaction::get_current();
     //    warn("transaction=0x%x", txn);
@@ -163,19 +172,22 @@ osperl_transaction(os_transaction::transaction_type_enum tt,
 	die("%s", tmps);
       }
     } else {
-      if (osperl::txn_is_ok && tt != os_transaction::abort_only)
-        os_transaction::commit(txn);
+      if (osp::txn_is_ok && tt != os_transaction::abort_only)
+	os_transaction::commit(txn);
       else
 	os_transaction::abort(txn);
       delete txn;
     }
   }
+
+  // OK, all done.  Now retry?
   if (txn_nested==0 && deadlocked) {
     deadlocked=0;
     if (retries++ < os_transaction::get_max_retries()) {
+      DEBUG_deadlock(warn("deadlock: goto retry %d", retries));
       goto RETRY;
     } else {
-      if (osperl::rethrow_exceptions) {
+      if (osp::rethrow_exceptions) {
 	char *tmps = SvPV(GvSV(errgv), na);
 	if (!tmps || !*tmps) tmps = "Died";
 	die("%s", tmps);
@@ -194,6 +206,47 @@ XS(XS_ObjStore_try_update)
 XS(XS_ObjStore_try_abort_only)
 { osperl_transaction(os_transaction::abort_only, os_transaction::local); }
 
+XS(XS_ObjStore_translate)
+{ perl_call_sv(osp::stargate, G_SCALAR); }
+
+// work around completely inexplicable xsubpp BUS error
+XS(XS_ObjStore__lookup)
+{
+    dXSARGS;
+    if (items != 2)
+	croak("Usage: ObjStore::_lookup(path, mode)");
+    SP -= items;
+    {
+	char *	path = (char *)SvPV(ST(0),na);
+	int	mode = (int)SvIV(ST(1));
+	os_database *db = os_database::lookup(path, mode);
+	XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Database", (void*)db ));
+	PUTBACK;
+	return;
+    }
+}
+
+XS(XS_ObjStore__Database_set_check_illegal_pointers)
+{
+    dXSARGS;
+    if (items != 2)
+	croak("Usage: ObjStore::Database::set_check_illegal_pointers(THIS, yes)");
+    {
+	int	yes = (int)SvIV(ST(1));
+	os_database *	THIS;
+
+	if( sv_isobject(ST(0)) && (SvTYPE(SvRV(ST(0))) == SVt_PVMG) )
+		THIS = (os_database *)SvIV((SV*)SvRV( ST(0) ));
+	else{
+		warn( "ObjStore::Database::set_check_illegal_pointers() -- THIS is not a blessed SV reference" );
+		XSRETURN_UNDEF;
+	};
+
+	THIS->set_check_illegal_pointers(yes);
+    }
+    XSRETURN_EMPTY;
+}
+
 // lookup static symbol (not needed if dynamically linked)
 extern "C" XS(boot_ObjStore__GENERIC);
 
@@ -209,13 +262,17 @@ BOOT:
   assert(me);
   objectstore::set_client_name(SvPV(me, na));
   objectstore::initialize();		// should delay boot for flexibility? XXX
-  objectstore::set_incremental_schema_installation(1);
+  //objectstore::set_incremental_schema_installation(1);
   objectstore::set_thread_locking(0);	// threads support...?!
   tix_exception::set_unhandled_exception_hook(osperl_exception_hook);
-  osperl::boot_thread();
+  osp::boot_thread();
   newXSproto("ObjStore::try_read", XS_ObjStore_try_read, file, "&");
   newXSproto("ObjStore::try_update", XS_ObjStore_try_update, file, "&");
   newXSproto("ObjStore::try_abort_only", XS_ObjStore_try_abort_only, file, "&");
+  newXSproto("ObjStore::translate", XS_ObjStore_translate, file, "$$");
+  newXSproto("ObjStore::_lookup", XS_ObjStore__lookup, file, "$$");
+  newXSproto("ObjStore::Database::set_check_illegal_pointers", XS_ObjStore__Database_set_check_illegal_pointers, file, "$$");
+  newXSproto("ObjStore::_post_eval_cleanup", XS_ObjStore__post_eval_cleanup, file, "");
 
 SV *
 reftype(ref)
@@ -225,19 +282,21 @@ reftype(ref)
 	ref = SvRV(ref);
 	XSRETURN_PV(sv_reftype(ref, 0));
 
-char *
-schema_dir(...)
+int
+__debug(mask)
+	int mask
 	CODE:
-	RETVAL = SCHEMADIR;
+	RETVAL = osp::debug;
+	osp::debug = mask;
 	OUTPUT:
 	RETVAL
 
 int
-_enable_blessings(yes)
+_to_bless(yes)
 	int yes
 	CODE:
-	RETVAL = osperl::enable_blessings;
-	osperl::enable_blessings = yes;
+	RETVAL = osp::to_bless;
+	osp::to_bless = yes;
 	OUTPUT:
 	RETVAL
 
@@ -245,8 +304,8 @@ int
 _tie_objects(yes)
 	int yes
 	CODE:
-	RETVAL = osperl::tie_objects;
-	osperl::tie_objects = yes;
+	RETVAL = osp::tie_objects;
+	osp::tie_objects = yes;
 	OUTPUT:
 	RETVAL
 
@@ -254,15 +313,15 @@ SV *
 set_stargate(code)
 	SV *code
 	CODE:
-	ST(0) = osperl::stargate? sv_2mortal(newSVsv(osperl::stargate)):&sv_undef;
-	if (!osperl::stargate) { osperl::stargate = newSVsv(code); }
-	else { sv_setsv(osperl::stargate, code); }
+	ST(0) = osp::stargate? sv_2mortal(newSVsv(osp::stargate)):&sv_undef;
+	if (!osp::stargate) { osp::stargate = newSVsv(code); }
+	else { sv_setsv(osp::stargate, code); }
 
 void
 rethrow_exceptions(yes)
 	int yes;
 	CODE:
-	osperl::rethrow_exceptions = yes;
+	osp::rethrow_exceptions = yes;
 
 char *
 release_name()
@@ -298,16 +357,6 @@ network_servers_available()
 	RETVAL = objectstore::network_servers_available();
 	OUTPUT:
 	RETVAL
-
-void
-set_auto_open_mode(mode, fp, ...)
-	char *mode
-	char *fp
-	PROTOTYPE: $$;$
-	CODE:
-	os_int32 sz = 0;
-	if (items == 3) sz = SvIV(ST(2));
-	objectstore::set_auto_open_mode(str_2auto_open(mode), str_2fetch(fp), sz);
 
 int
 get_page_size()
@@ -352,7 +401,7 @@ segment_of(sv)
 	SV *sv
 	CODE:
 	char *CLASS = "ObjStore::Segment";
-	RETVAL = osperl::sv_2segment(sv);
+	RETVAL = osp::sv_2segment(sv);
 	OUTPUT:
 	RETVAL
 
@@ -391,17 +440,6 @@ os_server::get_databases()
 
 MODULE = ObjStore	PACKAGE = ObjStore
 
-os_database *
-open(pathname, read_only, create_mode)
-	char *pathname
-	int read_only
-	int create_mode
-	CODE:
-	char *CLASS = "ObjStore::Database";
-	RETVAL = os_database::open(pathname, read_only, create_mode);
-	OUTPUT:
-	RETVAL
-
 int
 get_n_databases()
 	CODE:
@@ -412,16 +450,63 @@ get_n_databases()
 MODULE = ObjStore	PACKAGE = ObjStore::Database
 
 void
+os_database::_open(read_only)
+	int read_only
+	CODE:
+	THIS->open(read_only);
+
+void
+os_database::_open_mvcc()
+	CODE:
+	THIS->open_mvcc();
+
+void
 os_database::close()
 
 void
-os_database::destroy()
+os_database::_destroy()
+	CODE:
+	THIS->destroy();
+
+void
+os_database::get_host_name()
+	PPCODE:
+	char *path = THIS->get_host_name();
+	XPUSHs(sv_2mortal(newSVpv(path, 0)));
+	delete path;
+
+void
+os_database::get_pathname()
+	PPCODE:
+	char *path = THIS->get_pathname();
+	XPUSHs(sv_2mortal(newSVpv(path, 0)));
+	delete path;
+
+void
+os_database::get_relative_directory()
+	PPCODE:
+	char *path = THIS->get_relative_directory();
+	XPUSHs(sv_2mortal(newSVpv(path, 0)));
+	delete path;
+
+void
+os_database::get_id(...)
+	PPCODE:
+	os_database_id *id = THIS->get_id();
+	XPUSHs(sv_2mortal(newSVpvf("%08p%08p%08p",id->word0,id->word1,id->word2)));
 
 int
 os_database::get_default_segment_size()
 
 int
 os_database::get_sector_size()
+
+void
+os_database::_allow_external_pointers(yes)
+	int yes
+	CODE:
+	// DO NOT USE THIS!
+	THIS->allow_external_pointers(yes);
 
 int
 os_database::size()
@@ -435,9 +520,6 @@ os_database::time_created()
 int
 os_database::is_open()
 
-void
-os_database::open_mvcc()
-
 int
 os_database::is_open_mvcc()
 
@@ -448,16 +530,13 @@ int
 os_database::is_writable()
 
 void
-os_database::set_opt_cache_lock_mode(yes)
-	int yes
-
-void
 os_database::set_fetch_policy(policy, ...)
 	char *policy;
 	PROTOTYPE: $;$
 	CODE:
 	int bytes=4096;
-	if (items == 2) bytes = SvIV(ST(1));
+	if (items == 3) bytes = SvIV(ST(2));
+	else if (items > 3) croak("os_database::set_fetch_policy(policy, [sz])");
 	THIS->set_fetch_policy(str_2fetch(policy), bytes);
 
 void
@@ -508,6 +587,17 @@ os_database::get_all_segments()
 	delete [] segs;
 
 void
+os_database::_PRIVATE_ROOT()
+	PPCODE:
+	os_database_root *rt = THIS->find_root(osp::private_root);
+	if (!rt && osp::is_update_txn) {
+	  rt = THIS->create_root(osp::private_root);
+	  rt->set_value(0, OSSV::get_os_typespec());
+	}
+	if (rt) XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Root", rt));
+	else    XPUSHs(&sv_undef);
+
+void
 os_database::get_all_roots()
 	PPCODE:
 	char *CLASS = "ObjStore::Root";
@@ -515,10 +605,11 @@ os_database::get_all_roots()
 	if (num == 0) XSRETURN_EMPTY;
 	os_database_root **roots = new os_database_root*[num];
 	THIS->get_all_roots(num, roots, num);
-	EXTEND(sp, num);
-	int xx;
-	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv( sv_newmortal(), CLASS, roots[xx] ));
+	for (int xx=0; xx < num; xx++) {
+	  assert(roots[xx]);
+	  char *nm = roots[xx]->get_name();
+	  int priv = strEQ(nm, osp::private_root);
+	  if (!priv) XPUSHs(sv_setref_pv( sv_newmortal(), CLASS, roots[xx] ));
 	}
 	delete [] roots;
 
@@ -531,19 +622,38 @@ os_database::create_root(name)
 	char *name
 	PREINIT:
 	char *CLASS = "ObjStore::Root";
+	CODE:
+	DEBUG_root(warn("%p->create_root(%s)", THIS, name));
+	RETVAL = THIS->create_root(name);
+	assert(RETVAL);
+	RETVAL->set_value(0, OSSV::get_os_typespec());
+	OUTPUT:
+	RETVAL
 
 os_database_root *
 os_database::find_root(name)
 	char *name
 	PREINIT:
 	char *CLASS = "ObjStore::Root";
+	CODE:
+	if (strEQ(name, osp::private_root)) {
+	  warn("The private root is, well, private");
+	  XSRETURN_UNDEF;
+	}
+	DEBUG_root(warn("%p->find_root(%s)", THIS, name));
+	RETVAL = THIS->find_root(name);
+	DEBUG_root(warn("%p->find_root(%s) = %p", THIS, name, RETVAL));
+	OUTPUT:
+	RETVAL
 
 MODULE = ObjStore	PACKAGE = ObjStore::Root
 
 void
 os_database_root::destroy()
 	CODE:
-	delete (OSSV*) THIS->get_value();
+	DEBUG_root(warn("%p->destroy_root()", THIS));
+	OSSV *old = (OSSV*) THIS->get_value();
+	if (old) delete old;
 	delete THIS;
 
 char *
@@ -554,17 +664,21 @@ os_database_root::get_value()
 	CODE:
 	if (!THIS) XSRETURN_UNDEF;
 	OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
-	ST(0) = osperl::ossv_2sv(ossv);
+	DEBUG_root(warn("%p->get_value() = OSSV=%p", THIS, ossv));
+	ST(0) = osp::ossv_2sv(ossv);
 
 void
-os_database_root::set_value(sv)
-	SV *sv
+os_database_root::set_value(pv)
+	OSSVPV *pv
 	CODE:
+	// Disallow scalars in roots because it is fairly useless and too messy.
 	OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
 	if (ossv) {
-	  *ossv = sv;
+	  DEBUG_root(warn("%p->set_value(): OSSV(%p)=%p", THIS, ossv, pv));
+	  ossv->s(pv);
 	} else {
-	  ossv = osperl::plant_sv(os_segment::of(THIS), sv);
+	  DEBUG_root(warn("%p->set_value(): planting %p", THIS, pv));
+	  ossv = osp::plant_ospv(os_database::of(THIS)->get_default_segment(),pv);
 	  THIS->set_value(ossv, OSSV::get_os_typespec());
 	}
 
@@ -735,8 +849,12 @@ os_segment::set_comment(info)
 	short_info[31] = 0;
 	THIS->set_comment(short_info);
 
-char *
+void
 os_segment::get_comment()
+	PPCODE:
+	char *cm = THIS->get_comment();
+	XPUSHs(sv_2mortal(newSVpv(cm, 0)));
+	delete cm;
 
 void
 os_segment::lock_into_cache()
@@ -750,7 +868,8 @@ os_segment::set_fetch_policy(policy, ...)
 	PROTOTYPE: $;$
 	CODE:
 	int bytes=4096;
-	if (items == 2) bytes = SvIV(ST(1));
+	if (items == 3) bytes = SvIV(ST(2));
+	else if (items > 3) croak("os_database::set_fetch_policy(policy, [sz])");
 	THIS->set_fetch_policy(str_2fetch(policy), bytes);
 
 void
@@ -764,11 +883,11 @@ of(sv)
 	SV *sv
 	CODE:
 	char *CLASS = "ObjStore::Segment";
-	RETVAL = osperl::sv_2segment(sv);
+	RETVAL = osp::sv_2segment(sv);
 	OUTPUT:
 	RETVAL
 
-#-----------------------------# Magic
+#-----------------------------# Bridge
 
 MODULE = ObjStore	PACKAGE = ObjStore::Bridge
 
@@ -780,43 +899,66 @@ ossv_bridge::DESTROY()
 MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL
 
 void
-OSSVPV::_bless(pstr)
-	char *pstr
-	CODE:
-	THIS->_bless(pstr);
+OSSVPV::_refcnt()
+	PPCODE:
+	XPUSHs(sv_2mortal(newSViv(THIS->_refs + THIS->_weak_refs)));
+
+void
+OSSVPV::_bless(st)
+	char *st
+	PPCODE:
+	PUTBACK; THIS->_bless(st); return;
 
 char *
-OSSVPV::_ref()
+OSSVPV::_blessed_to()
 	CODE:
-	RETVAL = THIS->get_blessing();
+	RETVAL = THIS->_blessed_to(0);
 	OUTPUT:
 	RETVAL
 
 int
-OSSVPV::_refcnt()
-	CODE:
-	RETVAL = THIS->_refs;
-	OUTPUT:
-	RETVAL
+OSSVPV::_is_blessed()
 
 SV *
 OSSVPV::_pstringify(...)
 	PROTOTYPE: ;$$
 	CODE:
-	char *rtype = sv_reftype(SvRV(ST(0)), 0);
-	ST(0) = sv_2mortal(newSVpvf("%s=%s(0x%x)",THIS->get_blessing(),rtype,THIS));
+	SV *sv = SvRV(ST(0));
+	char *rtype = sv_reftype(sv, 0);
+	char *blessed_to = sv_reftype(sv, 1);
+	ST(0) = sv_2mortal(newSVpvf("%s=%s(0x%x)",blessed_to,rtype,THIS));
+
+char *
+OSSVPV::os_class()
+	CODE:
+	RETVAL = THIS->base_class();
+	OUTPUT:
+	RETVAL
+
+void
+OSSVPV::get_pointer_numbers()
+	PPCODE:
+	os_unsigned_int32 n1,n2,n3;
+	objectstore::get_pointer_numbers(THIS, n1, n2, n3);
+	XPUSHs(sv_2mortal(newSVpvf("%08p%08p", n1, n3)));
 
 SV *
-OSSVPV::_paddress(...)
+OSSVPV::new_ref(...)
+	PROTOTYPE: ;$
 	CODE:
-	ST(0) = sv_2mortal(newSViv((long) THIS));
+	os_segment *seg=0;
+	if (items == 1) { seg = os_segment::of(THIS); }
+	else if (items == 2) { seg = osp::sv_2segment(ST(1)); }
+	if (!seg)
+	  croak("OSSVPV(0x%x)->new_ref([segment]) passed junk", THIS);
+	ST(0)= osp::ospv_2sv(new(seg,OSPV_Ref::get_os_typespec()) OSPV_Ref(THIS));
 
 #-----------------------------# UNIVERSAL::Container
 
 MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL::Container
 
 RAW_STRING *
-OSSVPV::_get_raw_string(key)
+OSPV_Container::_get_raw_string(key)
 	char *key;
 	CODE:
 	char *CLASS = "ObjStore::RAW_STRING";
@@ -825,36 +967,39 @@ OSSVPV::_get_raw_string(key)
 	RETVAL
 
 double
-OSSVPV::_percent_filled()
+OSPV_Container::_percent_filled()
 	CODE:
 	RETVAL = THIS->_percent_filled();
 	if (RETVAL < 0 || RETVAL > 1) XSRETURN_UNDEF;
 	OUTPUT:
 	RETVAL
 
+int
+OSPV_Generic::_count()
+
 SV *
-OSSVPV::new_cursor(...)
+OSPV_Container::new_cursor(...)
+	PROTOTYPE: ;$
 	CODE:
-	XSRETURN_UNDEF;
 	os_segment *seg=0;
-	if (items == 0) { seg = os_segment::of(THIS); }
-	else if (items == 1) { seg = osperl::sv_2segment(ST(0)); }
+	if (items == 1) { seg = os_segment::of(THIS); }
+	else if (items == 2) { seg = osp::sv_2segment(ST(1)); }
 	if (!seg)
-	  croak("OSSVPV(0x%x)->new_cursor([segment]) was passed junk", THIS);
-	ST(0) = osperl::ospv_2sv(THIS->new_cursor(seg));
+	  croak("OSSVPV(0x%x)->new_cursor([segment]) passed junk", THIS);
+	ST(0) = osp::ospv_2sv(THIS->new_cursor(seg));
 
 #-----------------------------# AV
 
 MODULE = ObjStore	PACKAGE = ObjStore::AV
 
 SV *
-OSSVPV::FETCH(xx)
+OSPV_Generic::FETCH(xx)
 	int xx;
 	CODE:
 	ST(0) = THIS->FETCHi(xx);
 
 SV *
-OSSVPV::STORE(xx, nval)
+OSPV_Generic::STORE(xx, nval)
 	int xx;
 	SV *nval;
 	CODE:
@@ -863,21 +1008,50 @@ OSSVPV::STORE(xx, nval)
 	if (ret) { ST(0) = ret; }
 	else     { XSRETURN_EMPTY; }
 
-int
-OSSVPV::_LENGTH()
+void
+OSPV_Generic::All()
+	PPCODE:
+	PUTBACK;
+	SV **ret = new SV*[THIS->_count()];
+	for (int xx=0; xx < THIS->_count(); xx++) {
+	  ret[xx] = THIS->FETCHi(xx);
+	}
+	SPAGAIN;
+	EXTEND(SP, THIS->_count());
+	for (xx=0; xx < THIS->_count(); xx++) {
+	  PUSHs(ret[xx]);
+	}
+	delete [] ret;
+
+SV *
+OSPV_Generic::_Pop()
+	CODE:
+	ST(0) = THIS->Pop();
+
+void
+OSPV_Generic::_Push(nval)
+	SV *nval;
+	CODE:
+	THIS->Push(nval);
+
+void
+OSPV_Generic::_Shift(nval)
+	SV *nval;
+	CODE:
+	THIS->Shift(nval);
 
 #-----------------------------# HV
 
 MODULE = ObjStore	PACKAGE = ObjStore::HV
 
 SV *
-OSSVPV::FETCH(key)
+OSPV_Generic::FETCH(key)
 	char *key;
 	CODE:
 	ST(0) = THIS->FETCHp(key);
 
 SV *
-OSSVPV::STORE(key, nval)
+OSPV_Generic::STORE(key, nval)
 	char *key;
 	SV *nval;
 	CODE:
@@ -887,84 +1061,98 @@ OSSVPV::STORE(key, nval)
 	else     { XSRETURN_EMPTY; }
 
 void
-OSSVPV::DELETE(key)
+OSPV_Generic::DELETE(key)
 	char *key
 
 int
-OSSVPV::EXISTS(key)
+OSPV_Generic::EXISTS(key)
 	char *key
 
 SV *
-OSSVPV::FIRSTKEY()
+OSPV_Generic::FIRSTKEY()
 	CODE:
 	ST(0) = THIS->FIRST( THIS_bridge );
 
 SV *
-OSSVPV::NEXTKEY(ign)
-	char *ign;
+OSPV_Generic::NEXTKEY(...)
 	CODE:
+	if (items > 2) croak("NEXTKEY: too many arguments");
 	ST(0) = THIS->NEXT( THIS_bridge );
 
 void
-OSSVPV::CLEAR()
+OSPV_Generic::CLEAR()
 
 #-----------------------------# Set
 
 MODULE = ObjStore	PACKAGE = ObjStore::Set
 
 void
-OSSVPV::add(...)
+OSPV_Generic::add(...)
 	CODE:
-	for (int xx=1; xx < items; xx++) {
-	  SV *ret = THIS->add(ST(xx));
-	}
+	for (int xx=1; xx < items; xx++) THIS->add(ST(xx));
 
 int
-OSSVPV::contains(val)
+OSPV_Generic::contains(val)
 	SV *val;
 
 void
-OSSVPV::rm(nval)
+OSPV_Generic::rm(nval)
 	SV *nval
 
 SV *
-OSSVPV::first()
+OSPV_Generic::first()
 	CODE:
 	ST(0) = THIS->FIRST( THIS_bridge );
 
 SV *
-OSSVPV::next()
+OSPV_Generic::next()
 	CODE:
 	ST(0) = THIS->NEXT( THIS_bridge );
 
-#-----------------------------# Cursor
+#-----------------------------# Ref
 
-MODULE = ObjStore	PACKAGE = ObjStore::Cursor
+MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL::Ref
 
-SV *
-OSPV_Cursor::focus()
-	PPCODE:
-	XPUSHs(THIS->focus());
+os_database *
+OSPV_Ref::_get_database()
+	PREINIT:
+	char *CLASS = "ObjStore::Database";
 
 int
-OSPV_Cursor::more()
+OSPV_Ref::_broken()
+
+int
+OSPV_Ref::deleted()
 
 void
-OSPV_Cursor::first()
+OSPV_Ref::focus()
 	PPCODE:
-	PUTBACK; THIS->first(); return;
+	PUTBACK;
+	SV *sv = osp::ospv_2sv(THIS->focus());
+	SPAGAIN;
+	XPUSHs(sv);
+
+#-----------------------------# Cursor
+
+MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL::Cursor
+
+void
+OSPV_Cursor::seek_pole(side)
+	SV *side
+	CODE:
+	if (SvPOKp(side)) {
+	  char *str = SvPV(side, na);
+	  if (strEQ(str, "end")) THIS->seek_pole(1);
+	} else if (SvIOK(side) && SvIV(side)==0) {
+	  THIS->seek_pole(0);
+	} else croak("seek_pole");
+
+void
+OSPV_Cursor::at()
+	PPCODE:
+	PUTBACK; THIS->at(); return;
 
 void
 OSPV_Cursor::next()
 	PPCODE:
 	PUTBACK; THIS->next(); return;
-
-void
-OSPV_Cursor::prev()
-	PPCODE:
-	PUTBACK; THIS->prev(); return;
-
-void
-OSPV_Cursor::last()
-	PPCODE:
-	PUTBACK; THIS->last(); return;

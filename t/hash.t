@@ -1,16 +1,13 @@
 #-*-perl-*-
 BEGIN { $| = 1; $tx=1; print "1..4\n"; }
 
-sub ok { print "ok $tx\n"; $tx++; }
-sub not_ok { print "not ok $tx\n"; $tx++; }
-
 use ObjStore;
+use lib './t';
+use test;
 
-my $osdir = ObjStore->schema_dir;
-my $DB = ObjStore::open($osdir . "/perltest.db", 0, 0666);
-    
+&open_db;    
 try_update {
-    my $john = $DB->root('John');
+    my $john = $db->root('John');
     $john ? ok : not_ok;
     
     my $xr = $john->{nest}{rat} = {};

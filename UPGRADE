@@ -1,0 +1,24 @@
+UPGRADING
+
+We have way too much data in OS/Perl.  If you do too, you will need to
+evolve your databases.
+
+
+** osp_evolve
+
+You must use osp_evolve instead of ossevol.
+
+  osp_evolve [-i class] <workdb> <evolvedb>+
+
+osp_evolve is relatively fast.  It took 8 minutes to evolve a 32MB
+database on an Ultra 1 running Solaris.  If you get an error about
+avarray, just add '-i avarray' to the command line.
+
+
+** osp_copy
+
+If you also want to re-copy your databases, you can now use osp_copy.
+It take about 8-10 times at long as osp_evolve, but it does a lot of
+stuff and is written completely in perl.  All the data in my 32MB
+database was copied into a mere 5.5MB.
+

@@ -319,9 +319,7 @@ sub objstore {
     $o->flags('ld', "-los", "-losths", "-lC");
     
     $o->clean("$tag-osschema.c", "neutralize-$tag");
-    $o->spotless(sub {
-	$o->x("osrm -f $o->{osdbdir}/$tag.adb");
-    });
+#    $o->spotless(sub {$o->x("osrm -f $o->{osdbdir}/$tag.adb");});
 
     new Maker::Seq(new Maker::Unit("ossg $tag", sub {
 	my $adb = "$o->{osdbdir}/$tag.adb";

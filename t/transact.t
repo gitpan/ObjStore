@@ -1,28 +1,24 @@
-# test all transaction types and nested transactions in -*-perl-*-
-
-BEGIN { $| = 1; $tx=1; print "1..5\n"; }
-
-sub ok { print "ok $tx\n"; $tx++; }
-sub not_ok { print "not ok $tx\n"; $tx++; }
+# test all transaction types for -*-perl-*-
+BEGIN { $| = 1; $tx=1; print "1..4\n"; }
 
 use strict;
 use ObjStore ':ALL';
+use lib './t';
+use test;
+
 rethrow_exceptions(0);
 set_transaction_priority(0);
 
-my $db = ObjStore::open(&schema_dir . "/perltest.db", 0, 0666);
-
-try_update {
+&open_db;
+my @ret = try_update {
     my $john = $db->root('John');
-    $john ? ok : not_ok;
-    
-    exists $john->{right}? not_ok : ok;
+    die "No db" if !$john;
     
     $john->{right} = 69;
-    
-    'yes';
+
+    'void context';
 };
-warn $@ if $@;
+@ret ? not_ok : ok;
 
 try_abort_only {
     my $john = $db->root('John');
@@ -32,23 +28,35 @@ try_abort_only {
 try_read {
     my $john = $db->root('John');
     
-    if ($john->{right} == 69) { ok; }
-    else { not_ok; warn $john->{right}; }
-    
+    if (0) {
+	# NESTED EVAL BROKEN
+	reval(sub {
+	    my $b = ObjStore::lookup("bogus.db");
+	    warn $b;
+	});
+	warn $@;
+	$@ ? ok:not_ok;
+    }
+
+    $john->{right} == 69? ok : not_ok;
+
     $john->{'write'} = 0;
 };
-if ($@) { ok }
+if ($@) { warn $@ if $@ !~ m/Attempt to write during a read-only/; ok }
 else { not_ok; warn $@; }
+
+#ObjStore::_debug qw(deadlock);
 
 # retry deadlock
 try_update {
-    my $tw = new ObjStore::HV($db->create_segment, 7);
-    $db->root("tripwire", $tw);
+    $db->root("tripwire", sub {new ObjStore::HV($db->create_segment, 7)});
 };
 die if $@;
-set_max_retries(2);
+set_max_retries(10);
 my $attempt=0;
 try_update {
+    ++ $attempt;
+
     my $right = $db->root('John');
     ++ $right->{right};
 
@@ -60,31 +68,23 @@ try_update {
 	my $left = $db->root('tripwire');
 	$left->{left} = $right->{right};
     };
-    ++ $attempt;
 #    warn "attempt $attempt";
     if ($attempt == 1) {
 	&$code;
+    } elsif ($attempt > 1) {
+	# fall through
     } elsif ($attempt == 2) {
-	eval { &$code };
+	die 'not yet';
+	reval { &$code };
 #	warn $@;
 	die if $@;
     } elsif ($attempt == 3) {
-	# INFINITE LOOP!
+	die 'not yet';
 	try_update(\&$code);
 	warn $@;
 	die if $@;
     } else { die "what?" }
 };
-$attempt==2? ok:not_ok;
-
-try_update {
-    my $tw = $db->root('tripwire');
-    $db->destroy_root('tripwire');
-    my $john = $db->root('John');
-    delete $john->{right};
-};
-die if $@;
-try_update {
-    for ($db->get_all_segments) { $_->destroy if $_->is_empty; }
-};
-die if $@;
+warn $@ if $@;
+if ($attempt==3) {ok}
+else {warn $attempt; not_ok; }

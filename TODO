@@ -2,10 +2,10 @@
 TODO      DOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTO      TODO
 
 
-If anyone is interested in contributing to the feature set, please
-subscribe to the perl-objectstore mailing list.  Send email to
-majordomo@parallax.co.uk with the following in the body of the
-message:  "subscribe perl-objectstore you@your.company.com"
+If you are interested in contributing, subscribe to the OS/Perl
+mailing list.  Send email to majordomo@parallax.co.uk with the
+following in the body of your message:
+  "subscribe perl-objectstore you@your.company.com"
 
 
 Optimize for flexibility, then memory performance, then speed.
@@ -25,67 +25,60 @@ Speed is pretty good already, compared to a relational database!
 Of course, there is always room for improvement.
 
 
-+ FOR CORE SCHEMA EVOLUTION +
-
-Weak references!
-
-Don't store the hash key's length in the database (save 4 bytes and an
-allocation)!
-
-
 + IDEAS +
 
-$hv->new_cursor($seg);
+Peeker fix comma & semi // fix prefix for "$at = "...
 
-Persistent cursors!
+Support for acquire_lock, notification, database access control?,
+transaction hooks?,
 
-osp_copy -> database cursor (focus)
-
-Factor Peeker
-
-Tk osp_edit?
-
-Support for acquire_lock(), transaction hooks, notification, database
-access control, utility API, os_object_cursor?  Who cares?
+Reference weaken/strengthen?  Use some bits in OSSVPV?
 
 Split GENERIC into ObjectStore & Splash parts?
 
 ObjStore::File.  Support Verity full text indexing?
 
-Encapsulate all the transaction stuff.  Figure out nested transactions.
+Encapsulate/reorg all the transaction stuff.  Figure out nested
+transactions.  ObjStore::Transaction::Bridge as a perl object?
 
-ObjStore::Transaction::Bridge as a perl object?
+Seems like there might be memory leaks on the transient side...?
 
-Track down any/all XS transient memory leaks.  (Any?)
-
-Avoid stomping on some other version of bless?
+Make XS code more efficient.  (How?)  Avoid stomping on some other
+version of bless?  (Why?)
 
 
 + BIGGISH PROJECTS +
 
 Support for multiple application schemas!  (Expected 1Q98)
 
+Find replacements for os_array, os_dictionary, and os_set that:
+    Are lighter weight (liboscol.so.sun.4.0 is 2.7M plus 200k of schema)
+    Have better memory performance
+    Cursors that use references instead of pointers!
+Is anything on the net suitable?  GE_COOL AVL_Tree?  b-tree?
+Doubly-linked link would be cool for arrays.
+
 Add support for parts of the TimeSeries Object Manager?
 
 Could perl performance be improve?  Streamline typemap?
-
-Add MOP support for editing & reporting of abritrary databases. [HARD]
-Object Design working on this problem?
 
 Expand Maker to encompass all architectures/compilers/situations.
 
 
 + CORE-PERL WISH LIST +
 
-According to Devel::Peek, tied hashes/arrays take up transient memory
-proportional to their underlying structure.  This needs to be fixed!
+The TIE interfaces are not as detailed as the built-ins.  I should be
+able to hide whatever necessary complexity in the module that
+implements the 'tie' so the user doesn't have to know anything
+special.  How about lvalues?  How about proper support for nested
+structures?
+
+Devel::Peek seems to indicate that hash-elements under a tied hash
+are being allocated.  I don't understand how this could be necessary. 
+Tied values should take an absolute minimum amount of transient memory. 
+Why store things twice?
+
+Make 'reftype' a built-in
 
 There should be a less kludgy way to extend bless.  Why isn't it a
 special method of UNIVERSAL?  :-(
-
-Why do FIRSTKEY, NEXTKEY accept a string instead of a (string, length) pair
-or an (SV*)?  The TIE interfaces should be more XS friendly!
-
-Make 'reftype' an official built-in!
-
-

@@ -7,23 +7,27 @@ use Getopt::Long;
 use IO::Handle;
 
 sub usage {
-    print "ospeek [-all] [-addr] <database>\n";
+    print "ospeek [-all] [-addr] [-refcnt] <database>\n";
     exit;
 }
 
 my %opt=();
-GetOptions(\%opt, 'all', 'addr') or &usage;
+GetOptions(\%opt, 'all', 'addr', 'refcnt') or &usage;
 &usage if @ARGV != 1;
 
-ObjStore::_enable_blessings(0);
-my $db = shift @ARGV;
-my $DB = ObjStore::open($db, 0, 0666);
+my $path = shift @ARGV;
+
 my $fh = new IO::Handle;
 $fh->fdopen(fileno(STDOUT),"w") or die "fdopen(STDOUT): $!";
+
+my $db = ObjStore::open($path, 1);
 try_read {
-    my $pk = new ObjStore::Peeker(to => $fh, all => $opt{all}, addr => $opt{addr});
-    $pk->Peek($DB);
+#    for my $r ($db->get_database_references) {
+#	print "Refers to: ".$r->get_name."\n";
+#    }
+    my $pk = new ObjStore::Peeker(to => $fh, %opt);
+    $pk->Peek($db);
     my $count = $pk->Coverage;
-    printf("Examined %d persistent slots.\n", $count);
+    print $fh "Examined $count persistent slots.\n";
 };
-die "[Abort] $@\n" if $@;
+$fh->flush;

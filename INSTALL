@@ -1,26 +1,31 @@
-Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
-This package is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-
-
-** Installation
-
+------------------------------------------------------------ INSTALLATION
 
 Tested Systems:
-   sun4-solaris / SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1,4.0.2,5.0.0,5.0.1
 
+   Solaris 2.5.1
+     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1, 4.0.2
+     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0.0, 5.0.1
 
-The build process is a bit radical and needs some hand-holding.
+-------------------------------------------------------------------------
 
-1. 'perl ./be help'
+The build process is a bit radical and needs some explaination.
 
-2. Make any necessary changes and run 'perl ./be'.
+1. vi ./Config.pm
 
-3. It should build an './blib/bin/osperl' binary and run the test scripts.
-   './t/hash.t' fails 2/4 until bugrep015834 is fixed.
+2. perl ./be
 
-4. 'perl ./be installed'
+     It should build all the code and run the test scripts.  ./t/hash.t
+     will fail 2/4 until bugrep015834 is fixed.
 
+3. perl ./be test
+
+     Since the test database now has data, this exercises different code.
+
+4. perl ./be installed
+
+-------------------------------------------------------------------------
 
 If you succeed on a system that is not listed in above, please send
 a note to perl-objectstore@parallax.co.uk announcing your success!
+
+-------------------------------------------------------------------------

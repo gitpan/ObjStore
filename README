@@ -7,11 +7,11 @@ Name           DSLI  Description                                  Info
 -----------    ----  -------------------------------------------- -----
 ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
-Interface to ObjectStore OODBMS (http://www.odi.com).  Stores scalars,
-arrays, hashes, sets, and references directly in the database without
-any flattening of nested or circular structures.  Virtual memory
-mechanism used to make read/write access nearly as fast as memory
-mapped files.
+Interface to ObjectStore OODBMS (http://www.odi.com).  Stores perl
+data directly in the database without flattening of either nested or
+cyclic structures.  Includes interactive perl shell for examining and
+editing arbitrary databases.  Virtual memory mechanism is used to make
+access nearly as fast as memory mapped files.
 
 Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
 
@@ -24,11 +24,28 @@ majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
 
 
 see ./INSTALL for installation instructions
+see ./UPGRADE for directions on evolving databases from prior releases
 see ./TODO for list of things to do
 see ./CHANGES for a historical perspective
 
 
 ### RECENT CHANGES ###
+
+
+** 10-10-97 Released 1.17
+
+- PERL / OBJECTSTORE SHELL !!
+
+- First-class cursors for all persistent types.
+
+- osp_copy script to copy databases.  Source code included.
+
+- Support for cross database references.
+
+- Simplified API for 'open'.
+
+- Sets depreciated.  The interface is there, but they are
+re-implemented with hashes.
 
 
 ** 10-03-97 Released 1.16
@@ -42,22 +59,4 @@ databases is in the works.
 
 - The default stargate now destroys data as it is copied into the
 database.  This is necessary to prevent the inadvertant creation of
-uncollectable circular structures.
-
-- Started implementation of persistent cursors.
-
-
-** 09-27-97 Released 1.15
-
-- Expanded analysis of Perl, Java, C++, and SQL as database languages.
-
-- Partial arrays.  Mileage may vary.
-
-- Automatic retry in the event of deadlock (69).
-
-- Blessed objects now try to 'require' their class the first time they
-are instantiated in transient memory.
-
-- Renamed $Exception to $EXCEPTION.
-
-- PHTML.pm and Eval.pm moved to their own distribution.
+uncollectable cyclic structures.

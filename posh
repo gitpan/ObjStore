@@ -1,0 +1,288 @@
+#!/nw/dist/prod/bin/perl -w
+# It would be cool if this code could be put inside a /Safe/ object...
+
+package Posh::View;
+use strict;
+BEGIN { require Cwd; *cwd = \&Cwd::fastcwd; }
+use IO::Pipe;
+use ObjStore ':ADV';
+require ObjStore::Peeker;
+require ObjStore::Ref;
+use vars qw(@ISA $view $is_string);
+@ISA = 'ObjStore::HV';
+
+my $Results = new ObjStore::Peeker(to => 'stdout', vareq => 1);
+
+my $Peeker  = new ObjStore::Peeker(depth => 0); #, refcnt => 1
+# Refcnts are wildly inaccurate unless you are in read_only mode.
+
+sub new {
+    my ($class, $mom) = @_;
+    my $o = $class->SUPER::new($mom);
+    $o->{mom} = $mom;
+    $o;
+}
+
+sub init {
+    my ($o, $prev) = @_;
+    # copy from $prev by default ?
+    $o->{where} ||= 'ufs';
+    $o->{'cwd'} ||= cwd;
+    $o->{cursor} ||= new ObjStore::Ref($o);
+}
+
+sub enter {
+    my ($o) = @_;
+    $o->init;
+    chdir($o->{'cwd'}) or $o->{'cwd'} = cwd;
+    if ($o->{where} eq 'os') {
+	eval { $o->{cursor}->open }; #broken XXX
+# from 1..depth XXX
+#	if ($o->[$x]->deleted) {
+#	    warn "$x is deleted";
+#	    while ($o->_count > $x) { $o->Pop }
+#	    last;
+#	}
+	if ($o->{cursor}->depth == 0) {
+	    $o->{where} = 'ufs';
+	}
+    }
+    $o->prompt;
+}
+
+sub prompt {
+    my ($o) = @_;
+    my $p = '';
+    if ($o->{where} eq 'ufs' ) {
+	$p = $o->{'cwd'};
+	$p =~ s,^.+?\/([^/]+\/[^/]+\/[^/]+)$,$1,;  #? XXX
+    } elsif ($o->{where} eq 'os') {
+	if ($o->{cursor}->depth > 1) {
+	    $p = "\$at = ".$o->{cursor}->focus;
+	} else {
+	    $p = "\n\$at = ".$Peeker->Peek($o->{cursor}->focus);
+	}
+    } else {
+	print("You goofball!\n") if $o->{where} eq 'moon';
+	$o->{where} = 'ufs';
+	$p = $o->enter;
+    }
+    $p;
+}
+
+sub execute {
+    my ($view, $input) = @_;
+    $Posh::View::view = $view;
+
+    $is_string=!ref $input;
+
+    if ($is_string) {
+	if ($view->{where} eq 'ufs') {
+	    if ($input =~ m/^\s*(ls)\s*(.*)$/s) {
+		$input = "$1(qw($2));";
+	    } elsif ($input =~ m/^\s*cd\s(.*)$/s) {
+		$input = "cd_ufs(qw($1))";
+	    }
+	} elsif ($view->{where} eq 'os') {
+	    if ($input =~ m/^\s*cd\s*(.*)$/s) {
+		my $path = $1;
+		if ($path =~ m,^(\.\./?)+\s*$,) {
+		    $input = "cd_os('$path')";
+		} elsif ($path =~ m/^\s*$/) {
+		    $input = "cd_os('/')";
+		} else {
+		    $input = "cd_os($1)";
+		}
+	    }
+	}
+    }
+
+    my $at;
+    $at = $view->{cursor}->focus if $view->{where} eq 'os';
+#    my @ret = reval($input);
+    my @ret = ref $input? (eval { &$input }) : eval $input;
+    print($@) if $@;
+    if ($is_string) { for (@ret) { $Results->Peek($_) } }
+}
+
+#--------------------------------------------- COMMANDS (not methods)
+
+sub cd_ufs {
+    $is_string=0;
+    my ($o, $path) = ($view, @_);
+    $path = $ENV{HOME} if !$path;
+    if (-f $path) {
+	my $db = ObjStore::open($path, 0);
+	$o->{cdb} = $db->get_pathname;
+	$o->{cursor}->Push($db);
+	$o->{where} = 'os';
+    } else {
+	if (chdir($path)) {
+	    $o->{'cwd'} = cwd;
+	} else {
+	    print("posh: cd $path: No such directory\n");
+	}
+    }
+}
+
+sub cd_os {
+    $is_string=0;
+    my ($o, $path) = ($view, @_);
+    return if !$path;
+    if (ref $path) {
+	$o->{cursor}->Push($path);
+    } elsif ($path =~ m,^/$,) {
+	while ($o->{cursor}->depth) { $o->{cursor}->Pop }
+    } elsif ($path =~ /\.\./) {
+	while ($path =~ s/\.\.// and $o->{cursor}->depth) {
+	    $o->{cursor}->Pop;
+	}
+    } else {
+	print "posh: cd $path: ??\n";
+    }
+    $o->{where} = 'ufs' if $o->{cursor}->depth == 0;
+}
+
+sub pwd {
+    $is_string=0;
+    if ($view->{where} eq 'ufs') {
+	print("$view->{'cwd'}\n");
+    } elsif ($view->{where} eq 'os') {
+	for (my $z=0; $z < $view->{cursor}->depth; $z++) {
+	    print "[$z] = ".$Peeker->Peek($view->{cursor}->focus($z));
+	}
+    }
+}
+
+sub ls {
+    $is_string=0;
+    my ($path) = @_;
+    if ($view->{where} eq 'ufs') {
+	$path ||= '';
+	my $pipe = new IO::Pipe;
+	$pipe->reader('ls', '-C', split(/\s+/, $path));
+	while (defined(my $l = <$pipe>)) {
+	    print($l);
+	}
+    } elsif ($view->{where} eq 'os') {
+	if (@_) { 
+	    print "\n";
+	    for (my $x=0; $x < @_; $x++) {
+		print "[$x] = ".$Peeker->Peek($_[$x]);
+	    }
+	} else {
+	    print "\n\$at = ".$Peeker->Peek($view->{cursor}->focus);
+	}
+    }
+}
+
+sub peek { &ls; }
+
+package Posh::FakeTerm;
+
+sub new {
+    my ($class) = @_;
+    bless [], $class;
+}
+
+sub readline {
+    my ($o, $pr) = @_;
+    $|=1;
+    print($pr);
+    $|=0;
+    scalar(<>);
+}
+
+sub addhistory {}
+
+package Posh;
+use strict;
+use Carp;
+use IO::Handle;
+use ObjStore ':ADV';
+use vars qw(@ISA $term);
+require ObjStore::AppInstance;
+@ISA = 'ObjStore::AppInstance';
+
+sub new {
+    my ($class, @opts) = @_;
+    my $o = $class->SUPER::new('posh', pvars => [qw(ttype pref view)]);
+
+    croak "Odd number of parameters" if @opts & 1;
+    while (@opts) { $o->{pop @opts} = pop @opts }
+
+    $o->{user} ||= scalar(getpwuid($>));
+
+    ObjStore::set_transaction_priority(0x1000);
+    try_update {
+#	$o->wdb->allow_external_pointers;
+	$o->cache;
+	$o->{state} = 'active';
+	$o->{ttype} ||= 'read';
+	$o->{public}{user} ||= $o->{user};
+	$o->{pref} ||= {view=>0};
+	$o->{view} ||= [new Posh::View($o->{public})];
+	$o->{prompt} = $o->view->enter;
+	$o->uncache;
+    };
+    $o;
+}
+
+sub view {
+    my ($o, $xx) = @_;
+    $xx = $o->{pref}{view} if !defined $xx;
+    $o->{view}[$xx];
+}
+
+sub sid { $_[0]->{user}; }
+
+sub run {
+    my ($o) = @_;
+    print("posh $ObjStore::VERSION (Perl $] ".ObjStore::release_name.")\n");
+    print "[set for \U$o->{ttype}]\n";
+    while (1) {
+	my $input;
+	if ($o->{prompt} =~ m/^(.*\n)(.*)$/s) {
+	    print $1;
+	    $input = $term->readline("$2% ");
+	} else {
+	    $input = $term->readline("$o->{prompt}% ");
+	}
+	last if (!defined $input or $input =~ m/^\s*exit\s*$/);
+
+	my $ttype;
+	if ($input =~ m/^(cd)\s(.*)$/) {
+	    $ttype = 'update';
+	} elsif ($input =~ m/^\s*(read|update|abort_only)\s*$/) {
+	    my $mode = $1;
+	    $ttype = 'update';
+	    $input = sub {
+		$o->{ttype} = $mode;
+		print "[set for \U$mode]\n";
+	    };
+	} else {
+	    $ttype = $o->{ttype};
+	}
+
+	begin $ttype, sub{
+	    $o->cache;
+	    $o->view->execute($input) if $input;
+	    $o->{prompt} = $o->view->prompt if $ttype ne 'read';
+	    $term->addhistory($input) if (!ref $input and $input =~ /\S/);
+	    $o->uncache($ttype ne 'read');
+	};
+    }
+}
+
+eval {
+    use Term::ReadLine;
+    $term = new Term::ReadLine('posh');
+    $term->ornaments(1);
+    # do completion on perl?
+};
+if ($@) {
+    print "** warning: Module 'Term::ReadLine' could not be loaded.\n";
+    $term = new Posh::FakeTerm;
+}
+$SIG{INT} = sub { die "ABORT" };
+(new Posh())->run;

@@ -1,0 +1,25 @@
+NOTES
+
+o Functions or methods starting with '_' are internal to osperl.  They
+should not be used and are subject to change without notice.
+
+o Dependencies are not properly tracked by Maker.  You should remove
+all object files if you suspect they are out of sync.
+
+o Avoid const, private & templates.  C++ sucks.  Long live C++!
+
+o The following might change the perl stack:
+  OSSVPV::_bless,
+  OSSVPV::_blessed_to, wrap_object, osp::*_2sv, osp::push_*
+  osperl::force_sv_2bridge, OSSV::operator=
+
+o Weak references are conceptually orthogonal to cursors.  However,
+the extra complexity necessary to split the dimension seems like
+overkill.  After more contemplation, maybe they are not orthogonal.
+In any case, it is far simpler just to make cursors a subclass of
+references.
+
+o Cross database pointers cannot be enabled.  They are too dangerous
+for reference counted data.
+
+o Coding XS is very strange.

@@ -1,11 +1,10 @@
 #-*-perl-*-
 BEGIN { $| = 1; $tx=1; print "1..5\n"; }
 
-sub ok { print "ok $tx\n"; $tx++; }
-sub not_ok { print "not ok $tx\n"; $tx++; }
-
 use Carp;
 use ObjStore;
+use lib './t';
+use test;
 
 sub chk_refs {
     my ($r1, $r2) = @_;
@@ -17,14 +16,13 @@ sub chk_refs {
 
 my $refs;
 
-my $db = ObjStore::open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
-
+&open_db;
 try_update {
     my $john = $db->root('John');
     $refs = $john->_refcnt;
     chk_refs($john->_refcnt, $refs); #1
 
-    my $c = [$john, {1=>$john}];
+    my $c = [$john, {1=>\$john}];
     $john->STORE('gated', $c);
     @$c == 0? ok:not_ok; #2
 

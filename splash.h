@@ -10,17 +10,8 @@
  * I'd like to thank Michael Golan <mg@Princeton.EDU> for his critiques
  * and clever suggestions. Some of which have actually been implemented
  *
- * 06-19-97 Pritikin - Hacked for use with ObjectStore!
+ * 06-19-97 Pritikin:  Hacked for use with ObjectStore
  */
-
-#ifndef	_SPLASH_H
-#define	_SPLASH_H
-
-#include <string.h>
-
-#ifdef	DEBUG
-#include	<stdio.h>
-#endif
 
 #define	INLINE	inline
 
@@ -43,7 +34,6 @@ private:
 
 protected:
     int allocated;
-    void compact(const int i);
 
 public:
 #ifdef	USLCOMPILER
@@ -54,24 +44,22 @@ public:
 #endif
     {
       os_segment *WHERE = os_segment::of(this);
+      assert(n > 0);
 	a= new(WHERE, T::get_os_typespec(), n) T[n];
 	cnt= 0;
 	firstshift = fs;
         first= n>>firstshift;
 	allocated= n;
 	allocinc= n;
-#	ifdef	DEBUG
-	fprintf(stderr, "SPListBase(int %d) a= %p, first= %d\n", allocinc, a, first);
-#	endif
+	DEBUG_splash(warn("SPListBase(int %d) a= %p, first= %d\n",
+			  allocinc, a, first));
     }
 
     SPListBase(const SPListBase<T>& n);
     SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n);
     virtual ~SPListBase(){
-#       ifdef	DEBUG
-	fprintf(stderr, "~SPListBase() a= %p, allocinc= %d\n", a, allocinc);
-#       endif
-	delete [] a;
+      DEBUG_splash(warn("~SPListBase() a= %p, allocinc= %d\n", a, allocinc));
+      delete [] a;
     }
 
     INLINE T& operator[](const int i);
@@ -79,6 +67,7 @@ public:
 
     int count(void) const{ return cnt; }
 
+    void compact(const int i);
     void add(const T& n);
     void add(const int i, const T& n);
     void erase(void){ cnt= 0; first= (allocated>>firstshift);}
@@ -159,9 +148,7 @@ SPListBase<T>::SPListBase(const SPListBase<T>& n)
     os_segment *WHERE = os_segment::of(this);
     a= new(WHERE, T::get_os_typespec(), allocated) T[allocated];
     for(int i=0;i<cnt;i++) a[first+i]= n.a[first+i];
-#ifdef	DEBUG
-    fprintf(stderr, "SPListBase(SPListBase&) a= %p, source= %p\n", a, n.a);
-#endif
+    DEBUG_splash(warn("SPListBase(SPListBase&) a= %p, source= %p\n", a, n.a));
 
 }
 
@@ -169,9 +156,7 @@ template <class T>
 SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n){
 //  cout << "SPListBase<T>::operator=()" << endl;
     if(this == &n) return *this;
-#ifdef	DEBUG
-    fprintf(stderr, "~operator=(SPListBase&) a= %p\n", a);
-#endif
+    DEBUG_splash(warn("~operator=(SPListBase&) a= %p\n", a));
     delete [] a; // get rid of old one
     allocated= n.allocated;
     allocinc= n.allocinc;
@@ -180,9 +165,7 @@ SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n){
     os_segment *WHERE = os_segment::of(this);
     a= new(WHERE, T::get_os_typespec(), allocated) T[allocated];
     for(int i=0;i<cnt;i++) a[first+i]= n.a[first+i];
-#ifdef	DEBUG
-    fprintf(stderr, "operator=(SPListBase&) a= %p, source= %p\n", a, n.a);
-#endif
+    DEBUG_splash(warn("operator=(SPListBase&) a= %p, source= %p\n", a, n.a));
     return *this;
 }
 /* 
@@ -202,10 +185,8 @@ int newfirst;
                 int idx= (first > newfirst) ? i : cnt-1-i;
                 a[newfirst+idx]= a[first+idx];
 	    }
-#ifdef DEBUG
-            fprintf(stderr, "SPListBase::grow() moved a= %p, first= %d, newfirst= %d, amnt= %d, cnt= %d, allocated= %d\n",
-                    a, first, newfirst, amnt, cnt, allocated);
-#endif
+	DEBUG_splash(warn("SPListBase::grow() moved a= %p, first= %d, newfirst= %d, amnt= %d, cnt= %d, allocated= %d\n",
+			  a, first, newfirst, amnt, cnt, allocated));
            first= newfirst;
            return;
         }
@@ -218,12 +199,10 @@ int newfirst;
     os_segment *WHERE = os_segment::of(a);
     T *tmp= new(WHERE, T::get_os_typespec(),allocated) T[allocated];
     newfirst= (allocated>>1) - (newcnt>>1);
+    DEBUG_splash(warn("SPListBase(0x%x)->grow(): old= %p, a= %p, allocinc= %d, newfirst= %d, amnt= %d, cnt= %d, allocated= %d\n",
+		      this, a, tmp, allocinc, newfirst, amnt, cnt, allocated));
     for(int i=0;i<cnt;i++) tmp[newfirst+i].operator=(a[first+i]);
-#ifdef	DEBUG
-    fprintf(stderr, "SPListBase::grow() a= %p, old= %p, allocinc= %d, first= %d, amnt= %d, cnt= %d, allocated= %d\n",
-            tmp, a, allocinc, first, amnt, cnt, allocated);
-    fprintf(stderr, "~SPListBase::grow() a= %p\n", a);
-#endif
+    DEBUG_splash(warn("SPListBase(0x%x)->grow(): done copying\n", this));
     delete [] a;
     a= tmp;
     first= newfirst;
@@ -234,10 +213,8 @@ void SPListBase<T>::add(const T& n){
     if(cnt+first >= allocated) grow();
     assert((cnt+first) < allocated);
     a[first+cnt]= n;
-#ifdef DEBUG
-    fprintf(stderr, "add(const T& n): first= %d, cnt= %d, idx= %d, allocated= %d\n",
-                first, cnt, first+cnt, allocated);
-#endif
+    DEBUG_splash(warn("add(const T& n): first= %d, cnt= %d, idx= %d, allocated= %d\n",
+                first, cnt, first+cnt, allocated));
     cnt++;
 }
 
@@ -256,10 +233,8 @@ void SPListBase<T>::add(const int ip, const T& n){
 	    a[first+i]= a[(first+i)-1];
         a[first+ip]= n;
     }
-#ifdef DEBUG
-    fprintf(stderr, "add(const int ip, const T& n): first= %d, cnt= %d, idx= %d, allocated= %d\n",
-                first, cnt, first+ip, allocated);
-#endif
+    DEBUG_splash(warn("add(const int ip, const T& n): first= %d, cnt= %d, idx= %d, allocated= %d\n",
+		      first, cnt, first+ip, allocated));
     cnt++;
 }
 
@@ -267,9 +242,14 @@ template <class T>
 void SPListBase<T>::compact(const int n){ // shuffle down starting at n
 int i;
     assert((n >= 0) && (n < cnt));
-    if(n == 0) first++;
-    else for(i=n;i<cnt-1;i++){
-	    a[first+i]= a[(first+i)+1];
+    if(n == 0) {
+      a[first] = 0;
+      first++;
+    } else {
+      for(i=n;i<cnt-1;i++) {
+	a[first+i]= a[(first+i)+1];
+      }
+      a[cnt-2+first+1] = 0;  //snark the last element
     }
     cnt--;
 }
@@ -356,8 +336,3 @@ int i;
 	compact(offset);
     return r;
 }
-
-
-
-#endif
-

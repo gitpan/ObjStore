@@ -275,18 +275,19 @@ Policy can be one of C<as_used>, C<read>, or C<write>.
 
 =back
 
-=head1 CONTAINERS
+=head1 PERSISTENT OBJECTS
 
 Databases are comprised of segments.  Segments dynamically resize from
 very small to very big.  You should split your data into lots segments
-when it makes sense.  Segment improve locality of reference and can be
-a unit of locking or caching.
+when it makes sense.  Segments improve locality and can be a unit
+of locking or caching.
 
-When you create a container you must specify the segment in which it
-is to be allocated.  All containers are created using the form C<'new
-ObjStore::$type($store, $cardinality)'>.  You may pass any persistent
-object in place of $store and the new container will be created in the
-same segment as the $store object!
+When you create a database object you must specify the segment in
+which it is to be allocated.  All containers are created using the
+form C<'new ObjStore::$type($store, $cardinality)'> and other creation
+methods follow a similar pattern.  You may pass any persistent object
+in place of $store and the new container will be created in the same
+segment as the $store object!
 
 =head2 Arrays
 
@@ -296,8 +297,8 @@ an expected cardinality of ten elements.
     my $a7 = new ObjStore::AV($store, 10);
 
 None of the usually array operations are supported except fetch and
-store.  (Push, pop, shift and unshift are available but not
-documented..., oops!)  At least the following works:
+store.  (Actually push, pop, shift and unshift are all available but
+not documented...)  At least the following works:
 
     $a7->[1] = [1,2,3,[4,5],6];
 
@@ -336,25 +337,40 @@ If you have installed older releases, you might know that sets were
 supported.  They still work, but they are re-implemented in terms of
 hashes.
 
-=head2 And Cursors (Oh My!)
+=head2 References
 
-All containers have a method, C<new_cursor($segment)>, that creates
-a persistent cursor.  A cursor is like any other object.  It is stored
-in the database and you can bless it into a package.  The following
-methods are always available:
+You can generate a reference to any persistent object with the method
+C<new_ref($segment)>.  The main reason to use references is to refer
+to data in other databases.  Refs do not affect remote refcnts and
+therefore are a relatively safe way to create cross database pointers.
 
-  $cs = $c->new_cursor($seg);   # creates a cursor in segment $seg
-  $c2 = $cs->focus;             # returns another ref to $c
+  $f = $r->focus;              # returns the focus of the ref
+  $r->open($how);              # attempts to open the focus' database
+  $yes = $r->deleted;          # is the focus deleted?
+
+Be aware that references can return garbage if the focus' database is
+not open.  You need to call C<open> explicitly.  If the database is
+already open, C<open> will not be called again.
+
+=head2 Cursors
+
+Containers have a method, C<new_cursor($segment)>, that creates a
+persistent cursor for the given container.  Think of a cursor as a
+heavy-weight reference.  The following methods are available, in
+addition to the methods for references.
+
+  $cs->seek_pole($pole);        # seek to the first or last element
+  ($k,$v) = $cs->at;            # returns the current element
   ($k,$v) = $cs->next;          # returns the next element
 
 =over 4
 
 =item *
 
-Arrays return (index,value) pairs.  Hash cursors return (key,value)
-pairs.  Sets do something reasonable, but they are highly depreciated.
-All cursors return the empty list () when no more elements are
-available.
+Array cursors return (index,value) pairs.  Hash cursors return
+(key,value) pairs.  Sets do something reasonable, but are highly
+depreciated.  All cursors return the empty list () when no more
+elements are available.
 
 =item *
 
@@ -375,11 +391,10 @@ this.
 =item *
 
 Cursors do not change the primary reference count; they use weak
-references.  That means that you can know if the container is deleted
+references.  That means that you can know if a container is deleted
 even while cursors are focused on it.  Use the C<deleted> method to
-check.
-
-Cursors are also the only safe way to refer across databases. XXX
+check.  And just like references, cursors that refer to collections in
+other databases don't use refcnts at all.
 
 =back
 
@@ -392,6 +407,17 @@ methods:
 
 There may also be a way to test for availability of advanced
 features.  (E.g. 'can_chicken_walk')
+
+=head2 And Access Paths (Oh My!)
+
+An array of references or cursors is essentially an access path.  Two
+simple classes for doing access paths are included in the
+distribution:
+
+  ObjStore::Ref            # access path composed of refs
+  ObjStore::Cursor         # cursor based access path
+
+See the source code for details.
 
 =head1 INTROSPECTION
 
@@ -481,7 +507,7 @@ C<I</opt/os/tmp%> B<cd silly.db>>
     whiteboard => ObjStore::UNIVERSAL::Ref ...
   },
 
-C<I<%> B<cd $at-E<gt>{whiteboard}-E<gt>focus>>
+C<I<%> B<cd $at-E<gt>{whiteboard}>>
 
 C<I<$at = ObjStore::AV=ARRAY(0xe0580000)%> B<ls>>
 
@@ -577,7 +603,7 @@ syncronization between the two languages creates a lot of extra
 complexity.  So much so that there are many software companies that
 exist solely to help address this headache.
 
-perl is better because it spans all the requirements in a single
+Perl is better because it spans all the requirements in a single
 language.  For example, this is similar to an SQL table:
 
   my $h1 = { name => undef, title => undef, size => undef };
@@ -651,8 +677,7 @@ Perl will soon integrate with Java enough to use SwingSet - AWT.
 =item *
 
 I'd like to see some comparisions of code length when solving the same
-problems in Java and in perl.  I have a strong suspicion that it is
-easier to do data processing in perl.
+problems in Java and in perl.
 
 =back
 
@@ -713,9 +738,9 @@ that blessings are persistent.  For example:
     package main;
     my $o = new MyObject($db);
 
-If you store each class in a separate C<.pm> file in your @INC path
-(see C<require>), then the classes will be autoloaded as you traverse
-your data.
+Be aware that if a C<$class->isa('ObjStore::UNIVERSAL')>, you cannot
+C<bless {}, $class>.  You can only bless persistent objects into
+persistent classes.
 
 =head2 Class Autoloading
 
@@ -750,7 +775,7 @@ if anything went wrong and determine how to proceed.
   try_update {
      ...
   };
-  die if $@;    # check for errors!
+  die if $@;    # Don't forget!  Check for errors!
 
 =item * DEADLOCK
 
@@ -764,30 +789,34 @@ yourself.
 =head2 Stargate
 
 The stargate determines which collection representations are used to
-store implicitly created hashes and arrays.  It is called recursively
-on data structures in order to copy them into persistent memory.  If
-you replace the default stargate with your own, make sure to dismember
-the transient structures as they are processed to insure that cyclic
-structures will be collected in transient memory.  (See C<ObjStore.pm>
-for an example.)
+store implicitly created hashes and arrays.  The function is called
+recursively on data structures in order to copy them into persistent
+memory.  You can access the stargate directly with
+C<ObjStore::translate>.
+
+  my $persistent_stuff = ObjStore::translate([1,2,3,{phat=>'dog'}]);
+
+If you replace the default stargate with your own, make sure to
+dismember the transient structures as they are processed to insure
+that cyclic structures will be collected in transient memory.  (See
+C<ObjStore.pm> for an example.)
 
 =head2 Cross Database Pointers
 
 You can allow cross database pointers with:
 
-  $db->allow_external_pointers;
+  $db->_allow_external_pointers;
 
-But do not do this brainlessly!  Databases that have references to
-other databases affect refcnts.  Your refcnts will be wrong if you
-simply C<osrm> random databases.  This will cause some of your data to
-become undeletable.
+But you should avoid this if at all possible.  Pointers affect
+refcnts, even in other databases.  Your refcnts will be wrong if you
+simply C<osrm> a random database.  This will cause some of your data
+to become undeletable.
 
-To deal with this properly, you must systematically C<undef> all your
-references and insure that a given database is empty before you
-C<osrm> it.  C<$db->destroy> contains the appropriate logic.  However,
-pay special attention to cyclic structures.  You must break all cycles
-in your data to allow it to be collected by C<$db->destroy>.  It's not
-hard, you just need to pay attention to detail.
+It is much safer to use references or cursors to refer to data in
+other databases.  References use the os_reference_protected class,
+which is designed to solve this problem.  References and cursors do
+not use refcnts when pointing to remote database so you are free to
+osrm with less trepidation and planning.
 
 =head2 Performance Check List
 
@@ -796,8 +825,6 @@ B<Getting performance out of ObjectStore is not rocket science.>
 
 =over 4
 
-=item * DO AS MUCH AS POSSIBLE PER TRANSACTION
-
 =item * SEGMENTS
 
 Is your data partitioned into as many segments as possible?  (See
@@ -805,11 +832,18 @@ the introduction to containers.)
 
 =item * COMPACTNESS
 
-Is your data stored as compactly as possible?  You get 90% of your
-performance because you can fit your whole working data set into RAM.
-If you are doing a good job, your database should be less than twice
-the size of it's ASCII dump; i.e., less than 2 times expansion.  (See
-the section of data representation.)
+Is your data stored as compactly as possible?
+
+You get 90% of your performance because you can fit your whole working
+data set into RAM.  If you are doing a good job, your database should
+be less than twice the size of it's uncompressed ASCII dump; i.e.,
+less than 2 times expansion.  (See the section on data
+representation.)
+
+=item * DO AS MUCH AS POSSIBLE PER TRANSACTION
+
+Transactions, especially update transactions, involve a lot of
+set/cleanup.  The more you do per transaction the better.
 
 =item * WHERE IS THE REAL BOTTLENECK?
 
@@ -851,13 +885,14 @@ safely left on the bookshelf where they belong.
 
 =head2 Differences Between The Perl And C++ APIs
 
-Most stuff should be roughly the same.  However,
+Most stuff should be roughly the same.  However, some static methods
+sit directly under C<ObjStore::> instead of under their own classes.
 
 =over 4
 
 =item *
 
-Some static methods sit directly under C<ObjStore::>
+The interface for lookup and open is simplified.
 
 =item *
 
@@ -923,7 +958,7 @@ C<ObjStore::File> will be the base class for large binary data.
 
 When an ObjectStore exception occurs, C<$ObjStore::EXCEPTION> is
 called with an explaination.  You can replace the default handler with
-your own function.
+your own.
 
 Each subclass of C<ObjStore::UNIVERSAL::Container> has a C<%REP> hash.
 Persistent object implementations add their create functions to the
@@ -945,17 +980,16 @@ tonal facility will be available in the next release.
 =head2 ossv_bridge typemap
 
 The following explaination may be helpful to developers trying to
-understand the ObjStore typemap.  If you don't know what a typemap is,
-just skip to the next section.
+understand the typemap.  If you don't know what a typemap is, just
+skip to the next section.
 
 The struct C<ossv_bridge> is used to bridge between perl and C++
 objects.  It contains transient cursors and transient pointers to
 persistent data.  Immediately after a transaction finishes,
-C<invalidate> is invoked on all outstanding bridges.
-
-This is necessary in order to update the reference counts properly.
-This was also the most difficult part to get right.  But hey, how many
-databases do ref counting?
+C<invalidate> is invoked on all outstanding bridges.  This is
+necessary in order to update the reference counts properly.  This was
+also the most difficult part to get right.  But hey, how many
+databases do ref-counting?
 
 =head1 DIRECTION
 
@@ -964,9 +998,9 @@ databases do ref counting?
 =item * LEANER COLLECTION REPRESENTATIONS
 
 The ObjectStore collections are weighted down with unnecessary index
-and query support.  I'd like to replace them with a suite of lean
-representations for large cardinality collections to compliment the
-Splash collections.
+and query support.  Worse, ObjectStore cursors cannot use references,
+only pointers.  I'd like to find a suite of lean representations for
+large cardinality collections to compliment the Splash collections.
 
 =item * MORE BUILT-IN DATA TYPES
 
@@ -992,15 +1026,16 @@ Most other static methods can also be exported.
 
 =item * HIGH VOLITILITY
 
-Anything not documented is subject to change without notice.  (I will
+Anything not documented is subject to change without notice.  (But I will
 try to preserve backward compatibility when possible.)
 
 =item * CURSED OBJECTS
 
 The strings used to record the blessed nature of persistent objects
-are allocated in a private hash in the default segment of a database
-(See C<'ospeek -all'>).  If you accidentally mess up or change any of
-these strings, your objects will be cursed.  You have a backup, right?
+are allocated under a private root in the default segment of a
+database (See C<'ospeek -all'>).  If you accidentally mess up or
+change any of these strings, your objects will be cursed.  You have a
+backup, right?
 
 =item * NESTED TRANSACTIONS
 
@@ -1018,7 +1053,7 @@ support.  Actually, I don't think this is a bug.
 Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
 
 This package is free software; you can redistribute it and/or modify
-it under the same terms as perl itself.  The software is provided "as
+it under the same terms as perl itself.  This software is provided "as
 is" without express or implied warranty.  Perl / ObjectStore is
 available via any CPAN mirror site.  See
 http://www.perl.com/CPAN/modules/by-module/ObjStore

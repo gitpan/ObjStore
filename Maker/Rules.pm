@@ -59,6 +59,11 @@ sub set_install_dirs {
     $o->{install_dirs} = $map;
 }
 
+sub want_threads {
+    my ($o) = @_;
+    $o->{thread};
+}
+
 sub set_defaults {
     my ($o, $hint) = @_;
 
@@ -68,10 +73,13 @@ sub set_defaults {
     $o->flags('ld-dl', $Config{lddlflags});
 
     $o->exe(perl => "$Config{bin}/perl");
-    $o->exe(xsubpp => "$Config{privlibexp}/ExtUtils/xsubpp");
-    $o->flags('xsubpp', "-typemap", "$Config{privlibexp}/ExtUtils/typemap");
 
     if ($hint and $hint eq 'perl-module') {
+	$o->flags('cc', $Config{'ccflags'});
+	$o->flags('cxx', $Config{'ccflags'});
+	$o->exe(xsubpp => "$Config{privlibexp}/ExtUtils/xsubpp");
+	$o->flags('xsubpp', "-typemap", "$Config{privlibexp}/ExtUtils/typemap");
+
 	$o->set_install_dirs({
 	    'bin' => ["./blib/bin", $Config{installbin}, $Config{bin}],
 	    'man1' => ["./blib/man/man1", $Config{installman1dir}],
@@ -85,11 +93,17 @@ sub set_defaults {
 
     # system dependent section
 
-    if ($Config{archname} eq 'sun4-solaris') {
+    if ($Config{archname} =~ m/^sun4-solaris(.*)$/) {
+	$o->{thread} = ($1 =~ /thread/);
+
 	# assume SunPro 4.0
 	$o->exe('cxx', 'CC');
 	$o->flags('cxx-dl', '-KPIC', '-G');
 	$o->spotless('Templates.DB');
+	if ($o->want_threads) {
+	    $o->flags('cxx', '-mt');
+	    $o->flags('ld', '-mt');
+	}
 
 	# special phase
 	push(@{$o->{postlink}}, sub {  
@@ -301,7 +315,8 @@ sub objstore {
 
     $o->flags('cxx', '-vdelx', '-pta'); # fix vector delete & full tmpl instantiation
     $o->flags('cxx', "-I$ENV{OS_ROOTDIR}/include", qq(-DSCHEMADIR="$o->{osdbdir}"));
-    $o->flags('ld', "-R $ENV{OS_ROOTDIR}/lib");
+    $o->flags('ld', "-R$ENV{OS_ROOTDIR}/lib");
+#    $o->flags('ld', "-L$ENV{OS_ROOTDIR}/lib");
 
     my %features;
     for (@$libs) {
@@ -316,9 +331,12 @@ sub objstore {
 		defined $OS_FEATURE->{$_}{ldb};
 	}
     }
-    $o->flags('ld', "-los", "-losths", "-lC");
+    $o->flags('ld', "-los",
+	      $o->want_threads? "-losthr" : "-losths",
+	      $Config{libs},
+	      "-lC");  # -lC should not be required
     
-    $o->clean("$tag-osschema.c", "neutralize-$tag");
+    $o->clean("$tag-osschema.c", "neutral-$tag");
 #    $o->spotless(sub {$o->x("osrm -f $o->{osdbdir}/$tag.adb");});
 
     new Maker::Seq(new Maker::Unit("ossg $tag", sub {
@@ -327,7 +345,7 @@ sub objstore {
 	    newer("$tag-osschema.c", "$tag-schema.c")) {
 	    
 	    my @inc = grep(/^-I/, $o->flags('cxx'));
-	    $o->x("ossg", @inc, '-DOSSG=1', '-showw', '-nout', "neutralize-$tag",
+	    $o->x("ossg", @inc, '-DOSSG=1', '-showw', '-nout', "neutral-$tag",
 		  '-asdb', $adb, '-assf', "$tag-osschema.c",
 		  "$tag-schema.c", $o->flags('ossg'), $o->flags('LDB'));
 	}

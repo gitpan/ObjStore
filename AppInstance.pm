@@ -8,7 +8,9 @@ sub ROOT() { 'instances' }
 
 sub new {
     my ($class, $app, @opts) = @_;
-    my $wdb = ObjStore::open(TMP_DBDIR."/$app.db", 0, 0666);
+    my $dbdir = $ENV{"\U${app}_DBDIR"} || TMP_DBDIR;
+    $dbdir =~ s,/+$,,;
+    my $wdb = ObjStore::open("$dbdir/$app.db", 0, 0666);
     my $o = bless { _wdb => $wdb, _app => $app, _cached => 0 }, $class;
     $o->config(@opts);
 }

@@ -155,7 +155,7 @@ sub pm_2version {
     $fh->open($file) or croak "open $file: $!";
     my $ok=0;
     while (defined (my $l =<$fh>)) {
-	if ($l =~ m/\$VERSION\s*\=\s*['"]([\d\.]+)['"]/) {
+	if ($l =~ m/\$VERSION\s*\=\s*['"]([\d\.]+)["']/) {
 	    $o->{version} = "$1";
 	    $ok=1;
 	    last;
@@ -180,7 +180,7 @@ sub x {
 
 sub z {
     my ($o, @cmd) = @_;
-    confess '$o->x(@cmd)' if !ref $o;
+    confess '$o->x(@cmd)' if (!ref $o || !@cmd || !defined $cmd[0]);
 
     if ($cmd[0] eq 'rm') {
 	shift @cmd;

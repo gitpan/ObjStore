@@ -1185,7 +1185,11 @@ MODULE = ObjStore::GENERIC	PACKAGE = ObjStore::GENERIC
 BOOT:
   SV *rep;
   char *tag;
+#ifdef USE_THREADS
+  os_collection::set_thread_locking(1);
+#else
   os_collection::set_thread_locking(0);
+#endif
   os_index_key(hkey, hkey::rank, hkey::hash);
   // AV
   HV *avrep = perl_get_hv("ObjStore::AV::REP", TRUE);

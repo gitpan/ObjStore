@@ -47,7 +47,8 @@ my $r = Maker::Rules->new($pk, 'perl-module');
 @build_scripts = map {
     new Maker::Seq($r->HashBang(&LINKAGE eq 'dyn'? 'perl' : 'osperl', $_),
 		   new Maker::Unit($_, sub {})) } @scripts;
-#$r->opt(1);
+$r->opt(1);
+#$r->flags('cxx', '-g');
 $r->flags('cxx', '-DOSP_DEBUG');
 #$r->flags('ossg', '-padc', '-arch','set1');
 $r->flags('ld-dl', '-ztext');   # SunPro specific?

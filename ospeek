@@ -1,4 +1,4 @@
-#!/nw/dist/prod/bin/perl -w
+#!/nw/dev/perl/bin/perl -w
 
 use strict;
 use ObjStore ':ALL';

@@ -1,4 +1,6 @@
+AppInstance.pm
 CHANGES
+Config.pm
 Cursor.pm
 GENERIC.h
 GENERIC.pm
@@ -16,9 +18,11 @@ Peeker.pm
 PoweredByOS.gif
 PoweredByOS2.gif
 README
+Ref.pm
 SRC
 SetEmulation.pm
 TODO
+UPGRADE
 be
 bugrep015834
 bugrep073197
@@ -51,12 +55,14 @@ t/chk_arraybug.t
 t/cursor.t
 t/deadlock.pl
 t/hash.t
+t/integer.t
 t/overload.t
 t/peek.good
 t/root.t
 t/segment.t
 t/set.t
 t/stargate.t
+t/test.pm
 t/transact.t
 t/weak.t
 t/z_ospeek.t

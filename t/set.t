@@ -8,7 +8,6 @@ use test;
 
 #ObjStore::_debug qw(bridge);
 #ObjStore::disable_auto_class_loading();
-use Data::Dumper;
 
 &open_db;
 for my $rep (10, 100) {

@@ -8,7 +8,7 @@ use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS
 	    $DEFAULT_OPEN_MODE $EXCEPTION %CLASSLOAD $CLASSLOAD);
 
-$VERSION = '1.17';  #is a string, not a number!
+$VERSION = '1.18';  #is a string, not a number!
 
 require Exporter;
 require DynaLoader;
@@ -51,6 +51,17 @@ sub schema_dir() {
     &ObjStore::Config::SCHEMA_DBDIR;
 }
 
+sub PoweredByOS {
+    use Config;
+    "$Config{sitelib}/ObjStore/PoweredByOS.gif";
+}
+
+$EXCEPTION = sub {
+    my $reason = shift;
+    local($Carp::CarpLevel) = 1;
+    confess "ObjectStore: $reason\t";
+};
+
 # code in XS?
 sub begin {
     croak "begin(ttype, coderef)" if @_ != 2;
@@ -61,9 +72,45 @@ sub begin {
     else { croak "Transaction type must be 'read', 'update', or 'abort_only'"; }
 }
 
-sub PoweredByOS {
-    use Config;
-    "$Config{sitelib}/ObjStore/PoweredByOS.gif";
+sub DEFAULT_STARGATE {
+    my ($seg, $sv) = @_;
+    my $type = reftype $sv;
+    my $class = ref $sv;
+#    croak("$sv already persistent") if $class->isa('ObjStore::UNIVERSAL');
+    if ($type eq 'REF') {
+	my $sv = $$sv;
+	$sv->new_ref($seg);
+    } elsif ($type eq 'HASH') {
+	my $hv = new ObjStore::HV($seg);
+	while (my($hk,$v) = each %$sv) { $hv->STORE($hk, $v); }
+	%$sv = ();
+	if ($class ne 'HASH') { ObjStore::bless $hv, $class; }
+	$hv
+    } elsif ($type eq 'ARRAY') {
+	my $av = new ObjStore::AV($seg, scalar(@$sv) || 7);
+	for (my $x=0; $x < @$sv; $x++) { $av->STORE($x, $sv->[$x]); }
+	@$sv = ();
+	if ($class ne 'ARRAY') { ObjStore::bless $av, $class; }
+	$av
+    } else {
+	croak("ObjStore::DEFAULT_STARGATE: Don't know how to translate $sv");
+    }
+};
+
+set_stargate(\&DEFAULT_STARGATE);
+sub gateway { carp 'depreciated; call set_stargate instead'; set_stargate(@_); }
+sub set_gateway { carp 'depreciated; call set_stargate instead'; set_stargate(@_); }
+
+# Bless should be a member of UNIVERSAL, so I can override it
+# with less impolite trickery.
+
+sub bless ($;$) {
+    my ($ref, $class) = @_;
+    $class = caller if !defined $class;
+    CORE::bless $ref, $class;  #? XXX
+    &ObjStore::UNIVERSAL::_bless($ref, $class) if
+	$ref->isa('ObjStore::UNIVERSAL');
+    $ref;
 }
 
 # This can be expensive so it should only be called once per class.
@@ -93,41 +140,7 @@ sub disable_auto_class_loading {
 }
 *ObjStore::disable_class_auto_loading = \&disable_auto_class_loading; #silly me
 
-$EXCEPTION = sub {
-    my $reason = shift;
-    local($Carp::CarpLevel) = 1;
-    confess "ObjectStore: $reason\t";
-};
-
-sub DEFAULT_STARGATE {
-    my ($seg, $sv) = @_;
-    my $type = reftype $sv;
-    my $class = ref $sv;
-    croak("$sv already persistent") if $class->isa('ObjStore::UNIVERSAL');
-    if ($type eq 'REF') {
-	my $sv = $$sv;
-	$sv->new_ref($seg);
-    } elsif ($type eq 'HASH') {
-	my $hv = new ObjStore::HV($seg);
-	while (my($hk,$v) = each %$sv) { $hv->STORE($hk, $v); }
-	%$sv = ();
-	if ($class ne 'HASH') { ObjStore::bless $hv, $class; }
-	$hv
-    } elsif ($type eq 'ARRAY') {
-	my $av = new ObjStore::AV($seg, scalar(@$sv) || 7);
-	for (my $x=0; $x < @$sv; $x++) { $av->STORE($x, $sv->[$x]); }
-	@$sv = ();
-	if ($class ne 'ARRAY') { ObjStore::bless $av, $class; }
-	$av
-    } else {
-	croak("ObjStore::DEFAULT_STARGATE: Don't know how to translate $sv");
-    }
-};
-
-set_stargate(\&DEFAULT_STARGATE);
-sub gateway { carp 'depreciated; call set_stargate instead'; set_stargate(@_); }
-sub set_gateway { carp 'depreciated; call set_stargate instead'; set_stargate(@_); }
-
+# BROKEN
 # switch to CORE::eval? XXX
 sub reval($) {
     my $code = shift;
@@ -139,18 +152,6 @@ sub reval($) {
     }
     &ObjStore::_post_eval_cleanup();
     @r;
-}
-
-# Bless should be a member of UNIVERSAL, so I can override it
-# with less impolite trickery.
-
-sub bless ($;$) {
-    my ($ref, $class) = @_;
-    $class = caller if !defined $class;
-    CORE::bless $ref, $class;  #? XXX
-    &ObjStore::UNIVERSAL::_bless($ref, $class) if
-	$ref->isa('ObjStore::UNIVERSAL');
-    $ref;
 }
 
 sub lookup {
@@ -248,7 +249,7 @@ sub destroy {
     } while ($more);
 
     # Other databases may still have references to data.  We can't safely
-    # delete until there is definitely data left.
+    # delete until there is definitely no data left.
     my $empty=1;
     &ObjStore::try_update(sub {
 	for my $s ($o->get_all_segments) {
@@ -372,10 +373,6 @@ sub clone_to {
     $cloner->($r->focus)->new_ref($seg);
 }
 
-package ObjStore::UNIVERSAL::Cursor;
-use vars qw(@ISA);
-@ISA = qw(ObjStore::UNIVERSAL::Ref);
-
 sub _peek {
     my ($val, $o, $name) = @_;
     ++ $o->{coverage};
@@ -387,6 +384,10 @@ sub _peek {
     -- $o->{level};
     $o->nl;
 }
+
+package ObjStore::UNIVERSAL::Cursor;
+use vars qw(@ISA);
+@ISA = qw(ObjStore::UNIVERSAL::Ref);
 
 sub clone_to {
     my ($r, $seg, $cloner) = @_;

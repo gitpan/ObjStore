@@ -1,4 +1,4 @@
-#!/nw/dist/prod/bin/perl -w
+#!/nw/dev/perl/bin/perl -w
 # It would be cool if this code could be put inside a /Safe/ object...
 
 package Posh::View;
@@ -13,7 +13,8 @@ use vars qw(@ISA $view $is_string);
 
 my $Results = new ObjStore::Peeker(to => 'stdout', vareq => 1);
 
-my $Peeker  = new ObjStore::Peeker(depth => 0); #, refcnt => 1
+my $Lser  = new ObjStore::Peeker(depth => 0);
+my $Peeker  = new ObjStore::Peeker(depth => 0);
 # Refcnts are wildly inaccurate unless you are in read_only mode.
 
 sub new {
@@ -60,7 +61,7 @@ sub prompt {
 	if ($o->{cursor}->depth > 1) {
 	    $p = "\$at = ".$o->{cursor}->focus;
 	} else {
-	    $p = "\n\$at = ".$Peeker->Peek($o->{cursor}->focus);
+	    $p = "\n\$at = ".$Lser->Peek($o->{cursor}->focus);
 	}
     } else {
 	print("You goofball!\n") if $o->{where} eq 'moon';
@@ -130,6 +131,7 @@ sub cd_os {
     my ($o, $path) = ($view, @_);
     return if !$path;
     if (ref $path) {
+	$path = $path->focus if $path->isa("ObjStore::UNIVERSAL::Ref");
 	$o->{cursor}->Push($path);
     } elsif ($path =~ m,^/$,) {
 	while ($o->{cursor}->depth) { $o->{cursor}->Pop }
@@ -149,18 +151,18 @@ sub pwd {
 	print("$view->{'cwd'}\n");
     } elsif ($view->{where} eq 'os') {
 	for (my $z=0; $z < $view->{cursor}->depth; $z++) {
-	    print "[$z] = ".$Peeker->Peek($view->{cursor}->focus($z));
+	    print "[$z] = ".$Lser->Peek($view->{cursor}->focus($z));
 	}
     }
 }
 
 sub ls {
     $is_string=0;
-    my ($path) = @_;
     if ($view->{where} eq 'ufs') {
+	my ($path) = @_;
 	$path ||= '';
 	my $pipe = new IO::Pipe;
-	$pipe->reader('ls', '-C', split(/\s+/, $path));
+	$pipe->reader('ls', '-C', split(/\s+/, $path));  #osls XXX
 	while (defined(my $l = <$pipe>)) {
 	    print($l);
 	}
@@ -176,7 +178,12 @@ sub ls {
     }
 }
 
-sub peek { &ls; }
+sub peek {
+    # Improve this XXX
+    $Peeker->{depth} = 10;
+    &ls;
+    $Peeker->{depth} = 0;
+}
 
 package Posh::FakeTerm;
 
@@ -251,7 +258,7 @@ sub run {
 	last if (!defined $input or $input =~ m/^\s*exit\s*$/);
 
 	my $ttype;
-	if ($input =~ m/^(cd)\s(.*)$/) {
+	if ($input =~ m/^(cd)\s*(.*)$/) {
 	    $ttype = 'update';
 	} elsif ($input =~ m/^\s*(read|update|abort_only)\s*$/) {
 	    my $mode = $1;

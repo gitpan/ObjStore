@@ -263,7 +263,11 @@ BOOT:
   objectstore::set_client_name(SvPV(me, na));
   objectstore::initialize();		// should delay boot for flexibility? XXX
   //objectstore::set_incremental_schema_installation(1);
-  objectstore::set_thread_locking(0);	// threads support...?!
+#ifdef USE_THREADS
+  objectstore::set_thread_locking(1);
+#else
+  objectstore::set_thread_locking(0);
+#endif
   tix_exception::set_unhandled_exception_hook(osperl_exception_hook);
   osp::boot_thread();
   newXSproto("ObjStore::try_read", XS_ObjStore_try_read, file, "&");
@@ -362,6 +366,13 @@ int
 get_page_size()
 	CODE:
 	RETVAL = objectstore::get_page_size();
+	OUTPUT:
+	RETVAL
+
+double
+get_unassigned_address_space()
+	CODE:
+	RETVAL = objectstore::get_unassigned_address_space();
 	OUTPUT:
 	RETVAL
 

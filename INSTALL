@@ -2,6 +2,8 @@
 
 Tested Systems:
 
+   perl 5.004, 5.004_53
+
    Solaris 2.5.1
      SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1, 4.0.2
      SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0.0, 5.0.1
@@ -10,12 +12,15 @@ Tested Systems:
 
 The build process is a bit radical and needs some explaination.
 
-1. vi ./Config.pm
+1. xemacs ./Config.pm
 
 2. perl ./be
 
-     It should build all the code and run the test scripts.  ./t/hash.t
-     will fail 2/4 until bugrep015834 is fixed.
+     It should build all the code and run the test scripts.
+
+     ./t/hash.t will fail 2/4 until bugrep015834 is fixed.
+     ./t/transact.t will fail test 4 occationally.
+     ./t/z_ospeek.t is very sensitive to the success of the other tests.
 
 3. perl ./be test
 

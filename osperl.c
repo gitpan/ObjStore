@@ -548,7 +548,7 @@ char *OSSV::type_2pv()
 
 RAW_STRING *OSSV::get_raw_string()
 {
-  assert(nature() == ossv_pv);
+  assert(natural() == ossv_pv);
   return (char*) vptr;
 }
 

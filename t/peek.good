@@ -9,17 +9,17 @@ ObjStore::Root John = ObjStore::HV (1) {
     7 => 'String 7',
     8 => 'String 8',
     9 => 'String 9',
-    c => ObjStore::SetEmulation (1) {
-      000000020000057c => ObjStore::HV (1) {
-        bob => 2,
-      },
-      0000000200001494 => ObjStore::HV (1) {
-        ed => 3,
-      },
-      0000000200001f98 => ObjStore::HV (1) {
+    c => ObjStore::SetEmulation (1) [
+      ObjStore::HV (1) {
         joe => 1,
       },
-    },
+      ObjStore::HV (1) {
+        bob => 2,
+      },
+      ObjStore::HV (1) {
+        ed => 3,
+      },
+    ],
     dict => ObjStore::HV (1) {
       1 => '3.14159',
       10 => '31.4159',

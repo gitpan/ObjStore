@@ -3,6 +3,20 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 10-03-97 Released 1.16
+
+- All transient data related to persistent memory is now garbage
+collected immediately after a transaction finishes.  This should fix
+any strange reference count problems that extensive testing has been
+uncovering.  I am very interested to see any examples of code that
+still leaks memory.  To recover memory already lost, a script to copy
+databases is in the works.
+
+- The default stargate now destroys data as it is copied into the
+database.  This is necessary to prevent the inadvertant creation of
+uncollectable cyclic structures.
+
+
 ** 09-27-97 Released 1.15
 
 - Expanded analysis of Perl, Java, C++, and SQL as database languages.
@@ -25,8 +39,6 @@ are instantiated in transient memory.
 transactions.  Persistent memory leaks no longer possible.
 
 - ospeek restricted to show only three instances per class.
-
-- No schema changes.
 
 
 ** 08-11-97 Released 1.10

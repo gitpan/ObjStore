@@ -27,10 +27,18 @@ Of course, there is always room for improvement.
 
 + IDEAS +
 
+thread support!
+
 Peeker fix comma & semi // fix prefix for "$at = "...
 
-Support for acquire_lock, notification, database access control?,
-transaction hooks?,
+Get rid of the -step option.
+
+Support for acquire_lock, notification, database access control,
+transaction hooks?
+
+posh - call system() when in ufs?
+
+Encapsulate/reorg all the transaction stuff.
 
 Reference weaken/strengthen?  Use some bits in OSSVPV?
 
@@ -38,13 +46,14 @@ Split GENERIC into ObjectStore & Splash parts?
 
 ObjStore::File.  Support Verity full text indexing?
 
-Encapsulate/reorg all the transaction stuff.  Figure out nested
-transactions.  ObjStore::Transaction::Bridge as a perl object?
+ObjStore::Transaction::Bridge as a perl object?
+
+try using SAVE macros for invalidate?
 
 Seems like there might be memory leaks on the transient side...?
 
 Make XS code more efficient.  (How?)  Avoid stomping on some other
-version of bless?  (Why?)
+version of bless?  (How?)
 
 
 + BIGGISH PROJECTS +
@@ -53,10 +62,11 @@ Support for multiple application schemas!  (Expected 1Q98)
 
 Find replacements for os_array, os_dictionary, and os_set that:
     Are lighter weight (liboscol.so.sun.4.0 is 2.7M plus 200k of schema)
-    Have better memory performance
-    Cursors that use references instead of pointers!
-Is anything on the net suitable?  GE_COOL AVL_Tree?  b-tree?
-Doubly-linked link would be cool for arrays.
+    Use less memory
+    Inorder traversals are roughly the same as sorted-by-address
+    Cursors that use references instead of pointers
+Is anything on the net suitable?  GE_COOL or AVL_Tree?  Any b-trees?
+A partially packed doubly-linked list would be cool for arrays.
 
 Add support for parts of the TimeSeries Object Manager?
 
@@ -78,7 +88,7 @@ are being allocated.  I don't understand how this could be necessary.
 Tied values should take an absolute minimum amount of transient memory. 
 Why store things twice?
 
-Make 'reftype' a built-in
-
 There should be a less kludgy way to extend bless.  Why isn't it a
 special method of UNIVERSAL?  :-(
+
+Make 'reftype' a built-in

@@ -5,15 +5,15 @@ sub new {
     my ($class, $file, $offset) = @_;
     my ($die, $warn) = @SIG{'__DIE__', '__WARN__'};
     $SIG{'__DIE__'} = sub {
-	if ($_[0] =~ m/^(.*) at \(eval \d+\) line (\d+)(.*?)$/s) {
-	    die "$1 at $file line ".($offset + $2).$3;
+	if ($_[0] =~ m/^(.*) at \(eval \d+\) line (\d+)/s) {
+	    die "$1 at $file line ".($offset + $2).".\n";
 	} else {
 	    die "XXX ".$_[0];
 	}
     };
     $SIG{'__WARN__'} = sub {
-	if ($_[0] =~ m/^(.*) at \(eval \d+\) line (\d+)(.*?)$/s) {
-	    warn "$1 at $file line ".($offset + $2).$3;
+	if ($_[0] =~ m/^(.*) at \(eval \d+\) line (\d+)/s) {
+	    warn "$1 at $file line ".($offset + $2).".\n";
 	} else {
 	    warn "XXX ".$_[0];
 	}
@@ -48,8 +48,10 @@ sub eval {
     $o->{ok} = 0;
     $o->{file} = $file;
     $o->{offset} = $offset;
-    my $ctxt = new Eval::Context($o->{file}, $o->{offset});
-    $o->{thunk} = eval $code;
+    {
+	my $ctxt = new Eval::Context($o->{file}, $o->{offset});
+	$o->{thunk} = CORE::eval $code;
+    }
     die if $@;
     $o->{ok} = 1;
 }
@@ -84,7 +86,8 @@ in addition to the code to be evaluated.
 
 =head1 BUGS
 
-Allow customization of message mangling?
+Allow customization of message mangling?  This is similar to
+Religion.pm in some ways?
 
 Regression test...?
 

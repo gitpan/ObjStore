@@ -57,7 +57,121 @@ performance, then speed.  If you really want speed, wait 3-6 months
 for Perl5 to get support for kernel threads.  Or see the TODO list
 about dynamic linking your own custom C++ objects.
 
-=head1 TRANSACTIONS
+=head1 OBJECTSTORE API
+
+Much of this API is a direct interface to the C++ API.  Refer to the
+ObjectStore documentation for exact symantics.
+
+=head2 OBJSTORE
+
+=over 4
+
+=item * $name = ObjStore::release_name()
+
+=item * $major = ObjStore::release_major()
+
+=item * $minor = ObjStore::release_minor()
+
+=item * $maintenance = ObjStore::release_maintenance()
+
+=item * $size = ObjStore::get_page_size();
+
+=item * @Servers = ObjStore::get_all_servers();
+
+=item * $in_abort = ObjStore::abort_in_progress();
+
+=back
+
+=head2 ::SERVER
+
+=over 4
+
+=item * $name = $s->get_host_name();
+
+=item * $is_broken = $s->connection_is_broken();
+
+=item * $s->disconnect();
+
+=item * $s->reconnect();
+
+=item * @Databases = $s->get_databases();
+
+=back
+
+=head2 ::DATABASE
+
+=over 4
+
+=item * $DB = ObjStore::Database->open($pathname, $read_only, $mode);
+
+=item * $DB->close();
+
+=item * $DB->destroy();
+
+=item * $DB->get_default_segment_size();
+
+=item * $DB->get_sector_size();
+
+=item * $ctime = $DB->time_created();
+
+=item * $is_open = $DB->is_open();
+
+=item * $DB->open_mvcc();
+
+=item * $is_mvcc = $DB->is_open_mvcc();
+
+=item * $read_only = $DB->is_open_read_only();
+
+=item * $can_write = $DB->is_writable();
+
+=item * $DB->set_fetch_policy(policy[, blocksize]);
+
+Policy can be one of C<segment>, C<page>, or C<stream>.
+
+=item * $DB->set_lock_whole_segment(policy);
+
+Policy can be one of C<as_used>, C<read>, or C<write>.
+
+=item * $DB = ObjStore::Database::of($pvar);
+
+=item * $Seg = $DB->create_segment();
+
+=item * $Seg = $DB->get_segment($segment_number);
+
+=item * @Segments = $DB->get_all_segments();
+
+=item * @Roots = $DB->get_all_roots();
+
+=item * $root = $DB->create_root($root_name);
+
+=item * $root = $DB->find_root($root_name);
+
+=item * $value = $DB->root($root_name[, $new_value]);
+
+If the given root is not found, creates a new one.  Sets the root's
+value if $new_value is defined.  Returns the root's current value.
+
+=item * $DB->destroy_root($root_name);
+
+Destroys the root with the given name if it exists.
+
+=back
+
+=head2 ::ROOT
+
+=over 4
+
+=item * $root->get_name();
+
+=item * $root->get_value();
+
+=item * $root->set_value($new_value);
+
+=item * $root->destroy();
+
+=back
+
+=head2 ::TRANSACTION
 
 ObjectStore transactions and exceptions are seemlessly integrated into
 Perl.
@@ -83,7 +197,45 @@ see if anything went wrong.  For example,
 Needless to say, you cannot access or modify persistent data outside
 of a transaction.
 
-=head1 OBJECTS (CONTAINERS)
+=over 4
+
+=item * $T = ObjStore::Transaction::get_current();
+
+=item * $type = $T->get_type();
+
+=back
+
+=head2 ::SEGMENT
+
+=over 4
+
+=item * $Seg->destroy();
+
+=item * $size = $Seg->size();
+
+=item * $num = $Seg->get_number();
+
+=item * $comment = $Seg->get_comment();
+
+=item * $Seg->set_comment($comment);
+
+=item * $Seg->lock_into_cache();
+
+=item * $Seg->unlock_from_cache();
+
+=item * $Seg->set_fetch_policy($policy[, $size]);
+
+Policy can be one of C<segment>, C<page>, or C<stream>.
+
+=item * $Seg->set_lock_whole_segment($policy);
+
+Policy can be one of C<as_used>, C<read>, or C<write>.
+
+=item * $Seg = ObjStore::Segment::of($pvar);
+
+=back
+
+=head1 CONTAINERS
 
 =over 4
 

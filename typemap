@@ -8,6 +8,7 @@
 
 TYPEMAP
 
+os_server *		O_OBJECT
 os_database *		O_OBJECT
 os_transaction *	O_OBJECT
 os_database_root *	O_OBJECT

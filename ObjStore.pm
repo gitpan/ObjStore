@@ -6,7 +6,7 @@ require 5.004;
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $Exception);
 
-$VERSION = '1.12';  #is string, not a number!
+$VERSION = '1.13';  #is string, not a number!
 
 use Carp;
 use Config;
@@ -82,9 +82,9 @@ use Carp;
 sub root {
     my ($o, $roottag, $nval) = @_;
     my $root = $o->find_root($roottag);
-    if ($nval) {
+    if (defined $nval) {
 	$root ||= $o->create_root($roottag);
-	$root->set_value($nval) if $nval;
+	$root->set_value($nval);
     }
     $root? $root->get_value() : undef;
 }

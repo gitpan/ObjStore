@@ -17,6 +17,7 @@ TODO
 be
 bugrep015834
 bugrep073197
+eval.t
 evo.c
 except.pl
 hv_builtin.c

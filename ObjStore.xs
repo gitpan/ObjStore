@@ -20,6 +20,14 @@ static os_fetch_policy str_2fetch(char *str)
   croak("str_2fetch: %s unrecognized", str);
 }
 
+static objectstore_lock_option str_2lock_option(char *str)
+{
+  if (strcmp(str, "as_used")==0) return objectstore::lock_as_used;
+  if (strcmp(str, "read")==0) return objectstore::lock_segment_read;
+  if (strcmp(str, "write")==0) return objectstore::lock_segment_write;
+  croak("str_2lock_option: %s unrecognized", str);
+}
+
 //----------------------------- Exceptions
 
 DEFINE_EXCEPTION(perl_exception,"Perl-ObjStore Exception",0);
@@ -202,6 +210,41 @@ reftype(ref)
 	ref = SvRV(ref);
 	XSRETURN_PV(sv_reftype(ref, 0));
 
+char *
+release_name()
+	CODE:
+	RETVAL = (char*) objectstore::release_name();
+	OUTPUT:
+	RETVAL
+
+int
+release_major()
+	CODE:
+	RETVAL = objectstore::release_major();
+	OUTPUT:
+	RETVAL
+
+int
+release_minor()
+	CODE:
+	RETVAL = objectstore::release_minor();
+	OUTPUT:
+	RETVAL
+
+int
+release_maintenance()
+	CODE:
+	RETVAL = objectstore::release_maintenance();
+	OUTPUT:
+	RETVAL
+
+int
+get_page_size()
+	CODE:
+	RETVAL = objectstore::get_page_size();
+	OUTPUT:
+	RETVAL
+
 void
 begin_update()
 	CODE:
@@ -220,22 +263,70 @@ begin_abort()
 	os_transaction::begin(os_transaction::abort_only);
 	warn("ObjStore::begin_abort() depreciated");
 
-int
-in_transaction()
-	CODE:
-	RETVAL = os_transaction::get_current() != 0;
-	OUTPUT:
-	RETVAL
-
 void
 commit()
 	CODE:
 	os_transaction::commit();
+	warn("ObjStore::commit() depreciated");
 
 void
 abort()
 	CODE:
 	os_transaction::abort();
+	warn("ObjStore::abort() depreciated - use 'die'");
+
+int
+abort_in_progress()
+	CODE:
+	RETVAL = objectstore::abort_in_progress();
+	OUTPUT:
+	RETVAL
+
+void
+get_all_servers()
+	PPCODE:
+	char *CLASS = "ObjStore::Server";
+	os_int32 num = objectstore::get_n_servers();
+	if (num == 0) XSRETURN_EMPTY;
+	os_server **svrs = new os_server*[num];
+	objectstore::get_all_servers(num, svrs, num);
+	EXTEND(sp, num);
+	int xx;
+	for (xx=0; xx < num; xx++) {
+		PUSHs(sv_setref_pv( newSViv(0) , CLASS, svrs[xx] ));
+	}
+	delete [] svrs;
+
+#-----------------------------# Server
+
+MODULE = ObjStore	PACKAGE = ObjStore::Server
+
+char *
+os_server::get_host_name()
+
+int
+os_server::connection_is_broken()
+
+void
+os_server::disconnect()
+
+void
+os_server::reconnect()
+
+void
+os_server::get_databases()
+	PPCODE:
+	char *CLASS = "ObjStore::Database";
+	os_int32 num = THIS->get_n_databases();
+	if (num == 0) XSRETURN_EMPTY;
+	os_database **dbs = new os_database*[num];
+	THIS->get_databases(num, dbs, num);
+	EXTEND(sp, num);
+	int xx;
+	for (xx=0; xx < num; xx++) {
+		PUSHs(sv_setref_pv( newSViv(0) , CLASS, dbs[xx] ));
+	}
+	delete [] dbs;
 
 #-----------------------------# Database
 
@@ -252,9 +343,6 @@ os_database::close()
 
 void
 os_database::destroy()
-
-void
-os_database::decache()
 
 int
 os_database::get_default_segment_size()
@@ -288,6 +376,12 @@ os_database::set_fetch_policy(policy, ...)
 	int bytes=4096;
 	if (items == 2) bytes = SvIV(ST(1));
 	THIS->set_fetch_policy(str_2fetch(policy), bytes);
+
+void
+os_database::set_lock_whole_segment(policy)
+	char *policy;
+	CODE:
+	THIS->set_lock_whole_segment(str_2lock_option(policy));
 
 os_database *
 of(ospv)
@@ -388,12 +482,29 @@ os_database_root::set_value(sv)
 	THIS->set_value(ossv, OSSV::get_os_typespec());
 	ossv->REF_inc();
 
-#-----------------------------# Transaction (?)
+#-----------------------------# Transaction
 
 MODULE = ObjStore	PACKAGE = ObjStore::Transaction
 
-static os_transaction *
-os_transaction::get_current()
+os_transaction *
+get_current()
+	CODE:
+	char *CLASS = "ObjStore::Transaction";
+	RETVAL = os_transaction::get_current();
+	OUTPUT:
+	RETVAL
+
+char *
+os_transaction::get_type()
+	CODE:
+	switch (THIS->get_type()) {
+	case os_transaction::abort_only: RETVAL = "abort_only"; break;
+	case os_transaction::read_only: RETVAL = "read"; break;
+	case os_transaction::update: RETVAL = "update"; break;
+	default: croak("os_transaction::get_type(): unknown transaction type");
+	}
+	OUTPUT:
+	RETVAL
 
 #-----------------------------# Segment
 
@@ -431,6 +542,12 @@ char *
 os_segment::get_comment()
 
 void
+os_segment::lock_into_cache()
+
+void
+os_segment::unlock_from_cache()
+
+void
 os_segment::set_fetch_policy(policy, ...)
 	char *policy;
 	PROTOTYPE: $;$
@@ -438,6 +555,12 @@ os_segment::set_fetch_policy(policy, ...)
 	int bytes=4096;
 	if (items == 2) bytes = SvIV(ST(1));
 	THIS->set_fetch_policy(str_2fetch(policy), bytes);
+
+void
+os_segment::set_lock_whole_segment(policy)
+	char *policy;
+	CODE:
+	THIS->set_lock_whole_segment(str_2lock_option(policy));
 
 os_segment *
 of(sv)

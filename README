@@ -32,6 +32,11 @@ see ./CHANGES for a historical perspective
 ### RECENT CHANGES ###
 
 
+** 09-11-97 Released 1.13
+
+- Improve ObjectStore API support.
+
+
 ** 09-02-97 Released 1.12
 
 - HTML::PHTML and Eval modules added.  HTML::PHTML gives you a simple

@@ -27,26 +27,26 @@ Of course, there is always room for improvement!
 
 + IDEAS +
 
-Better test scripts for sets?
+Better test scripts?
 
-Avoid stomping on some other version of ref,bless?  Nah.
+API style documentation
 
 Strings can be turned into BLOBs and back.  BLOBs support various
 indexing, including Verity TOM.  Verity full text indexing.
 
+Support for abort_top_level(), and transaction hooks.
+
+Support for notification, database access control?
+
+Support for the database utility API, os_object_cursor?  Who cares?
+
 Programmer friendly C++ / Java access to persistent perl data structures
 
-Support for notification.
-
-Support for database access control?
-
-Support for the database utility API?  Who cares?
-
-ossv_magic could do refcnts during update transactions...?
-
-ospeek option to re-bless all classes?  Only print # instances per class?
+ospeek option to re-bless all classes?
 
 Does anyone want ObjectStore pvars?
+
+Avoid stomping on some other version of ref,bless?
 
 Track down any/all XS transient memory leaks.  (Any?)
 

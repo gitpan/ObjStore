@@ -1,6 +1,7 @@
 package ObjStore::SetEmulation;  # can you spell 'hack' ?
 use Carp;
 use ObjStore;
+require ObjStore::Set;
 use vars qw($VERSION @ISA);
 $VERSION = 'You suck!';
 @ISA = qw(ObjStore::Set ObjStore::HV);

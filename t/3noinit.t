@@ -1,4 +1,4 @@
-use Test;
+use Test; #-*-perl-*-
 BEGIN { plan test => 6 }
 
 use ObjStore::NoInit;
@@ -16,5 +16,10 @@ ok $ObjStore::INITIALIZED;
 ok $ObjStore::CLIENT_NAME, $name;
 ok $ObjStore::CACHE_SIZE, $sz;
 
-eval { ObjStore::NoInit->import(); };
-ok $@ =~ m/too late/;
+{
+    my $warn;
+    local $SIG{__WARN__} = sub { $warn = shift };
+    ObjStore::NoInit->import();
+    ok $warn =~ m/too late/;
+}
+

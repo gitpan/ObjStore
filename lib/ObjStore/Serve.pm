@@ -48,6 +48,27 @@ sub seconds_delta {
     else { int($d/(60*60*24))." days" }
 }
 
+sub get_all_versions {
+    my ($V, @todo) = @_;
+    my @more;
+    for my $pack (@todo) {
+	no strict;
+	while (my ($key,$val) = each %{*{"$pack\::"}}) {
+	    local(*ENTRY) = $val;
+	    if (defined $val and defined *ENTRY{HASH} and $key =~ /::$/ and 
+		$key ne "main::") {
+
+		my($p) = $pack ne "main" ? "$pack\::" : "";
+		($p .= $key) =~ s/::$//;
+		my $ver = $ {"$p\::VERSION"} if defined $ {"$p\::VERSION"};
+		$V->{$p} = $ver if $ver;
+		push @more, $p;
+	    }
+	}
+    }
+    get_all_versions($V, @more) if @more;
+}
+
 sub restart {
     my ($o) = @_;
 
@@ -64,20 +85,22 @@ sub restart {
     $SERVE = $o->new_ref('transient','hard');
     my $h = $$o{history} ||= [];
     my $now = time;
-    $h->UNSHIFT({ restart => $now, mtime => $now, recent => [], total => {} });
+    my $V = {};
+    get_all_versions($V,'main');
+    $h->UNSHIFT({ VERSION => $V, restart => $now, mtime => $now,
+		  recent => [], total => {} });
 }
 
 use vars qw($Status $LoopLevel $ExitLevel);
 
 $LoopLevel = $ExitLevel = 0;
-ObjStore::set_max_retries(0);
+#ObjStore::set_max_retries(0);
 ObjStore::fatal_exceptions(0);
 
 # Don't wait forever! XXX
 for (qw(read write)) { ObjStore::lock_timeout($_,15); }
 
 sub init_signals {
-    $SIG{HUP} = 'IGNORE';
     for my $sig (qw(INT TERM)) {
         $SIG{$sig} = sub { my $why = "SIG$sig\n"; exitloop($why); };
     }
@@ -225,7 +248,8 @@ sub _checkpoint {
             $TXN = ObjStore::Transaction->new($SERVE? 'update' : 'read');
         }
         start_transaction();
-        Event->timer(-after => $LoopTime, -callback => sub {++$Checkpoint});
+        Event->timer(-after => $LoopTime, -callback => sub {++$Checkpoint},
+		     -desc => "checkpoint");
         # don't acquire any unnecessary locks!
     }
 }
@@ -306,14 +330,19 @@ sub async_checkpoint {
         do { 
             lock $TXOpen;
 	    # think about updates XXX
-            $tx = ObjStore::Transaction->new('global', 'read');
+            $tx ||= ObjStore::Transaction->new('global', 'read');
             start_transaction();
         };
         sleep $LoopTime;   #fractional? XXX
         do {
             lock $TXOpen;
 	    before_checkpoint($tx);
-            $tx->commit();
+	    if ($UseOSChkpt and !$tx->is_aborted and $tx->top_level) {
+		$tx->checkpoint();
+	    } else {
+		$tx->commit();
+		$tx = undef;
+	    }
             after_checkpoint();
         };
     }
@@ -348,7 +377,7 @@ sub init_autonotify {
 				    PRIORITY => 2) }
 	      : \&dispatch_notifications);
     $notifyEv = Event->io(-handle => $fh, -events => POLLRDNORM,
-                          -callback => $cb);
+                          -callback => $cb, -desc => "notifications");
 }
 
 #    ObjStore::Notification->set_queue_size(512);

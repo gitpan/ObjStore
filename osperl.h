@@ -3,41 +3,17 @@
 #ifndef __osperl_h__
 #define __osperl_h__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#ifndef __GNUG__
-
-#undef __attribute__
-#define __attribute__(_arg_)
-
-/* This directive is used by gcc to do extra argument checking.  It
-has no affect on correctness; it is just a debugging tool.
-Re-defining it to nothing avoids warnings from the solaris sunpro
-compiler.  If you see warnings on your system, figure out how to force
-your compiler to shut-up, and send me a patch. :-) */
-
-#endif
-
-#include "EXTERN.h"
-#include "perl.h"
-#include "XSUB.h"
-#ifdef __cplusplus
-}
-#endif
-
 #undef rs
 #include <ostore/ostore.hh>
-
-#if !defined(dTHR)
-#define dTHR extern int errno
-#endif
+#include <ostore/osreleas.hh>
 
 #undef croak
 #define croak osp_croak
+extern void osp_croak(const char* pat, ...);
 
-// Merge perl and ObjectStore typedefs...
+// Merge perl and ObjectStore typedefs!
+// It is better to be precise about fields widths in a database,
+// therefore OS types are preferred.
 #undef I32
 #define I32 os_int32
 #undef U32
@@ -47,61 +23,13 @@ your compiler to shut-up, and send me a patch. :-) */
 #undef U16
 #define U16 os_unsigned_int16
 
-#undef assert
-#ifdef OSP_DEBUG
-
-#define assert(what)                                              \
-        if (!(what)) {                                                  \
-            croak("Assertion failed: file \"%s\", line %d",             \
-                __FILE__, __LINE__);                                    \
-        }
-
-#define DEBUG_refcnt(a)   if (osp_thr::fetch()->debug & 1)  a
-#define DEBUG_assign(a)   if (osp_thr::fetch()->debug & 2)  a
-// 0x4: see txn.h
-#define DEBUG_array(a)    if (osp_thr::fetch()->debug & 8)  a
-#define DEBUG_hash(a)     if (osp_thr::fetch()->debug & 16) a
-#define DEBUG_set(a)      if (osp_thr::fetch()->debug & 32) a
-#define DEBUG_cursor(a)   if (osp_thr::fetch()->debug & 64) a
-#define DEBUG_bless(a)    if (osp_thr::fetch()->debug & 128) a
-#define DEBUG_root(a)     if (osp_thr::fetch()->debug & 256) a
-#define DEBUG_splash(a)   if (osp_thr::fetch()->debug & 512) a
-#define DEBUG_txn(a)      if (osp_thr::fetch()->debug & 1024) a
-#define DEBUG_ref(a)	  if (osp_thr::fetch()->debug & 2048) a
-#define DEBUG_wrap(a)	  if (osp_thr::fetch()->debug & 4096) {a}
-#define DEBUG_thread(a)	  if (osp_thr::fetch()->debug & 8192) a
-#define DEBUG_index(a)	  if (osp_thr::fetch()->debug & 16384) a
-#define DEBUG_norefs(a)	  if (osp_thr::fetch()->debug & 32768) a
-#define DEBUG_decode(a)	  if (osp_thr::fetch()->debug & 65536) a
-#else
-#define assert(what)
-#define DEBUG_refcnt(a)
-#define DEBUG_assign(a)
-#define DEBUG_array(a) 
-#define DEBUG_hash(a)
-#define DEBUG_set(a)
-#define DEBUG_cursor(a)
-#define DEBUG_bless(a)
-#define DEBUG_root(a)
-#define DEBUG_splash(a)
-#define DEBUG_txn(a)
-#define DEBUG_ref(a)
-#define DEBUG_wrap(a)
-#define DEBUG_thread(a)
-#define DEBUG_index(a)
-#define DEBUG_norefs(a)
-#define DEBUG_decode(a)
-#endif
-
-typedef void (*XS_t)(CV*);
-
 // OSSV has only 16 bits to store type information.  Yikes!
 
 // NOTE: It probably would have been slightly more efficient to make
 // 0=UNDEF instead of 1=UNDEF.  At the time I felt the extra checking
 // was worth it.
 
-#define OSVt_ERROR		0	// should never be zero
+#define OSVt_UNDEF2		0
 #define OSVt_UNDEF		1
 #define OSVt_IV32		2
 #define OSVt_NV			3
@@ -233,11 +161,10 @@ struct OSSVPV : os_virtual_behavior {
   int _is_blessed();
   int can_update(void *vptr);
   void NOTFOUND(char *meth);
-  HV *stash(int create);
-  char *blessed_to(STRLEN *len);
   void fwd2rep(char *methname, SV **top, int items);
+  HV *get_stash();
+
   virtual void bless(SV *);
-  virtual ospv_bridge *new_bridge();
   virtual char *os_class(STRLEN *len);  //must be NULL terminated too
   virtual char *rep_class(STRLEN *len);
   virtual int get_perl_type();
@@ -245,6 +172,25 @@ struct OSSVPV : os_virtual_behavior {
   virtual OSSV *traverse(char *keyish);
   virtual OSSVPV *traverse2(char *keyish);
   virtual void ROSHARE_set(int on);
+  // C++ cast hacks
+  virtual int is_OSPV_Ref2();
+};
+
+struct OSPVptr {
+  static os_typespec *get_os_typespec();
+  OSSVPV *rv;
+  OSPVptr() :rv(0) {}
+  ~OSPVptr() { set_undef(); }
+  void set_undef() { if (rv) { rv->REF_dec(); rv=0; } }
+  void operator=(OSSVPV *npv) { set_undef(); rv=npv; rv->REF_inc(); }
+  operator OSSVPV*() { return rv; }
+  OSSVPV *resolve() { return rv; }
+  void steal(OSPVptr &nval) { set_undef(); rv = nval.rv; nval.rv=0; }
+
+  // DANGER // DANGER // DANGER //
+  void FORCEUNDEF() { /*REF_dec*/ rv=0; }
+  OSSVPV *detach() { OSSVPV *ret = rv; /*REF_dec*/ rv=0; return ret; }
+  void attach(OSSVPV *nval) { set_undef(); rv = nval; /*REF_inc*/ }
 };
 
 struct OSPV_Ref2 : OSSVPV {
@@ -255,6 +201,7 @@ struct OSPV_Ref2 : OSSVPV {
   virtual int deleted();
   virtual OSSVPV *focus();
   virtual char *dump();
+  virtual int is_OSPV_Ref2();
 };
 
 struct OSPV_Ref2_hard : OSPV_Ref2 {
@@ -279,8 +226,10 @@ struct OSPV_Ref2_protect : OSPV_Ref2 {
   virtual char *dump();
 };
 
-// A cursor must be a single composite object.  Otherwise you would
-// need cursors for cursors.
+struct OSPV_Cursor; //XXX
+
+// A cursor must be a single composite object.  Otherwise you
+// need cursors for cursors!
 
 struct OSPV_Cursor2 : OSSVPV {
   static os_typespec *get_os_typespec();
@@ -300,7 +249,6 @@ struct OSPV_Cursor2 : OSSVPV {
   virtual I32 pos();
   virtual void stats();
 };
-struct OSPV_Cursor; //XXX
 
 // Any OSSVPV that contains pointers to other OSSVPVs (except a cursor)
 // must be a container.  Also note that the STORE method must be compatible
@@ -312,6 +260,22 @@ struct OSPV_Container : OSSVPV {
   virtual int FETCHSIZE();
   virtual void CLEAR();
   virtual OSSVPV *new_cursor(os_segment *seg);
+};
+
+// simple hash slot -- use it or write your own
+struct hvent2 {
+  static os_typespec *get_os_typespec();
+  char *hk;
+  OSSV hv;
+  hvent2();
+  ~hvent2();
+  void FORCEUNDEF();
+  void set_undef();
+  int valid() const;
+  void set_key(char *nkey);
+//  hvent2 *operator=(int zero);
+  int rank(const char *v2);
+  SV *key_2sv();
 };
 
 // Methods should accept SV* and return OSSV*, OSPV_*, or void 
@@ -336,29 +300,32 @@ struct OSPV_Generic : OSPV_Container {
   virtual SV *NEXT(ospv_bridge*);
   // array
   virtual OSSV *avx(int xx);
-  virtual SV *POP();
-  virtual SV *SHIFT();
+  virtual void POP();
+  virtual void SHIFT();
   virtual void PUSH(SV **base, int items);
   virtual void UNSHIFT(SV **base, int items);
   virtual void SPLICE(int offset, int length, SV **top, int count);
   // index
   virtual int add(OSSVPV *);
-  virtual void remove(OSSVPV *);
+  virtual char *remove(OSSVPV *);
   virtual void configure(SV **top, int items);
   virtual OSSVPV *FETCHx(SV *keyish);
   static OSSV *path_2key(OSSVPV *obj, OSPV_Generic *path);
-  // sets : depreciated
-  virtual void set_add(SV *);
-  virtual int set_contains(SV *);
-  virtual void set_rm(SV *);
 };
 
 #define INDEX_MAXKEYS 8
 
 struct osp_pathref {
+  int descending;
+  int keycnt;
   OSPV_Generic *pcache[INDEX_MAXKEYS];
   OSSV *keys[INDEX_MAXKEYS];
-  int keycnt;
+  osp_pathref();
+  void init(OSSVPV *paths);
+  void init(OSSVPV *paths, OSSVPV *target);
+  void set_descending(int descend);
+  int compare(OSSVPV *);
+  int compare(OSSVPV *d1, OSSVPV *d2);
 };
 
 struct osp_pathexam : osp_pathref {
@@ -367,28 +334,13 @@ struct osp_pathexam : osp_pathref {
   int trailcnt;
   int is_excl;
   int excl_ok;
+  int is_transient;
   char mode;
-  osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode, int excl);
+  osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode, int excl,
+	       int in_transient);
   void abort();
   void commit();
 };
-
-#if !OSSG
-#include "txn.h"
-
-struct ospv_bridge : osp_bridge {
-  OSSVPV *pv;
-
-  ospv_bridge(OSSVPV *_pv);
-  virtual void unref();
-  virtual void hold();
-  virtual int is_weak();
-  OSSVPV *ospv();
-
-  // Probably should avoid sub-classing XXX
-};
-
-#endif
 
 ////////////////////////////////////////////////////////////////////////
 // DEPRECIATED (but still included for schema compatibility)
@@ -415,6 +367,247 @@ struct OSPV_Cursor : OSPV_Ref {
   virtual void next();
 };
 
+#if !OSSG
+/*
+  Safety, then Speed;  There are lots of interlocking refcnts:
+
+  - Each bridge has a refcnt to the SV that holds it's transaction.
+
+  - Each transaction has a linked ring of bridges.
+
+  - Each bridge has a refcnt to the persistent object, but only
+    during updates (and in writable databases).
+ */
+
+struct osp_txn;
+struct osp_bridge_link {
+  osp_bridge_link *next, *prev;
+};
+struct osp_bridge : osp_bridge_link {
+  int refs;
+  int detached;
+  int manual_hold;
+  int holding;  //true if changed REFCNT
+  SV *txsv;				// my transaction scope
+
+#ifdef OSP_DEBUG  
+  int br_debug;
+#define BrDEBUG(b) b->br_debug
+#define BrDEBUG_set(b,to) BrDEBUG(b)=to
+#define DEBUG_bridge(br,a)   if (BrDEBUG(br) || osp_thr::fetch()->debug & 4) a
+#else
+#define BrDEBUG(b) 0
+#define BrDEBUG_set(b,to)
+#define DEBUG_bridge(br,a)
+#endif
+
+  void init();
+  osp_txn *get_transaction();
+  void leave_perl();
+  void enter_txn(osp_txn *txn);
+  void leave_txn();
+  int invalid();
+  virtual void freelist();
+  virtual ~osp_bridge();
+  virtual void unref();
+  virtual void hold();
+  virtual int is_weak();
+};
+
+// ODI seemed to want to restrict tix_handlers to lexical scope.  We trump
+// them:
+struct dytix_handler {
+  tix_handler hand;
+  dytix_handler();
+};
+
+#ifdef DEBUG_ALLOCATION
+
+#define NEW_OS_OBJECT(ret, near, typespec, type)	\
+STMT_START {						\
+  osp_thr::record_new(0,"before", #type);			\
+  ret = new(near, typespec) type;			\
+  osp_thr::record_new(ret,"after", #type);			\
+} STMT_END
+
+
+#define NEW_OS_ARRAY(ret, near, typespec, type, width)	\
+STMT_START {						\
+  osp_thr::record_new(0, "before", #type, width);		\
+  ret = new(near, typespec, width) type[width];		\
+  osp_thr::record_new(ret, "after", #type, width);		\
+} STMT_END
+
+#else
+
+#define NEW_OS_OBJECT(ret, near, typespec, type)	\
+  ret = new(near, typespec) type
+
+#define NEW_OS_ARRAY(ret, near, typespec, type, width)	\
+  ret = new(near, typespec, width) type[width]
+
+#endif
+
+
+// per-thread globals
+struct osp_thr {
+  osp_thr();
+  ~osp_thr();
+
+  //global globals
+  static void boot();
+  static osp_thr *fetch();
+  static SV *stargate;
+  static HV *CLASSLOAD;
+  static SV *TXGV;
+  static AV *TXStack;
+
+  //methods
+  static void record_new(void *vptr, char *when, char *type, int ary=0);
+
+  //context
+  long signature;
+  long debug;
+  SV *errsv;
+  dytix_handler *hand;
+  char *report;
+
+  //glue methods
+  ospv_bridge *ospv_freelist;
+  static os_segment *sv_2segment(SV *);
+  static ospv_bridge *sv_2bridge(SV *, int force, os_segment *near=0);
+  static SV *ossv_2sv(OSSV *ossv, int hold=0);
+  static SV *ospv_2sv(OSSVPV *, int hold=0);
+  static SV *wrap(OSSVPV *ospv, SV *br);
+
+  OSSV *plant_sv(os_segment *, SV *);
+  OSSV *plant_ospv(os_segment *seg, OSSVPV *pv);
+  void push_ospv(OSSVPV *pv);
+};
+
+struct osp_txn {
+  osp_txn(os_transaction::transaction_type_enum,
+	  os_transaction::transaction_scope_enum);
+  int is_aborted();
+  void abort();
+  void commit();
+  void pop();
+//  void burn_bridge();
+  void checkpoint();
+  void post_transaction();
+  int can_update(os_database *);
+  int can_update(void *);
+  void prepare_to_commit();
+  int is_prepare_to_commit_invoked();
+  int is_prepare_to_commit_completed();
+
+  os_transaction::transaction_type_enum tt;
+  os_transaction::transaction_scope_enum ts;
+  os_transaction *os;
+  U32 owner;   //for local transactions; not yet XXX
+  osp_bridge_link ring;
+};
+
+#define dOSP osp_thr *osp = osp_thr::fetch()
+#define dTXN							\
+mysv_lock(osp_thr::TXGV);					\
+osp_txn *txn = 0;						\
+if (AvFILL(osp_thr::TXStack) >= 0) {				\
+  SV *_txsv = SvRV(*av_fetch(osp_thr::TXStack,			\
+			    AvFILL(osp_thr::TXStack), 0));	\
+  txn = (osp_txn*) SvIV(_txsv);					\
+}
+
+
+// THESE MACROS CAN PROBABLY BE REMOVED NOW
+//
+// 1. REMOVE THEM
+// 2. RE-TEST
+// 3. GRIN
+
+#define OSP_START0				\
+STMT_START {					\
+int odi_cxx_ok=0;				\
+TIX_HANDLE(all_exceptions)
+
+#define OSP_ALWAYS0 \
+odi_cxx_ok=1;							\
+TIX_EXCEPTION							\
+  sv_setpv(osp->errsv, tix_local_handler.get_report());		\
+TIX_END_HANDLE							\
+
+#define OSP_END0						\
+if (!odi_cxx_ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));\
+} STMT_END;
+
+#define OSP_ALWAYSEND0 OSP_ALWAYS0 OSP_END0
+
+struct osp_smart_object {
+  virtual void REF_inc();
+  virtual void REF_dec();
+  virtual ~osp_smart_object();
+};
+
+// do not use as a super-class!!
+struct ospv_bridge : osp_bridge {
+  OSSVPV *pv;
+  osp_smart_object *info;
+
+  virtual void init(OSSVPV *_pv);
+  virtual void unref();
+  virtual void hold();
+  virtual int is_weak();
+  virtual void freelist();
+  OSSVPV *ospv();
+};
+
+#ifdef OSPERL_PRIVATE
+#define OSP_INIT(z) z
+#else
+#define OSP_INIT(z)
+#endif
+
+// Safe, easy, embedded, fixed maximum length strings
+// Can you tell that I hate templates?
+#define DECLARE_FIXEDSTRING(W)				\
+struct FixedStr ## W {					\
+  static os_typespec *get_os_typespec();		\
+  static int maxlen;					\
+  os_unsigned_int8 len;					\
+  char ch[ W ];						\
+  void set(char *pv, STRLEN pvn) {			\
+    len = (pvn > maxlen)? maxlen : pvn;			\
+    memcpy(ch, pv, len);				\
+  }							\
+  void operator=(char *pv) { set(pv,strlen(pv)); }	\
+  void operator=(SV *sv) {				\
+    STRLEN tmp;						\
+    char *pv = SvPV(sv, tmp);				\
+    set(pv,tmp);					\
+  }							\
+  SV *svcopy() { return newSVpvn(ch, len); }		\
+};							\
+OSP_INIT(int FixedStr##W::maxlen = W;)
+
+// Conservative alignment dictates sizeof a multiple of 4 bytes.
+//
+// Anything longer than 35 characters can probably afford
+// real allocation overhead.
+//
+DECLARE_FIXEDSTRING(3)
+DECLARE_FIXEDSTRING(7)
+DECLARE_FIXEDSTRING(11)
+DECLARE_FIXEDSTRING(15)
+DECLARE_FIXEDSTRING(19)
+DECLARE_FIXEDSTRING(23)
+DECLARE_FIXEDSTRING(27)
+DECLARE_FIXEDSTRING(31)
+DECLARE_FIXEDSTRING(35)
+#undef DECLARE_FIXSTRING
+
+#endif
+
+// These are temporary and might disappear!
 extern "C" void mysv_dump(SV *sv);
 extern "C" void mysv_lock(SV *sv);
 

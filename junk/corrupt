@@ -1,8 +1,0 @@
-ObjectStore releases prior to ObjectStore 5.0.3 (at least on solaris)
-have a hard to trigger bug that causes database corruption when
-allocating large numbers of strings.  Eariler releases are perfectly
-fine for most applications, but you should upgrade to 5.0.3 for the
-best reliability.
-
--------------------------------------------------------------------------
-

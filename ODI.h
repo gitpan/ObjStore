@@ -11,7 +11,6 @@ struct OSPV_hvdict : OSPV_Generic {
   os_Dictionary < hkey, OSSV* > hv;
   OSPV_hvdict(os_unsigned_int32);
   virtual ~OSPV_hvdict();
-  virtual ospv_bridge *new_bridge();
   virtual OSSVPV *new_cursor(os_segment *seg);
   virtual char *os_class(STRLEN *);
   virtual char *rep_class(STRLEN *);
@@ -38,3 +37,4 @@ struct OSPV_hvdict_cs : OSPV_Cursor {
   virtual void at();
   virtual void next();
 };
+

@@ -66,6 +66,11 @@ Usage: posh [switches] [database [class]]
     }
 }
 
+# this is probably wrong XXX
+require ObjStore::REP::Splash;
+require ObjStore::REP::FatTree;
+require ObjStore::REP::ODI;
+
 package input;
 use ObjStore ':ADV';
 use vars qw($at $db $cursor $view);
@@ -506,7 +511,7 @@ sub new {
     $o->{app} = ObjStore::AppInstance->new('posh', $o->{user});
     $o->{ttype} = $open_mode eq 'mvcc'? 'read' : 'update';
 
-    ObjStore::set_max_retries(0);
+#    ObjStore::set_max_retries(0);
     $ObjStore::TRANSACTION_PRIORITY = 0x100; #don't conflict with real jobs
     begin('update', sub {
 	      my $t = $o->{app}->top();

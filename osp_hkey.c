@@ -1,3 +1,4 @@
+#include "osp-preamble.h"
 #include "osperl.h"
 #include "osp_hkey.h"
 
@@ -33,7 +34,9 @@ hkey *hkey::operator=(const hkey &k1)
   set_undef();
   len = k1.len;
   if (len) {
-    pv = new(os_segment::of(this), os_typespec::get_char(), len) char[len];
+    NEW_OS_ARRAY(pv, os_segment::of(this), os_typespec::get_char(), char, len);
+//    pv = new(os_segment::of(this), os_typespec::get_char(), len) char[len];
+//    warn("fill '%s'\n", k1.pv);
     memcpy(pv, k1.pv, len);
   }
   DEBUG_hash(warn("hkey(0x%x)->operator=(%s=0x%x,%d)",
@@ -52,7 +55,9 @@ void hkey::s(const char *k1, os_unsigned_int32 nlen)
   set_undef();
   len = nlen;
   if (len) {
-    pv = new(os_segment::of(this), os_typespec::get_char(), len) char[len];
+    NEW_OS_ARRAY(pv, os_segment::of(this), os_typespec::get_char(), char, len);
+//    pv = new(os_segment::of(this), os_typespec::get_char(), len) char[len];
+//    warn("fill '%s'\n", k1);
     memcpy(pv, k1, len);
   }
   DEBUG_hash(warn("hkey(0x%x)->s(%s=0x%x,%d)",

@@ -4,6 +4,9 @@
 #include "splash.h"
 #include "osp_hkey.h"
 
+
+/////////////// DEPRECIATED
+
 struct hent {
   static os_typespec *get_os_typespec();
   hkey hk;
@@ -48,6 +51,7 @@ struct OSPV_hvarray_cs : OSPV_Cursor {
   virtual void next();
 };
 
+
 struct OSPV_setarray : OSPV_Generic {
   static os_typespec *get_os_typespec();
   SPList < OSSV > cv;
@@ -77,10 +81,7 @@ struct OSPV_setarray_cs : OSPV_Cursor {
   virtual void next();
 };
 
-// ObjectStore collections
-#include <ostore/coll.hh>
-#include <ostore/coll/cursor.hh>
-#include <ostore/coll/dict_pt.hh>
+// DEPRECIATED
 
 struct OSPV_sethash : OSPV_Generic {
   static os_typespec *get_os_typespec();

@@ -1,0 +1,345 @@
+[PATCH 5.004_66] Overloaded <>, ${} and friends
+
+
+
+       From: Ilya Zakharevich <ilya@math.ohio-state.edu> 
+       To: perl5-porters@perl.org (Mailing list Perl5) 
+       Date: Tue, 9 Jun 1998 22:17:41 -0400 (EDT) 
+       Message-Id: <199806100217.WAA04854@monk.mps.ohio-state.edu> 
+
+
+
+This patch is two-headed.  
+
+a) It adds support for new overloaded method
+   '<>', which is triggered on both
+
+        <$iter>;
+        <${iter}>;
+
+   This makes it possible to have iterators in Perl.
+
+   The patch may also speed up <$var> a little bit by inlining most
+   frequently used parts of pp_rv2gv.
+
+b) It also adds *experimental* support for overloaded dereferencing in
+   Perl.  The corresponding method names are '${}', '@{}', '%{}', '*{}', 
+   '&{}'.
+
+   The overloading happens on the level of *language* only.  If the
+   core dereferences the overloaded reference, it will see the actual
+   contents.  However, if the script contains 
+
+        $obj->{foo}
+
+   this is subject to overloading.  If usage shows that this distinction 
+   causes sufficient confusion, the whole concept may be removed from Perl.
+
+c) Both overloaded-<> and overloaded-dereference are made optional in purpose
+   of backward-compatibility.  This means that if "fallback" is not
+   prohibited, and the overloaded methods are not defined for the given
+   package, then the standard ways to do <> and dereference is used for
+   the given object.
+
+I have no time to correct documentation/tests now, but maybe in a week I
+will have time for _simple_ matters like docs/tests (not for excessive
+debugging).
+
+Enjoy,
+Ilya
+
+--- ./perl.h.orig       Mon Jun  8 22:58:00 1998
++++ ./perl.h    Tue Jun  9 01:47:42 1998
+@@ -2106,7 +2106,44 @@ EXT MGVTBL vtbl_amagicelem;
+ 
+ #ifdef OVERLOAD
+ 
+-#define NofAMmeth 58
++enum {
++  fallback_amg,        abs_amg,
++  bool__amg,   nomethod_amg,
++  string_amg,  numer_amg,
++  add_amg,     add_ass_amg,
++  subtr_amg,   subtr_ass_amg,
++  mult_amg,    mult_ass_amg,
++  div_amg,     div_ass_amg,
++  modulo_amg,  modulo_ass_amg,
++  pow_amg,     pow_ass_amg,
++  lshift_amg,  lshift_ass_amg,
++  rshift_amg,  rshift_ass_amg,
++  band_amg,    band_ass_amg,
++  bor_amg,     bor_ass_amg,
++  bxor_amg,    bxor_ass_amg,
++  lt_amg,      le_amg,
++  gt_amg,      ge_amg,
++  eq_amg,      ne_amg,
++  ncmp_amg,    scmp_amg,
++  slt_amg,     sle_amg,
++  sgt_amg,     sge_amg,
++  seq_amg,     sne_amg,
++  not_amg,     compl_amg,
++  inc_amg,     dec_amg,
++  atan2_amg,   cos_amg,
++  sin_amg,     exp_amg,
++  log_amg,     sqrt_amg,
++  repeat_amg,   repeat_ass_amg,
++  concat_amg,  concat_ass_amg,
++  copy_amg,    neg_amg,
++  to_sv_amg,   to_av_amg,
++  to_hv_amg,   to_gv_amg,
++  to_cv_amg,   iter_amg,    
++  max_amg_code,
++};
++
++#define NofAMmeth max_amg_code
++
+ #ifdef DOINIT
+ EXTCONST char * AMG_names[NofAMmeth] = {
+   "fallback",  "abs",                  /* "fallback" should be the first. */
+@@ -2137,7 +2174,10 @@ EXTCONST char * AMG_names[NofAMmeth] = {
+   "log",       "sqrt",
+   "x",         "x=",
+   ".",         ".=",
+-  "=",         "neg"
++  "=",         "neg",
++  "${}",       "@{}",
++  "%{}",       "*{}",
++  "&{}",       "<>",
+ };
+ #else
+ EXTCONST char * AMG_names[NofAMmeth];
+@@ -2167,37 +2207,6 @@ typedef struct am_table_short AMTS;
+ #define AMT_AMAGIC_on(amt)     ((amt)->flags |= AMTf_AMAGIC)
+ #define AMT_AMAGIC_off(amt)    ((amt)->flags &= ~AMTf_AMAGIC)
+ 
+-enum {
+-  fallback_amg,        abs_amg,
+-  bool__amg,   nomethod_amg,
+-  string_amg,  numer_amg,
+-  add_amg,     add_ass_amg,
+-  subtr_amg,   subtr_ass_amg,
+-  mult_amg,    mult_ass_amg,
+-  div_amg,     div_ass_amg,
+-  modulo_amg,  modulo_ass_amg,
+-  pow_amg,     pow_ass_amg,
+-  lshift_amg,  lshift_ass_amg,
+-  rshift_amg,  rshift_ass_amg,
+-  band_amg,    band_ass_amg,
+-  bor_amg,     bor_ass_amg,
+-  bxor_amg,    bxor_ass_amg,
+-  lt_amg,      le_amg,
+-  gt_amg,      ge_amg,
+-  eq_amg,      ne_amg,
+-  ncmp_amg,    scmp_amg,
+-  slt_amg,     sle_amg,
+-  sgt_amg,     sge_amg,
+-  seq_amg,     sne_amg,
+-  not_amg,     compl_amg,
+-  inc_amg,     dec_amg,
+-  atan2_amg,   cos_amg,
+-  sin_amg,     exp_amg,
+-  log_amg,     sqrt_amg,
+-  repeat_amg,   repeat_ass_amg,
+-  concat_amg,  concat_ass_amg,
+-  copy_amg,    neg_amg
+-};
+ 
+ /*
+  * some compilers like to redefine cos et alia as faster
+--- ./toke.c.orig       Tue Jun  9 01:07:18 1998
++++ ./toke.c    Tue Jun  9 03:09:56 1998
+@@ -5212,15 +5212,15 @@ scan_inputsymbol(char *start)
+            if ((tmp = pad_findmy(d)) != NOT_IN_PAD) {
+                OP *o = newOP(OP_PADSV, 0);
+                o->op_targ = tmp;
+-               lex_op = (OP*)newUNOP(OP_READLINE, 0, newUNOP(OP_RV2GV, 0, o));
++               lex_op = (OP*)newUNOP(OP_READLINE, 0, o);
+            }
+            else {
+                GV *gv = gv_fetchpv(d+1,TRUE, SVt_PV);
+                lex_op = (OP*)newUNOP(OP_READLINE, 0,
+-                                       newUNOP(OP_RV2GV, 0,
+                                            newUNOP(OP_RV2SV, 0,
+-                                               newGVOP(OP_GV, 0, gv))));
++                                               newGVOP(OP_GV, 0, gv)));
+            }
++           lex_op->op_flags |= OPf_SPECIAL;
+            /* we created the ops in lex_op, so make yylval.ival a null op */
+            yylval.ival = OP_NULL;
+        }
+--- ./pp.h.orig Fri May 29 07:00:20 1998
++++ ./pp.h      Tue Jun  9 01:18:14 1998
+@@ -198,19 +198,23 @@
+ #define AMG_CALLbinL(left,right,meth) \
+             amagic_call(left,right,CAT2(meth,_amg),AMGf_noright)
+ 
+-#define tryAMAGICunW(meth,set) STMT_START { \
++#define tryAMAGICunW(meth,set,shift) STMT_START { \
+           if (amagic_generation) { \
+            SV* tmpsv; \
+-           SV* arg= *(sp); \
++           SV* arg= *(sp+shift); \
+            if ((SvAMAGIC(arg))&&\
+                (tmpsv=AMG_CALLun(arg,meth))) {\
+-              SPAGAIN; \
++              SPAGAIN; sp+=shift; \
+               set(tmpsv); RETURN; } \
+          } \
+        } STMT_END
+ 
++#define FORCE_SETs(sv) STMT_START { sv_setsv(TARG, (sv)); SETTARG; } STMT_END
++
+ #define tryAMAGICun    tryAMAGICunSET
+-#define tryAMAGICunSET(meth) tryAMAGICunW(meth,SETs)
++#define tryAMAGICunSET(meth) tryAMAGICunW(meth,SETs,0)
++#define tryAMAGICunTARGET(meth, shift) {dSP; dTARGETSTACKED;           \
++             tryAMAGICunW(meth,FORCE_SETs,shift);}
+ 
+ #define opASSIGN (op->op_flags & OPf_STACKED)
+ #define SETsv(sv)      STMT_START {                                    \
+--- ./pp_hot.c.orig     Fri May 29 07:00:20 1998
++++ ./pp_hot.c  Tue Jun  9 03:26:22 1998
+@@ -194,7 +194,23 @@ PP(pp_padsv)
+ 
+ PP(pp_readline)
+ {
++    tryAMAGICunTARGET(iter, 0);
+     last_in_gv = (GV*)(*stack_sp--);
++    if (op->op_flags & OPf_SPECIAL) {  /* Are called as <$var> */
++       if (SvROK(last_in_gv)) {
++           if (SvTYPE(SvRV(last_in_gv)) != SVt_PVGV) 
++               goto hard_way;
++           last_in_gv = (GV*)SvRV(last_in_gv);
++       } else if (SvTYPE(last_in_gv) != SVt_PVGV) {
++         hard_way: {
++           dSP;
++           XPUSHs((SV*)last_in_gv);
++           PUTBACK;
++           pp_rv2gv(ARGS);
++           last_in_gv = (GV*)(*stack_sp--);
++         }
++       }
++    }
+     return do_readline();
+ }
+ 
+@@ -389,7 +405,9 @@ PP(pp_print)
+ 
+ PP(pp_rv2av)
+ {
+-    djSP; dPOPss;
++  djSP; dPOPss;  tryAMAGICun(to_av);
++  {
++
+     AV *av;
+ 
+     if (SvROK(sv)) {
+@@ -469,11 +487,14 @@ PP(pp_rv2av)
+        PUSHi(maxarg);
+     }
+     RETURN;
++  }
+ }
+ 
+ PP(pp_rv2hv)
+ {
+-    djSP; dTOPss;
++  djSP; dTOPss;  tryAMAGICun(to_hv);
++  {
++
+     HV *hv;
+ 
+     if (SvROK(sv)) {
+@@ -550,6 +571,7 @@ PP(pp_rv2hv)
+        SETTARG;
+        RETURN;
+     }
++  }
+ }
+ 
+ PP(pp_aassign)
+--- ./pp_sys.c.orig     Fri May 29 10:17:46 1998
++++ ./pp_sys.c  Tue Jun  9 01:08:06 1998
+@@ -235,6 +235,8 @@ PP(pp_backtick)
+ PP(pp_glob)
+ {
+     OP *result;
++    tryAMAGICunTARGET(iter, -1);
++
+     ENTER;
+ 
+ #ifndef VMS
+--- ./pp.c~     Fri May 29 07:00:20 1998
++++ ./pp.c      Tue Jun  9 03:20:16 1998
+@@ -207,7 +207,8 @@ PP(pp_padany)
+ 
+ PP(pp_rv2gv)
+ {
+-    djSP; dTOPss;
++  djSP; dTOPss;  tryAMAGICun(to_gv);
++  {
+ 
+     if (SvROK(sv)) {
+       wasref:
+@@ -248,12 +249,13 @@ PP(pp_rv2gv)
+        save_gp((GV*)sv, !(op->op_flags & OPf_SPECIAL));
+     SETs(sv);
+     RETURN;
++  }
+ }
+ 
+ PP(pp_rv2sv)
+ {
+-    djSP; dTOPss;
+-
++  djSP; dTOPss;  tryAMAGICun(to_gv);
++  {
+     if (SvROK(sv)) {
+       wasref:
+        sv = SvRV(sv);
+@@ -297,6 +299,7 @@ PP(pp_rv2sv)
+     }
+     SETs(sv);
+     RETURN;
++  }
+ }
+ 
+ PP(pp_av2arylen)
+@@ -348,7 +351,9 @@ PP(pp_pos)
+ 
+ PP(pp_rv2cv)
+ {
+-    djSP;
++  djSP;  tryAMAGICun(to_cv);
++  {
++
+     GV *gv;
+     HV *stash;
+ 
+@@ -363,6 +368,7 @@ PP(pp_rv2cv)
+        cv = (CV*)&sv_undef;
+     SETs((SV*)cv);
+     RETURN;
++  }
+ }
+ 
+ PP(pp_prototype)
+--- ./gv.c~     Fri May 29 07:00:10 1998
++++ ./gv.c      Tue Jun  9 14:45:08 1998
+@@ -1241,6 +1241,15 @@ amagic_call(SV *left, SV *right, int met
+             lr = 1;
+           }
+           break;
++        case iter_amg:                 /* XXXX Eventually should do to_gv. */
++        case to_sv_amg:
++        case to_av_amg:
++        case to_hv_amg:
++        case to_gv_amg:
++        case to_cv_amg:
++            /* FAIL safe */
++            return NULL;       /* Delegate operation to standard mechanisms. */
++            break;
+         default:
+           goto not_found;
+         }
+

@@ -127,6 +127,8 @@ sub do_execute {
     require ObjStore::Peeker;
     my ($o, $in) = @_;
 
+    $$o{mtime} = time;  #make sure the GUI knows!
+    $in ||= '';
     $in =~ s/\s+$//;
     $in =~ s/^\s+//;
     my $hist = $$o{history} ||= [];
@@ -136,7 +138,6 @@ sub do_execute {
     # use a fresh transaction: speed doesn't matter compared to safety
     begin sub {
 	local $Carp::Verbose = 1;
-	$$o{mtime} = time;
 	$$o{why} = '';
 	$$o{out} = '';
 	

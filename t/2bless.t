@@ -90,7 +90,7 @@ begin 'update', sub {
     ok(ref $p1 eq 'PTest') or warn $p1;
     
     $j->{obj} = bless $p1, 'PTest';
-    ok($j->{obj} ne $transient) or warn $transient;
+    ok("$j->{obj}" ne $transient) or warn $transient;
     ok(ref $j->{obj} eq 'PTest') or warn $j->{obj};
 
     $j->{obj} = new PTest($db);

@@ -42,13 +42,13 @@ sub testify {
     ok($a->FETCH($a->FETCHSIZE()-1) == 1);
     for (1..2) { $a->POP; }
     my $e = $a->POP;
-    ok($e == 69) or warn $e;
+    ok($e, 69);
     
     ok($a->UNSHIFT(1,2,[]) == 3);
     ok($a->FETCH(0) == 1) or warn $a->FETCH(0);
     $a->SHIFT;
     $e = $a->SHIFT;
-    ok($e == 2) or warn $e;
+    ok($e, 2);
     $a->SHIFT;
     
     $a->const;
@@ -71,6 +71,9 @@ sub testify {
 	ok(0);
     }
 };
+
+require ObjStore::REP::Splash;
+require ObjStore::REP::FatTree;
 
 for my $rep (keys %ObjStore::AV::REP) {
     begin 'update', sub {

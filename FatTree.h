@@ -15,8 +15,8 @@ struct OSPV_fattree_av : OSPV_Generic {
   virtual OSSV *avx(int xx);
   virtual OSSV *FETCH(SV *xx);
   virtual OSSV *STORE(SV *xx, SV *value);
-  virtual SV *POP();
-  virtual SV *SHIFT();
+  virtual void POP();
+  virtual void SHIFT();
   virtual void PUSH(SV **base, int items);
   virtual void UNSHIFT(SV **base, int items);
   virtual void SPLICE(int offset, int length, SV **top, int count);
@@ -38,12 +38,11 @@ struct OSPV_fatindex2 : OSPV_Generic {
   virtual int get_perl_type();
   virtual void CLEAR();
   virtual int add(OSSVPV*);
-  virtual void remove(OSSVPV*);
+  virtual char *remove(OSSVPV*);
   virtual OSSVPV *FETCHx(SV *xx);
   virtual double _percent_filled();
   virtual int FETCHSIZE();
   virtual OSSVPV *new_cursor(os_segment *seg);
-  virtual OSSV *traverse(char *keyish);
   virtual OSSVPV *traverse2(char *keyish);
 };
 

@@ -6,8 +6,7 @@ use vars qw($VERSION);
 $VERSION = '0.02';
 
 sub new {
-    # $id should be probably be formed with:
-    #    join('.', `hostname`, $$, $id++);
+    # a unique $id could be constructed with join('.', `hostname`, $$, $id++);
 
     my ($class, $near, $id, $priority) = @_;
     # uses real pointers so must be per-database...

@@ -50,7 +50,7 @@ begin 'update', sub {
 	    $nums->add({num => -80000 + $_ * 40000 });
 	    $nums->add({typo => 20 * $_});
 	}
-	my $e = new ObjStore::HV($nums, { typo => 20 });
+	my $e = ObjStore::HV->new($nums, { typo => 20 });
 	$nums->remove($e);
 	for (.0005, .5, $nums->[$nums->FETCHSIZE()-1]->{num}) {
 	    $e->{num} = $_;

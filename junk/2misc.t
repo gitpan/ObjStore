@@ -1,6 +1,6 @@
 # even obscure -*-perl-*- should work
 use Test 1.03;
-BEGIN { plan tests => 16 }
+BEGIN { plan tests => 15 }
 
 use ObjStore ':ADV';
 use lib './t';
@@ -19,7 +19,7 @@ ok !defined ObjStore::get_all_servers();
 
 ObjStore::network_servers_available();
 ObjStore::get_page_size();
-ok ObjStore::get_n_databases(), 2;  #who cares?
+ObjStore::get_n_databases();  #who cares?
 
 my $s = ObjStore::get_all_servers();
 $s->get_host_name();

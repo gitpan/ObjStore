@@ -10,7 +10,23 @@ following in the body of your message:
 
 + IDEAS +
 
-?? $FAKE=1 -- don't include in stored @ISA tree
+transient indices can get unsorted (corrupted) DOCUMENT!
+  shouldn't return reason:  virtual char *remove(OSSVPV*);
+
+environment variables to change schema paths!
+
+!! 5.1 schema compatibility problem !!
+
+Firble
+
+Subroutine new redefined at /data/research/usr03/lib/perl5/site_perl/sun4-solaris/ObjStore/REP.pm line 24.
+  examine mod_perl solution!
+
+AVHV: should create a transient ref to the layout? XXX
+
+_private_root_data XS? XXX
+
+eradicate unneeded dOSP
 
 RE-THINK:
   sub isa { _isa(@_, 1); }
@@ -19,21 +35,18 @@ RE-THINK:
 
 bridges per-thread?
   optional transaction-level mutex to debug data accesses?
-pool allocation (x64?)
   move cursor stuff to separate struct
 
 study the perl compiler (ExCxx)
 
-perl magic should be non-lazy!
-
 osperlserver -l:daily /tmp/log/qsg_gui.19980304?
   maybe put logic in ObjStore::Process?
 
-Support for multiple application schemas
-  generic scalar object typemap
-  XPVMG abstraction
-  REFCNT
-  Bit::Vector
+more support for DLL schemas?
+  generic scalar object typemap?
+  XPVMG abstraction?
+  REFCNT?
+  Bit::Vector?
 
 Mike Guy writes: How about "die if in a void context"?  That would get
 the best of both worlds.  I'd like to see that style used much more in
@@ -42,6 +55,18 @@ results of open comes particularly to mind.
 
 
 + VAGUE POSSIBILITIES +
+
+make all depreciated stuff autoloaded
+
+Makefile.PL
+  install twice required...?
+
+perl magic should be non-lazy?
+
+patches
+  XSthr.h
+  ref overload
+  fold osp_croak back into perl
 
 -MObjStore=-Dflags ?
 
@@ -60,8 +85,6 @@ qtposh
 posh
   merge with ObjStore::Posh::Cursor?
   display style?  web integration?  cgi-posh?
-
-overloaded refs
 
 ~magic ownership check?
 
@@ -99,9 +122,6 @@ optimize splash suite
 
 ObjStore::Index
   $t->select(['*'], sub { my $r = shift; ... }); ??why
-
-pathexam
-  invisibly auto-traverse references?
 
 get_database
   factor
@@ -154,10 +174,11 @@ Evolve the schema to eliminate this harmless annoyance:  The object at 0xdff3019
 
 + BIGGISH PROJECTS +
 
-optional pool allocation of numeric types
+Needed is a more flexible hash table that can serve to replace
+os_Dictionary and also be used as an ObjStore::Index.
+
+optional pool allocation of numeric types [why bother??]
   configurable block size
   store offset in xiv!
   think about performance
 
-Needed is a more flexible hash table that can serve to replace
-os_Dictionary and also be used as an ObjStore::Index.

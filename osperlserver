@@ -3,20 +3,19 @@
 use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
-use vars qw($VERSION @DB $DAEMON $Loop %Debug);
-$VERSION = '0.53';
+use vars qw($VERSION @DB $DAEMON $Loop %Debug $Shutdown);
+$VERSION = '0.54';
 $DAEMON = 1;
 my $default_server = 'ObjStore::ServerDB';
 
 for (my $arg=0; $arg < @ARGV; $arg++) {
     my $o = $ARGV[$arg];
     if ($o =~ m/^ -d(ebug)? $/x) {
-	# different flavors?
-	++$Debug{'n'};
-	warn "use '-dn'\n";
+	warn "debug will no flags\n";
+	&usage;
     } elsif ($o =~ m/^ -F (ore(ground)?)? $/x) {
 	$DAEMON = 0;
-	warn "use '-dF'\n";
+	warn "please use the '-dF' option instead\n";
     } elsif ($o =~ m/^-d(\w+)$/) {
 	# this style is preferred
 	for my $d (split / */, $1) {
@@ -51,6 +50,8 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	    die "osperlserver: can't find myself" if !$FindBin::Bin;
 	    unshift(@INC, "$FindBin::Bin/$dir");
 	}
+    } elsif ($o =~ m/^-shutdown/) {
+	$Shutdown = $ARGV[++$arg];
     } elsif ($o !~ m/^-/) {
 #	warn "osperlserver: database.db is boring" if $o =~ m/\.db$/;
 	push @DB, $o;
@@ -68,10 +69,11 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 
 open(STDOUT, ">&STDERR") or die "can't redirect STDOUT: $!";
 if ($DAEMON) {
-    require Proc::Daemon;          #available via CPAN
+    # all forking must happen before ObjStore::initialize!
+    require Proc::Daemon;
     Proc::Daemon::init();
 }
-$SIG{HUP} = sub { warn "SIGHUP" if !$DAEMON };
+$SIG{HUP} = $DAEMON ? 'IGNORE' : sub { warn "SIGHUP" };
 
 for (@DB) {
     # Not foolproof... Hm.
@@ -140,7 +142,24 @@ for (@DB) {
 
 # checkpoint timer should be a command line option?
 
+if ($Shutdown) {
+    require Date::Manip;
+    Date::Manip->import();
+    my $at = ParseDate($Shutdown);
+    warn "osperlserver: do not understand -shutdown '$Shutdown' (ignored)\n"
+	if !$at;
+    # assumes that Event is in control... XXX
+    Event->timer(-interval => 60, -callback => sub {
+		     my $d = DateCalc('now',$at);
+		     if ($d !~ m/^\+/) {
+			 warn "shutdown at ".UnixDate($at,"%u")."\n";
+			 kill 'TERM', $$;  #dangerous? XXX
+		     }
+		 });
+}
+
 eval q[ END{ warn "exiting...\n"; } ];
+warn '@ARGV = '.join(' ',@ARGV)."\n";
 warn "Started!!\n";
 if (!$Loop->can('Loop')) {
     my $m = 'defaultLoop';
@@ -157,12 +176,13 @@ sub usage {
     print "
 Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
   -d\\w+
-     b             enable boot diagnostics
-     n             print notifications to STDERR
-     F             do not fork
-  -Idirectory      specify \@INC directory (may be used more than once)
-  -[mM]module..    executes `use/no module...' (just like perl)
-  -v               print version number (and exit)
+     b              enable boot diagnostics
+     n              print notifications to STDERR
+     F              do not fork
+  -Idirectory       specify \@INC directory (may be used more than once)
+  -[mM]module..     executes `use/no module...' (just like perl)
+  -shutdown <when>  exit at <when> (requires Event & Date::Manip)
+  -v                print version number (and exit)
 
     server:/full/path/to/database
        $default_server->new(...); boot();

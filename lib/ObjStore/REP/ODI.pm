@@ -1,6 +1,7 @@
 use strict;
 package ObjStore::REP::ODI;
-bootstrap ObjStore::REP::ODI $ObjStore::VERSION;
+use base 'DynaLoader';
+'ObjStore::REP::ODI'->bootstrap($ObjStore::VERSION);
 
 # The HashIndex project was delayed. XXX
 

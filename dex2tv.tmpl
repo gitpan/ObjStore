@@ -3,6 +3,7 @@
 #ifndef _tv_setup_
 #define _tv_setup_
 
+#include "osp-preamble.h"
 #include "osperl.h"
 
 /*
@@ -13,9 +14,13 @@
 */
 #define TnWIDTH		23
 
+#ifndef TV_TEST
+// #define TV_TEST
+#endif
 
-#define NEW_TN(near)\
-	new(os_segment::of(near), TN::get_os_typespec()) TN
+#define NEW_TN(ret, near)\
+	NEW_OS_OBJECT(ret, os_segment::of(near), TN::get_os_typespec(), TN)
+//	ret = new(os_segment::of(near), TN::get_os_typespec()) TN
 
 #define TnDATA_T		OSSVPV*
 #define TV_PLANT_DAT(d)
@@ -29,28 +34,26 @@
 
 #define DEXTV_MAXKEYS 8
 
+#define TV_DAT_2STRING(dat) dat->os_class(&na)
+
+
 #define TV_ESEEK_FDECL \
 int dex2tc_seek(XPVTC *tc, int unique, osp_pathref &exam)
 
-#define TV_ESEEK_LDECL \
-  int kx;
+#if 0
 
-#define TV_ESEEK_SETUP \
-  DEBUG_index(warn("seek [%d]", exam.keycnt)); \
-  for (kx=0; kx < exam.keycnt; kx++) { \
-    DEBUG_index(warn("key = %s", exam.keys[kx]->stringify())); \
-  }
-
-#define TV_ESEEK_CMP(cmp,k,d)						\
-STMT_START {								\
-  int _x=0;								\
-  for (; _x < exam.keycnt; _x++) {					\
-    OSSV *zk = OSPV_Generic::path_2key((OSSVPV*)d, exam.pcache[_x]);	\
-    cmp = exam.keys[_x]->compare(zk);					\
-    if (cmp) break;							\
-  }									\
-  if (!cmp) { DEBUG_index(warn("match %p", d)); }			\
+#define TV_ESEEK_SETUP						\
+STMT_START {							\
+  int kx;							\
+  DEBUG_index(warn("seek [%d]", exam.keycnt));			\
+  for (kx=0; kx < exam.keycnt; kx++) {				\
+    DEBUG_index(warn("key = %s", exam.keys[kx]->stringify()));	\
+  }								\
 } STMT_END
+
+#endif
+
+#define TV_ESEEK_CMP(cmp,k,d) cmp=exam.compare(d)
 
 #include "tv.public"
 

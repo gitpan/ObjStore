@@ -5,10 +5,17 @@ use vars qw($INIT_DELAYED);
 $INIT_DELAYED = 1;
 
 sub import {
-    confess "ObjStore::NoInit used too late" if $ObjStore::INITIALIZED;
+    carp "ObjStore::NoInit used too late" if $ObjStore::INITIALIZED;
     shift;
     require ObjStore;
     ObjStore->export(scalar caller(0), @_);
+}
+
+sub VERSION {
+    carp "ObjStore::NoInit used too late" if $ObjStore::INITIALIZED;
+    shift;
+    require ObjStore;
+    ObjStore->VERSION(@_);
 }
 
 1;

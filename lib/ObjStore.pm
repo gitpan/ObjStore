@@ -18,7 +18,7 @@ use vars
     qw($DEFAULT_OPEN_MODE $MAX_RETRIES),                       # simulated
     qw($EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.40';
+$VERSION = '1.41';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -36,7 +36,6 @@ require DynaLoader;
 		  );
     my @x_tra = (qw(&fatal_exceptions &release_name
 		    &network_servers_available
-		    &get_max_retries &set_max_retries
 		    &get_page_size &return_all_pages 
 		    &abort_in_progress &get_n_databases
 		    &set_stargate &DEFAULT_STARGATE
@@ -45,7 +44,7 @@ require DynaLoader;
 		 qw(&release_major &release_minor &release_maintenance
 		    &set_transaction_priority &subscribe &unsubscribe
 		   ));
-    my @x_old = qw(&schema_dir);
+    my @x_old = qw(&schema_dir &get_max_retries &set_max_retries);
     my @x_priv= qw($DEFAULT_OPEN_MODE %CLASSLOAD $CLASSLOAD $EXCEPTION
 		   &_PRIVATE_ROOT);
 
@@ -58,15 +57,46 @@ require DynaLoader;
 		    ALL => [@EXPORT, @x_adv, @x_tra]);
 }
 
+sub import {
+    no strict 'refs';
+    my $me = shift;
+    my $class = caller($Exporter::ExportLevel);
+
+    # Minimize the performance hit of gv_fetchmethod... XXX
+#    if (! defined &{"$class\::DESTROY"}) {
+#	warn $class."DESTROY";
+#	*{"$class\::DESTROY"} = sub {};
+#    }
+#    if (! defined &{"$class\::NOREFS"}) {
+#	warn $class."NOREFS";
+#	*{"$class\::NOREFS"} = sub {};
+#    }
+    $me->export($class, @_);
+}
+
 $EXCEPTION = sub {
     my $m = shift;
     local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     if ($m eq 'SEGV') {
 	$m = ObjStore::Transaction::SEGV_reason();
-	$m = "ObjectStore: $m\t" if $m;
+	if ($m) {
+	    if ($ObjStore::REGRESS) {
+		my $buf = "[ObjStore::REGRESS output for '$m':\n";
+		my $i = 0;
+		my @a;
+		while (@a = caller $i) {
+		    my ($pack,$file,$line,$sub) = @a;
+		    $buf .= "FRAME($i): in $sub at $file line $line\n";
+		    ++$i;
+		}
+		$buf.= "]\n";
+		warn $buf;
+	    }
+	    $m = "ObjectStore: $m\t";
+	} else {
+	    $m = 'SEGV';  # probably not our fault?
+	}
     }
-    $m ||= 'SEGV';  # (probably not our fault? :-)
-    warn $m if $ObjStore::REGRESS;
 
     # Due to bugs in perl, confess can cause a SEGV if the signal
     # happens at the wrong time.  Even a simple die doesn't always work.
@@ -77,9 +107,12 @@ $EXCEPTION = sub {
 $SIG{SEGV} = \&$EXCEPTION
     unless defined $SIG{SEGV}; # MUST NOT BE CHANGED! XXX
 
-eval { require Thread::Specific; };
-undef $@;   # only required if available
-bootstrap ObjStore($VERSION);
+eval { require Thread::Specific; } or do {
+    sub lock {}
+    undef $@;
+};
+
+'ObjStore'->bootstrap($VERSION);
 
 END {
 #    debug(qw(bridge txn));
@@ -139,41 +172,26 @@ sub fatal_exceptions {
     $FATAL_EXCEPTIONS = $yes;
 }
 
-$MAX_RETRIES = 10;
-# goofy?
-sub get_max_retries { $MAX_RETRIES; }
-sub set_max_retries { $MAX_RETRIES = $_[0]; }
-
 sub begin {
     my $code = pop @_;
     croak "last argument must be CODE" if !ref $code eq 'CODE';
-
     my $wantarray = wantarray;
-    my @result;
-    my $retries = 0;
-    my $do_retry;
-    do {
-	@result=();
-	my $txn = ObjStore::Transaction->new(@_);
-	my $ok=0;
-	$ok = eval {
-	    if ($wantarray) {
-		@result = $code->();
-	    } elsif (defined $wantarray) {
-		$result[0] = $code->();
-	    } else {
-		$code->();
-	    }
-	    $txn->post_transaction(); #1
-	    1;
-	};
-	($ok and $txn->get_type !~ m'^abort') ? $txn->commit() : $txn->abort();
-	$do_retry = (!$ok and $@ =~ m/Deadlock/ and $txn->top_level and
-		     $retries < get_max_retries());
-	++ $retries;
-	die if ($@ and $FATAL_EXCEPTIONS and !$do_retry);
-
-    } while ($do_retry);
+    my @result=();
+    my $txn = ObjStore::Transaction->new(@_);
+    my $ok=0;
+    $ok = eval {
+	if ($wantarray) {
+	    @result = $code->();
+	} elsif (defined $wantarray) {
+	    $result[0] = $code->();
+	} else {
+	    $code->();
+	}
+	$txn->post_transaction(); #1
+	1;
+    };
+    ($ok and $txn->get_type !~ m'^abort') ? $txn->commit() : $txn->abort();
+    die if ($@ and $FATAL_EXCEPTIONS);
     if (!defined wantarray) { () } else { wantarray ? @result : $result[0]; }
 }
 
@@ -259,8 +277,9 @@ sub _isa_loader {
 #    warn "_isa_loader $bs $base $class";
     if (!@{"$class\::ISA"} and $CLASS_AUTO_LOAD) {
 	return $class if $class eq 'ObjStore::Database';
-
 	my $isa = $bs ? $bs->[3] : [$base,[]];
+	($class,$isa) = @$isa
+	    if ($class =~ m/^_fake\:\:/ and @$isa == 2);
 	require_isa_tree($class, $isa);
 	force_load($class, $isa);
     }
@@ -302,7 +321,7 @@ sub open {
 sub peek {
     croak "ObjStore::peek(top)" if @_ != 1;
     require ObjStore::Peeker;
-    my $pk = new ObjStore::Peeker(to => *STDERR{IO});
+    my $pk = ObjStore::Peeker->new(to => *STDERR{IO});
     $pk->Peek($_[0]);
 }
 
@@ -338,6 +357,17 @@ sub debug {
 }
 
 #------ ------ ------ ------
+$MAX_RETRIES = 0;
+# goofy?
+sub get_max_retries {
+    carp "get_max_retries is not supported (ignored)";
+    $MAX_RETRIES;
+}
+sub set_max_retries {
+    carp "set_max_retries is not supported (ignored)";
+    $MAX_RETRIES = $_[0];
+}
+
 sub set_cache_size {
     carp "set_cache_size() depreciated, just assign to \$CACHE_SIZE";
     $CACHE_SIZE = shift;
@@ -499,7 +529,7 @@ sub GLOBS {
 # We can elide the recursion check, since 
 # If the persistent tree
 # Has a LOOP, 
-# We made a much more major mistake!
+# We made a mistake much more major!
 #                 -- Vogon Poetry, volume 3
 
 sub isa_tree_matches {
@@ -743,8 +773,7 @@ sub import_blessing {
     my ($db) = @_;
     my $bs = $db->_blessto_slot;
     if ($bs) {
-	my $class = $bs->[1];
-	&ObjStore::_isa_loader($bs, 'ObjStore::Database', $class);
+	my $class = &ObjStore::_isa_loader($bs, 'ObjStore::Database', $bs->[1]);
 
 	# Must use CORE::bless here -- the database is _already_ blessed, yes?
 	CORE::bless($db, $class);
@@ -885,33 +914,6 @@ sub _iscorrupt {
     $err;
 }
 
-sub POSH_PEEK {
-    my ($val, $o, $name) = @_;
-    my $path = $val->get_pathname;
-    my $how = $val->is_open;
-    $o->o($name."[$path, $how] {");
-    $o->nl;
-    $o->indent(sub {
-	my @roots = sort { $a->get_name cmp $b->get_name } $val->get_all_roots;
-	push(@roots, $val->_PRIVATE_ROOT) if $o->{all};
-	for my $r (@roots) {
-	    my $name = $o->{addr}? "$r " : '';
-	    $o->o($name,$r->get_name," => ");
-	    $o->peek_any($r->get_value);
-	    $o->nl;
-	}
-	$o->{coverage} += @roots;
-    });
-    $o->o("},");
-    $o->nl;
-}
-
-sub POSH_CD {
-    my ($db, $rname) = @_;
-    my $r = $db->find_root($rname);
-    $r? $r->get_value : undef;
-}
-
 sub _register_private_root_key {
     my ($class, $key, $mk) = @_;
     croak "$_ROOT_KEYS{$key}->{owner} has already reserved private root key '$key'"
@@ -971,7 +973,6 @@ sub of {
 }
 sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
-sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
 
 sub get_n_databases {
     carp "ObjStore::Database::get_n_databases depreciated; use ObjStore::get_n_databases";
@@ -1000,7 +1001,6 @@ sub of {
 }
 sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
-sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
 
 package ObjStore::Notification;
 use Carp;
@@ -1053,7 +1053,7 @@ sub is_evolved { _is_evolved(@_, 0); }
 sub clone_to { croak($_[0]."->clone_to() unimplemented") }
 
 # Do fancy argument parsing to make creation of unsafe references a
-# very intentional endevor.
+# very intentional endevour.  Maybe the default should be 'unsafe'? XXX
 sub new_ref {
     my ($o, $seg, $safe) = @_;
     $seg = $seg->segment_of if ref $seg;
@@ -1076,6 +1076,9 @@ sub evolve {
     my ($o) = @_;
     $o->isa($o->os_class) or croak "$o must be an ".$o->os_class;
 }
+
+sub NOREFS {}
+sub DESTROY {}
 
 #-------- -------- --------
 sub set_weak_refcnt_to_zero { croak "set_weak_refcnt_to_zero is unnecessary"; }
@@ -1128,35 +1131,8 @@ sub clone_to {
     $cloner->($r->focus)->new_ref($seg);
 }
 
-sub POSH_PEEK {
-    my ($val, $o, $name) = @_;
-    ++ $o->{coverage};
-    $o->o("$name => ");
-    $o->indent(sub {
-	my $at = $val->POSH_ENTER();
-	if (!ref $at) {
-	    $o->o($at);
-	} else {
-	    $o->o(ref($at)." ...");
-#	    $o->peek_any($at); XXX peek styles
-	}
-    });
-    $o->nl;
-}
-
-sub POSH_ENTER {
-    my ($val) = @_;
-    my $at = '(database not found)';
-    my $ok = 0;
-    $ok = ObjStore::begin(sub {
-	my $db = $val->get_database;
-	$at = '(deleted object in '.$db->get_pathname.')';
-	$db->open($val->database_of->is_open) if !$db->is_open;
-	!$val->deleted;
-    });
-    $at = $val->focus if $ok;
-    $at;
-}
+sub NOREFS {}
+sub DESTROY {}
 
 package ObjStore::Cursor;
 use vars qw($VERSION @ISA);
@@ -1169,6 +1145,9 @@ sub clone_to {
     my ($r, $seg, $cloner) = @_;
     $cloner->($r->focus)->new_cursor($seg);
 }
+
+sub NOREFS {}
+sub DESTROY {}
 
 package ObjStore::Container;
 use vars qw($VERSION @ISA);
@@ -1190,13 +1169,15 @@ sub clone_to {
 
 sub count { shift->FETCHSIZE; }  #goofy XXX
 
+sub NOREFS {}
+sub DESTROY {}
+
 package ObjStore::AV;
 use Carp;
 use vars qw($VERSION @ISA %REP);
 $VERSION = '1.01';
 @ISA=qw(ObjStore::Container);
 
-# will build at compile time... XXX
 sub new {
     my ($this, $loc, $how) = @_;
     $loc = $loc->segment_of if ref $loc;
@@ -1219,7 +1200,7 @@ sub new {
     $av;
 }
 
-sub EXTEND {}  #todo XXX
+sub EXTEND {}  #todo? XXX
 
 sub _iscorrupt {
     my ($o, $vlev) = @_;
@@ -1238,6 +1219,9 @@ sub map {
     for (my $x=0; $x < $o->FETCHSIZE; $x++) { push(@r, $sub->($o->[$x])); }
     @r;
 }
+
+sub NOREFS {}
+sub DESTROY {}
 
 #-------------- -------------- -------------- -------------- DEPRECIATED
 sub _count { 
@@ -1259,7 +1243,6 @@ use vars qw($VERSION @ISA %REP);
 $VERSION = '1.01';
 @ISA=qw(ObjStore::Container);
 
-# will build at compile time... XXX
 sub new {
     my ($this, $loc, $how) = @_;
     $loc = $loc->segment_of if ref $loc;
@@ -1307,6 +1290,9 @@ sub map {
     @r;
 }
 
+sub NOREFS {}
+sub DESTROY {}
+
 #----------- ----------- ----------- ----------- ----------- -----------
 
 sub nextKey {
@@ -1328,7 +1314,8 @@ use vars qw($VERSION @ISA %REP);
 $VERSION = '1.00';
 @ISA='ObjStore::Container';
 
-# HashIndex will probably be a separate class? XXX
+# HashIndex will be a separate class? XXX
+
 sub new {
     my ($this, $loc, @CONF) = @_;
     $loc = $loc->segment_of if ref $loc;
@@ -1353,22 +1340,6 @@ sub new {
     $x;
 }
 
-# optimize!! XXX
-sub SHIFT {
-    my ($o) = @_;
-    return if !@$o;
-    my $e = $o->[0];
-    $o->remove($e);
-    $e;
-}
-sub POP {
-    my ($o) = @_;
-    return if !@$o;
-    my $e = $o->[$#$o];
-    $o->remove($e);
-    $e;
-}
-
 sub map {
     my ($o, $sub) = @_;
     my @r;
@@ -1376,30 +1347,10 @@ sub map {
     @r;
 }
 
-sub POSH_PEEK {
-    my ($val, $o, $name) = @_;
-    $o->{coverage} += $val->FETCHSIZE;
-    my $big = $val->FETCHSIZE > $o->{width};
-    my $limit = $big? $o->{summary_width} : $val->FETCHSIZE;
-
-    $o->o("$name ");
-    $val->configure()->POSH_PEEK($o);
-    $o->o(" [");
-    $o->nl;
-    $o->indent(sub {
-		   my $c = $val->new_cursor;
-		   $c->moveto(-1);
-		   for (1..$limit) {
-		       $o->peek_any($c->each(1));
-		       $o->nl;
-		   }
-		   if ($big) { $o->o("..."); $o->nl; }
-	       });
-    $o->o("],");
-    $o->nl;
-}
-
 sub _iscorrupt {0}  #write your own!
+
+sub NOREFS {}
+sub DESTROY {}
 
 #----------- ----------- ----------- ----------- ----------- -----------
 
@@ -1448,52 +1399,6 @@ sub step {
     $delta == 1 or carp "$o doesn't really support step";
     $o->next;
 }
-
-package ObjStore::Set;
-use Carp;
-use base 'ObjStore::HV';
-use vars qw($VERSION);
-$VERSION = '0.00';
-
-sub new {
-    carp "ObjStore::Set is depreciated";
-    require ObjStore::SetEmulation;
-    my $class = shift;
-    bless('ObjStore::SetEmulation'->new(@_), $class);
-}
-
-sub POSH_PEEK {
-    my ($val, $o, $name) = @_;
-    my @S;
-    my $x=0;
-    for (my $v=$val->first; $v; $v=$val->next) {
-	++ $o->{coverage};
-	last if $x++ > $o->{width}+1;
-	push(@S, $v);
-    }
-    my $big = @S > $o->{width};
-    my $limit = $big ? $o->{summary_width}-1 : @S;
-    
-    $o->o($name . " [");
-    $o->nl;
-    ++$o->{level};
-    for (my $v=$val->first; $v; $v=$val->next) {
-	last if $limit-- <= 0;
-	$o->peek_any($v);
-	$o->nl;
-    }
-    if ($big) {
-	$o->o("...");
-	$o->nl;
-    }
-    --$o->{level};
-    $o->o("],");
-    $o->nl;
-}
-
-sub a { add(@_) }
-sub r { rm($_[0], $_[1]) }
-sub STORE { add(@_) }
 
 #----------- ----------- ----------- ----------- ----------- -----------
 package ObjStore;

@@ -3,7 +3,7 @@ use strict;
 package ObjStore::Table3;
 use Carp;
 use ObjStore ':ADV';
-require ObjStore::AV::Set;
+#require ObjStore::AV::Set; #?
 use base 'ObjStore::HV';
 use vars qw($VERSION);
 $VERSION = '1.02';

@@ -58,12 +58,14 @@ sub restart {
     Event->timer(-interval => 1, -callback => sub {
 		     Event->idle($worker) if !$Idle;
 		     $Idle=1;
-		 });
+		 },
+		 -desc => "jobs idle");
     Event->timer(-interval => 3, -callback => sub {
 		     local $Idle = $Idle;
 		     $worker->() if !$work;
 		     $work = 0;
-		 });
+		 },
+		 -desc => "jobs force");
 }
 
 # Assumes one Job::Table per database.
@@ -73,7 +75,7 @@ sub restart {
 # - cannot span transactions
 # - cannot be nested
 #
-# A slice is the smallest unit of work worth the overhead of this
+# A slice is the smallest unit of work worth the overhead of the
 # job management apparatus.
 
 sub _run1job {

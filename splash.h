@@ -48,7 +48,8 @@ public:
     {
       os_segment *WHERE = os_segment::of(this);
       assert(n > 0);
-	a= new(WHERE, T::get_os_typespec(), n) T[n];
+        NEW_OS_ARRAY(a, WHERE, T::get_os_typespec(), T, n);
+//	a= new(WHERE, T::get_os_typespec(), n) T[n];
 	cnt= 0;
 	firstshift = fs;
         first= n>>firstshift;
@@ -73,7 +74,10 @@ public:
     void compact(const int i);
     void add(const T& n);
     void insert(int at, int slots);
-    void erase(void){ cnt= 0; first= (allocated>>firstshift);}
+    void erase(void){
+      for (int xx=0; xx < cnt; xx++) a[xx+first].set_undef();
+      cnt= 0; first= (allocated>>firstshift);
+    }
 };
 
 // ************************************************************
@@ -157,7 +161,9 @@ int newfirst;
     if(newcnt < 0) newcnt= cnt;   // default
     allocated += amnt;
     os_segment *WHERE = os_segment::of(a);
-    T *tmp= new(WHERE, T::get_os_typespec(),allocated) T[allocated];
+    T *tmp;
+    NEW_OS_ARRAY(tmp, WHERE, T::get_os_typespec(), T, allocated);
+//    tmp = new(WHERE, T::get_os_typespec(),allocated) T[allocated];
     newfirst= (allocated>>1) - (newcnt>>1);
     DEBUG_splash(warn("SPListBase(0x%x)->grow(): old= %p, a= %p, allocinc= %d, newfirst= %d, amnt= %d, cnt= %d, allocated= %d\n",
 		      this, a, tmp, allocinc, newfirst, amnt, cnt, allocated));

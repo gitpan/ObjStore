@@ -1,3 +1,27 @@
+** 05-10-98 RELEASE 1.39
+
+- Fixed a long standing problem with transaction memory usage.  Memory
+associated with keeping track of persistent objects is now released as
+soon as possible (instead of at the end of the transaction).  A true
+checkpoint is now possible (but insufficiently tested).
+
+- Optionally, during update transactions reference counts are no
+longer affected by reads (this was not the case in prior versions!).
+Efficiency of certain types of updates should be improved.  You will
+need to manually invoke the HOLD method in the rare circumstance that
+a transient variable is the only reference to a persistent object (or
+otherwise risk a SEGV/BUS error).  Due to the gravity of this change,
+the optimization is turned off for 1.39 by default.  In anticipation
+of enabling it, a warning is generated to help pinpoint any problems
+in existing code.  Please test your code against 1.39 before upgrading
+to the next release!!
+
+- Lots of tweaks.  Reorganized transaction code and osperlserver.  All
+allocators should now accept 'transient' as a valid segment.
+ObjStore::Serve and ObjStore::Server supercede the jumbled logic
+initially prototyped in ObjStore::Process.
+
+
 ** 04-23-98 RELEASE 1.38
 
 - Support for multiple threads.  Changed ObjStore::Transaction->new()

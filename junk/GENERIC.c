@@ -2,6 +2,7 @@
 // THIS ENTIRE FILE IS DEPRECIATED (but included for backward compatibility)
 /* CCov: off */
 
+#include "preamble.h"
 #include "osperl.h"
 #include "GENERIC.h"
 
@@ -30,6 +31,7 @@ static void push_hkey_ossv(hkey *hk, OSSV *hv)
 
 /*--------------------------------------------- */
 /*--------------------------------------------- HV splash array */
+// DEPRECIATED!!!
 
 void hent::set_undef()
 { hk.set_undef(); hv.set_undef(); }
@@ -378,8 +380,8 @@ void OSPV_setarray_cs::next()
   if (cs < cnt) { cs = pv->first(cs); if (cs==-1) cs = cnt; }
 }
 
-/*--------------------------------------------- */
 /*--------------------------------------------- Set os_set */
+// DEPRECATED
 
 OSPV_sethash::OSPV_sethash(os_unsigned_int32 size)
   : set(size)
@@ -479,6 +481,7 @@ void OSPV_sethash_cs::at()
 
 void OSPV_sethash_cs::next()
 {
+  dOSP;
   if (reset_2pole != -1) {
     if (reset_2pole == 0) cs.first();
     else croak("not supported");
@@ -486,6 +489,12 @@ void OSPV_sethash_cs::next()
   }
   if (cs.null()) return;
   OSSVPV *pv = (OSSVPV*) cs.retrieve();
-  push_ospv(pv);
+  if (pv) {
+    SV *sv = osp->ospv_2sv(pv);
+    dSP;
+    XPUSHs(sv);
+    PUTBACK;
+  }
   cs.next();
 }
+

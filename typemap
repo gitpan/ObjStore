@@ -17,10 +17,6 @@ os_object_cursor *	O_OBJECT
 OSSVPV *		O_OSSVPV
 OSPV_Container *	O_OSSVPV
 OSPV_Generic *		O_OSSVPV
-OSPV_fatindex2 *	O_OSSVPV
-OSPV_odi_dictindex *	O_OSSVPV
-OSPV_avarray *		O_OSSVPV
-OSPV_hvarray2 *		O_OSSVPV
 OSPV_Ref2 *		O_OSSVPV
 OSPV_Cursor2 *		O_OSSVPV
 OSPV_Ref *		O_OSSVPV
@@ -28,6 +24,10 @@ OSPV_Cursor *		O_OSSVPV
 osp_thr *		O_OBJECT
 osp_txn *		O_OBJECT
 osp_bridge *		T_PTRREF
+
+OSPV_fatindex2 *        O_OSSVPV
+OSPV_splashheap *	O_OSSVPV
+
 
 ######################################################################
 INPUT

@@ -2,7 +2,7 @@ use strict;
 package ObjStore::ServerDB;
 use Carp;
 use ObjStore ':ADV';
-require ObjStore::Process;
+#require ObjStore::Process;
 use Carp;
 use base 'ObjStore::HV::Database';
 use vars qw($VERSION);
@@ -38,10 +38,10 @@ sub new {
     ObjStore::open($path, $mode, $mask);
 }
 
-sub wait_for_commit { 
-    carp "depreciated";
-    shift->hash->{'ObjStore::Process'}->wait_for_commit(); 
-}
+#sub wait_for_commit { 
+#    carp "depreciated";
+#    shift->hash->{'ObjStore::Process'}->wait_for_commit(); 
+#}
 
 package ObjStore::ServerDB::Top;  #move to a separate file?
 use Carp;

@@ -4,7 +4,9 @@ ObjStore - Perl Extension For C<ObjectStore> OODBMS
 
 =head1 SYNOPSIS
 
-Enjoy perl?  Sick of SQL?  Ready to try something new?
+Like perl?  Sick of SQL?  Ready to try something new?  This extension
+implements databases that look exactly like normal perl.  These same
+databases can also be easily extended with arbitrary C++ objects.
 
 =head1 DESCRIPTION
 
@@ -45,7 +47,7 @@ server-object collaboration services.  Completely generic!
 
 You will need:
 
-- ObjectStore OODBMS (see http://www.odi.com; evaluations are available!)
+- ObjectStore 5.X (see http://www.odi.com; evaluations are available!)
 
 - Perl 5.004_04 (or perl 5.005, once released)
 
@@ -58,6 +60,28 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 
 =head1 R!CENT CHANGES
+
+
+** 07-07-98 RELEASE 1.41
+
+This release will probably be the last release before 2.00.  This
+release is important because it is appears to be able to manipulate
+2.00 databases without requiring ObjectStore 5.1 and shared libraries.
+Release 2.00 and subsequent releases will require ObjectStore 5.1.
+
+- If an object is blessed into a package matching RE m/_fake\:\:/,
+then the package will be ignored (on reads).  A script for generic
+import of CSV files is now a trival exercise.
+
+- os_transaction::checkpoint has been tested and appears to work as
+well as standard transactions.  The performance gain appears
+measurable.
+
+- Indices now auto-dereference (just once) in the case that references
+are used.
+
+- Deadlocks are no longer automatic retried.  If you still need this,
+it is easy enough to cobble it together yourself.
 
 
 ** 05-30-98 RELEASE 1.40
@@ -78,46 +102,20 @@ scaffolding).
 - Edit the Makefile.PL to add -DOSP_SAFE_BRIDGE if you still need it!!
 
 
-** 05-10-98 RELEASE 1.39
-
-- Fixed a long standing problem with transaction memory usage.  Memory
-associated with keeping track of persistent objects is now released as
-soon as possible (instead of at the end of the transaction).  A true
-checkpoint is now possible (but insufficiently tested).
-
-- Optionally, during update transactions reference counts are no
-longer affected by reads (this was not the case in prior versions!).
-Efficiency of certain types of updates should be improved.  You will
-need to manually invoke the HOLD method in the rare circumstance that
-a transient variable is the only reference to a persistent object (or
-otherwise risk a SEGV/BUS error).  Due to the gravity of this change,
-the optimization is turned off for 1.39 by default.  In anticipation
-of enabling it, a warning is generated to help pinpoint any problems
-in existing code.  Please test your code against 1.39 before upgrading
-to the next release!!
-
-- Lots of tweaks.  Reorganized transaction code and osperlserver.  All
-allocators should now accept 'transient' as a valid segment.
-ObjStore::Serve and ObjStore::Server supercede the jumbled logic
-initially prototyped in ObjStore::Process.
-
-
 see ./INSTALL for hints on installation
 see ./UPGRADE to evolve databases from prior releases
 see ./TODO for a list of stuff in the queue
 see ./CHANGES for a visionary perspective
 
 
-Perl-ObjectStore mailing list:
+Perl-ObjectStore mailing list is waiting for your contribution--
+
+- If you're having trouble or if you've run into a bug.
+
+- Any job postings (as long as they relate to this extension.  FYI, I
+am not myself currently looking, but you never know...  :-)
 
 majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
-
-1. If you think you've run into a bug, try running your script with
-"perl -MObjStore=PANIC" and mail the output to the mailing list.
-
-2. The mailing list is also available for job postings (as long as
-they relate to this extension.  FYI, I am not myself currently
-looking.  :-)
 
 -------------------------------------------------------------------------
 Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.

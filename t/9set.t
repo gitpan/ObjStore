@@ -6,6 +6,7 @@ use strict;
 use ObjStore;
 use lib './t';
 use test;
+require ObjStore::Set;  # not quite dead yet!
 
 #ObjStore::_debug qw(bridge);
 #ObjStore::disable_auto_class_loading();
@@ -39,5 +40,7 @@ for my $rep (10, 100) {
 	ok(! $set->contains($yuk));
 	$set->add($yuk);
 	ok($set->contains($yuk));
+
+	delete $john->{c};
     };
 };

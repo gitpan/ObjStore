@@ -4,14 +4,14 @@
 
 use strict;
 package ObjStore::REP::FatTree;
-bootstrap ObjStore::REP::FatTree $ObjStore::VERSION;
-
-# We don't want this package in the @ISA because that would break the
-# representation abstraction.  The consequence is extra pain to do
-# method calls.
+use base 'DynaLoader';
+'ObjStore::REP::FatTree'->bootstrap($ObjStore::VERSION);
 
 package ObjStore::REP::FatTree::Index;
 use Carp;
+# We don't want this package in the @ISA because that would break the
+# representation abstraction.  The consequence is extra pain to do
+# method calls.
 
 # make recursive!
 sub estimate {
@@ -50,7 +50,7 @@ sub configure {
 	    $c->[1] = $v;
 	} elsif ($k eq 'path') {
 	    my @comp = split(m",\s*", $v);
-	    croak("$o->configure(path=>'$v'): invalidate") if @comp==0;
+	    croak("$o->configure(path=>'$v'): invalid") if @comp==0;
 	    croak("$o->configure(path=>'$v'): too many keys") if @comp >= 8;
 	    $c->[2] = [map {[map {"$_\0"} split(m"\/", $_)]} @comp];
 	    

@@ -1,6 +1,6 @@
 // -*-C++-*- mode
+#include "osp-preamble.h"
 #include "osperl.h"
-#include "GENERIC.h"
 #include "ODI.h"
 
 /* CCov: fatal SERIOUS */
@@ -110,39 +110,31 @@ int OSPV_hvdict::EXISTS(char *key)
   return out;
 }
 
-struct hvdict_bridge : ospv_bridge {
-  os_cursor *cs;
-  hvdict_bridge(OSSVPV *);
-  virtual ~hvdict_bridge();
+struct hvdict_bridge : osp_smart_object {
+  os_cursor cs;
+  hvdict_bridge(const os_collection &myco) : cs(myco) {}
 };
-hvdict_bridge::hvdict_bridge(OSSVPV *_pv) : ospv_bridge(_pv), cs(0)
-{}
-hvdict_bridge::~hvdict_bridge()
-{ if (cs) delete cs; }
 
-ospv_bridge *OSPV_hvdict::new_bridge()
-{ return new hvdict_bridge(this); }
-
-SV *OSPV_hvdict::FIRST(ospv_bridge *vmg)
+SV *OSPV_hvdict::FIRST(ospv_bridge *br)
 {
-  hvdict_bridge *mg = (hvdict_bridge *) vmg;
-  if (!mg->cs) mg->cs = new os_cursor(hv);
+  if (!br->info) br->info = new hvdict_bridge(hv);
+  os_cursor *cs = &((hvdict_bridge*)br->info)->cs;
   hkey *k1=0;
-  if (mg->cs->first()) {
-    k1 = (hkey*) hv.retrieve_key(*mg->cs);
+  if (cs->first()) {
+    k1 = (hkey*) hv.retrieve_key(*cs);
     assert(k1);
   }
   DEBUG_hash(warn("OSPV_hvdict::FIRST => %s", k1? k1->pv : "undef"));
   return k1->to_sv();
 }
 
-SV *OSPV_hvdict::NEXT(ospv_bridge *vmg)
+SV *OSPV_hvdict::NEXT(ospv_bridge *br)
 {
-  hvdict_bridge *mg = (hvdict_bridge *) vmg;
-  assert(mg->cs);
+  assert(br->info);
+  os_cursor *cs = &((hvdict_bridge*)br->info)->cs;
   hkey *k1=0;
-  if (mg->cs->next()) {
-    k1 = (hkey*) hv.retrieve_key(*mg->cs);
+  if (cs->next()) {
+    k1 = (hkey*) hv.retrieve_key(*cs);
     assert(k1);
   }
   DEBUG_hash(warn("OSPV_hvdict::NEXT => %s", k1? k1->pv : "undef"));
@@ -218,7 +210,9 @@ OSPV_hvdict::new(seg, sz)
 	os_segment *area = osp->sv_2segment(ST(1));
 	PUTBACK;
 	if (sz <= 0) croak("Non-positive cardinality");
-	OSSVPV *pv = new(area, OSPV_hvdict::get_os_typespec()) OSPV_hvdict(sz);
+	OSSVPV *pv;
+	NEW_OS_OBJECT(pv, area, OSPV_hvdict::get_os_typespec(), OSPV_hvdict(sz));
+//	pv = new(area, OSPV_hvdict::get_os_typespec()) OSPV_hvdict(sz);
 	pv->bless(ST(0));
 	return;
 

@@ -17,6 +17,8 @@ $VERSION = '0.05';
 @ISA = qw(ObjStore::HV Exporter);
 @EXPORT_OK = qw(txqueue txretry meter checkpoint);  #Loop Exit ?XXX
 
+Carp::cluck("ObjStore::Process is depreciated; see ObjStore::Serve");
+
 $EXE = $0;
 $EXE =~ s{^ .* / }{}x;
 chop($HOST = `hostname`);
@@ -26,7 +28,7 @@ $ExitLevel = 0;
 $MAXPENDING = 0;
 
 # Need alternative because realtime updates are not retry'able.
-ObjStore::set_max_retries(0);
+#ObjStore::set_max_retries(0);
 
 # Big program style.
 ObjStore::fatal_exceptions(0);

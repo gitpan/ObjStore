@@ -10,7 +10,7 @@
 
 
   2] Add XSTHRBOOT to your BOOT section so it can allocate a
-  thread specific slot.  Assumes Thread::Specific is already require'd.
+  thread specific slot.
 
   BOOT:
     XSTHRBOOT(mypackage);
@@ -31,26 +31,36 @@
   OTOH, when compiled with non-threaded perl the DESTORY method is
   not guarenteed to be called.
 
-  
+
   Joshua Pritikin 19980418
+
+
+TODO:
+
+Graham Barr <gbarr@ti.com> wrote:
+I am not sure I like the idea of having to type the package name every
+time I need to use one of these macros. As these are intended for use
+in an XS file and there are PACKAGE statements in th .xs file, could
+xsubpp define a macro (say __XS__PACKAGE__ or something) which could
+then be used in these macros ??
  */
 
 #ifndef USE_THREADS
 /* Easy, just store a static global pointer to the only instance. */
 
-#define dXSTHRINIT(PREFIX, constructor, blessto)					\
+#  define dXSTHRINIT(PREFIX, constructor, blessto)					\
 static PREFIX##_thr *PREFIX##_single = 0;					\
 static void *PREFIX##_newthr()							\
 { PREFIX##_single = (PREFIX##_thr*) constructor; return PREFIX##_single; }
 
-#define XSTHRBOOT(PREFIX) STMT_START {} STMT_END
+#  define XSTHRBOOT(PREFIX) STMT_START {} STMT_END
 
-#define XSTHRINFO(PREFIX, var) \
+#  define XSTHRINFO(PREFIX, var) \
 var = ((PREFIX##_thr *)(PREFIX##_single ? PREFIX##_single : PREFIX##_newthr()))
 
 #else /*USE_THREADS*/
 
-#define dXSTHRINIT(PREFIX, constructor, blessto)			\
+#  define dXSTHRINIT(PREFIX, constructor, blessto)			\
 static int PREFIX##_key = -1;					\
 static PREFIX##_thr *PREFIX##_newthr()				\
 {								\
@@ -65,12 +75,12 @@ static PREFIX##_thr *PREFIX##_newthr()				\
   return info;							\
 }
 
-/* automatic! XXX
-   0] Add "eval { require Thread::Specific; }; undef $@" to your 
-     Extension.pm file before bootstrap.*/
-
-#define XSTHRBOOT(PREFIX)						\
+#  define XSTHRBOOT(PREFIX)					\
   STMT_START {							\
+    PUTBACK;							\
+    perl_require_pv("Thread/Specific.pm");			\
+    if (SvTRUE(ERRSV)) croak(SvPV(ERRSV,na));			\
+    SPAGAIN;							\
     PUSHMARK(SP);						\
     XPUSHs(sv_2mortal(newSVpv("Thread::Specific", 16)));	\
     PUTBACK;							\
@@ -81,11 +91,11 @@ static PREFIX##_thr *PREFIX##_newthr()				\
     PUTBACK;							\
   } STMT_END
 
-#define XSTHRINFO(PREFIX, var)					\
+#  define XSTHRINFO(PREFIX, var)					\
 STMT_START {							\
   dTHR;								\
   SV **_info = av_fetch(thr->specific, PREFIX##_key, 0);	\
-  if (!_info) var = PREFIX##_newthr();				\
+  if (!_info || !SvOK(*_info)) var = PREFIX##_newthr();		\
   else var = (PREFIX##_thr *)SvIV((SV*)SvRV(*_info));		\
 } STMT_END
 

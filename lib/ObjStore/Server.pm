@@ -15,7 +15,7 @@ $ObjStore::TRANSACTION_PRIORITY = 0x2000;
 
 # Auto-retry of deadlocks can cause havoc.  You must take
 # responsibility to address this yourself.
-ObjStore::set_max_retries(0);
+#ObjStore::set_max_retries(0);
 
 # Big program style.
 ObjStore::fatal_exceptions(0);

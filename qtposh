@@ -76,7 +76,7 @@ $VERSION = '1.02';
 use slots 'shutdown()';
 sub shutdown { 
     for (@E) { $_->cancel }
-    ObjStore::Process->Exit();
+    ObjStore::Serve->exitloop();
 }
 
 my $reaper = QtREAPER->new->immortal;
@@ -386,6 +386,5 @@ use Qt;
 
 Editor->new($DB);
 
-require ObjStore::Process;
-ObjStore::Process->set_mode('read');
-ObjStore::Process->Loop();
+require ObjStore::Serve;
+ObjStore::Serve->Loop_single();

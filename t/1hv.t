@@ -90,6 +90,8 @@ sub testify {
     ok(join('', sort @k) eq '1245678');
 }
 
+require ObjStore::REP::Splash;
+require ObjStore::REP::ODI;
 begin 'update', sub {
     my $john = $db->root('John');
     $john or die "no db";

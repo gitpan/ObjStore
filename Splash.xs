@@ -1,4 +1,5 @@
 // -*-C++-*- mode
+#include "osp-preamble.h"
 #include "osperl.h"
 #include "Splash.h"
 
@@ -10,8 +11,7 @@
 
 static void push_sv_ossv(SV *hk, OSSV *hv)
 {
-  dOSP ;
-  SV *sv[2] = {hk, osp->ossv_2sv(hv)};
+  SV *sv[2] = {hk, osp_thr::ossv_2sv(hv)};
   dSP;
   EXTEND(SP, 2);
   PUSHs(sv[0]);
@@ -23,8 +23,7 @@ static void push_sv_ossv(SV *hk, OSSV *hv)
 static void push_index_ossv(int xx, OSSV *hv)
 {
   assert(hv);
-  dOSP ;
-  SV *sv[2] = {sv_2mortal(newSViv(xx)), osp->ossv_2sv(hv)};
+  SV *sv[2] = {sv_2mortal(newSViv(xx)), osp_thr::ossv_2sv(hv)};
   dSP;
   EXTEND(SP, 2);
   PUSHs(sv[0]);
@@ -32,53 +31,92 @@ static void push_index_ossv(int xx, OSSV *hv)
   PUTBACK;
 }
 
-hvent2::hvent2() : hk(0)
+/*--------------------------------------------- */
+/*--------------------------------------------- AV splash_heap */
+
+OSPV_splashheap::OSPV_splashheap(int sz)
+  : av(sz,8)
 {}
+OSPV_splashheap::~OSPV_splashheap()
+{ CLEAR(); }
+int OSPV_splashheap::FETCHSIZE()
+{ return av.count(); }
 
-hvent2::~hvent2()
+char *OSPV_splashheap::os_class(STRLEN *len)
+{ *len = 15; return "ObjStore::Index"; }
+char *OSPV_splashheap::rep_class(STRLEN *len)
+{ *len = 27; return "ObjStore::REP::Splash::Heap"; }
+
+int OSPV_splashheap::get_perl_type() { return SVt_PVAV; }
+
+void OSPV_splashheap::CLEAR()
+{ av.reset(); }
+
+int OSPV_splashheap::add(OSSVPV *pv)
 {
-  //  OSvROCLEAR(&hv); //?XXX
-  if (hk) delete [] hk; hk=0;
+  if (!conf_slot) croak("%p->add(%p): index not configured", this, pv);
+  OSPV_Generic *conf = (OSPV_Generic *) conf_slot.resolve();
+  osp_pathref exam;
+  exam.init(conf->avx(1)->get_ospv(), pv);
+  exam.set_descending(conf->FETCHSIZE() > 2 && conf->avx(2)->istrue());
+  int at = av.count();
+  int pi;
+  while (at && exam.compare(av[pi=(at-1)/2]) < 0) {
+    av[at].steal(av[pi]);
+    at = pi;
+  }
+  av[at] = pv;
+  return 1;
 }
 
-void hvent2::FORCEUNDEF()
-{ hk=0; hv.FORCEUNDEF(); }
-
-void hvent2::set_undef()
-{ if (hk) delete [] hk; hk=0; hv.set_undef(); }
-
-int hvent2::valid() const
-{ return hk != 0; }
-
-void hvent2::set_key(char *nkey)
+void OSPV_splashheap::SHIFT()
 {
-  assert(nkey);
-  set_undef();
-  int len = strlen(nkey)+1;
-  hk = new(os_segment::of(this), os_typespec::get_char(), len) char[len];
-  memcpy(hk, nkey, len);
+  if (!conf_slot) croak("%p->add(%p): index not configured", this, pv);
+  OSPV_Generic *conf = (OSPV_Generic *) conf_slot.resolve();
+  if (av.count() == 0) return;
+  SV *ret = osp_thr::ospv_2sv(av[0]);
+  if (av.count() > 1) {
+    OSSVPV *filler = av[av.count()-1].detach();
+    assert(filler);
+    av.compact(av.count()-1);
+    osp_pathref exam;
+    exam.init(conf->avx(1)->get_ospv(), filler);
+    exam.set_descending(conf->FETCHSIZE() > 2 && conf->avx(2)->istrue());
+    
+    int at=0;
+    int leaf = av.count()/2;
+    while (at < leaf) {
+      int jx = at*2+1;
+      int kx = jx+1;
+      if (kx < av.count() && exam.compare(av[kx], av[jx]) < 0) jx = kx;
+      if (exam.compare(av[jx]) > 0) {
+	av[at].steal(av[jx]);
+	at = jx;
+	continue;
+      }
+      break;
+    }
+    av[at].attach(filler);
+  } else {
+    av.compact(0);
+  }
+  dSP;
+  XPUSHs(ret);
+  PUTBACK;
 }
 
-SV *hvent2::key_2sv()
+OSSVPV *OSPV_splashheap::FETCHx(SV *sv)
 {
-  assert(hk);
-  return sv_2mortal(newSVpv(hk, 0));
+  int xx = SvIV(sv);
+  if (xx < 0 || xx >= av.count()) return 0;
+  return av[xx];
 }
 
-/* Added to support stupid C++ templates, then I decided just to rewrite
-   all the collection types in C.
-hvent2 *hvent2::operator=(int zero)
+OSSVPV *OSPV_splashheap::traverse2(char *keyish)
 {
-  assert(zero==0);
-  set_undef();
-  return this;
-}
-*/
-
-int hvent2::rank(const char *v2)
-{
-  assert(hk != 0 && v2 != 0);
-  return strcmp(hk, v2);
+  int xx = atoi(keyish);
+  if (xx < 0 || xx >= av.count()) return 0;
+  return av[xx];
 }
 
 /*--------------------------------------------- */
@@ -120,14 +158,12 @@ OSSV *OSPV_avarray::traverse(char *keyish)
 {
   if (_is_blessed()) {
     // This will be optimized once overload '%' works XXX
-    STRLEN bslen;
-    char *bs = blessed_to(&bslen);
-    assert(bs);
+    HV *stash = get_stash();
     SV *meth = (SV*) gv_fetchmethod(gv_stashpv("UNIVERSAL",0), "isa"); //XXX wrong
     assert(meth);
     dSP;
     PUSHMARK(SP);
-    XPUSHs(sv_2mortal(newSVpv(bs, bslen)));
+    XPUSHs(sv_2mortal(newSVpv(HvNAME(stash), 0)));
     XPUSHs(sv_2mortal(newSVpv("ObjStore::AVHV", 0)));
     PUTBACK;
     int items = perl_call_sv(meth, G_SCALAR);
@@ -165,27 +201,34 @@ OSSV *OSPV_avarray::STORE(SV *sv, SV *value)
   return &av[xx];
 }
 
-SV *OSPV_avarray::POP()
+void OSPV_avarray::POP()
 {	
-  SV *ret = &sv_undef;
   int n= av.count()-1;
   if (n >= 0) {
-    dOSP ;
-    ret = osp->ossv_2sv(&av[n]);
+    dTHR;
+    if (GIMME_V != G_VOID) {
+      SV *ret = osp_thr::ossv_2sv(&av[n]);
+      djSP;
+      XPUSHs(ret);
+      PUTBACK;
+    }
     av.compact(n);
   }
-  return ret;
 }
 
-SV *OSPV_avarray::SHIFT()
+void OSPV_avarray::SHIFT()
 {	
   SV *ret = &sv_undef;
   if (av.count()) {
-    dOSP ;
-    ret = osp->ossv_2sv(&av[0]);
+    dTHR;
+    if (GIMME_V != G_VOID) {
+      SV *ret = osp_thr::ossv_2sv(&av[0]);
+      djSP;
+      XPUSHs(ret);
+      PUTBACK;
+    }
     av.compact(0);
   }
-  return ret;
 }
 
 void OSPV_avarray::PUSH(SV **base, int items)
@@ -208,10 +251,9 @@ void OSPV_avarray::SPLICE(int offset, int length, SV **base, int count)
   if (length) {
     dTHR;
     if (GIMME_V == G_ARRAY) {
-      dOSP;
       SV **sv = new SV*[length];
       for (int xx=0; xx < length; xx++) {
-	sv[xx] = osp->ossv_2sv(&av[offset+xx]);
+	sv[xx] = osp_thr::ossv_2sv(&av[offset+xx]);
       }
       dSP;
       EXTEND(SP, length);
@@ -219,8 +261,7 @@ void OSPV_avarray::SPLICE(int offset, int length, SV **base, int count)
       PUTBACK;
       delete sv;
     } else if (GIMME_V == G_SCALAR) {
-      dOSP;
-      SV *ret = osp->ossv_2sv(&av[offset]);
+      SV *ret = osp_thr::ossv_2sv(&av[offset]);
       dSP;
       XPUSHs(ret);
       PUTBACK;
@@ -395,19 +436,15 @@ int OSPV_hvarray2::first(int start)
   return -1;
 }
 
-struct hvarray2_bridge : ospv_bridge {
+struct hvarray2_bridge : osp_smart_object {
   int cursor;
-  hvarray2_bridge(OSSVPV *);
+  hvarray2_bridge() : cursor(0) {}
 };
-hvarray2_bridge::hvarray2_bridge(OSSVPV *_pv) : ospv_bridge(_pv), cursor(0)
-{}
 
-ospv_bridge *OSPV_hvarray2::new_bridge()
-{ return new hvarray2_bridge(this); }
-
-SV *OSPV_hvarray2::FIRST(ospv_bridge *vmg)
+SV *OSPV_hvarray2::FIRST(ospv_bridge *br)
 {
-  hvarray2_bridge *mg = (hvarray2_bridge *) vmg;
+  if (!br->info) br->info = new hvarray2_bridge();
+  hvarray2_bridge *mg = (hvarray2_bridge*) br->info;
   SV *out;
   mg->cursor = first(0);
   if (mg->cursor != -1) {
@@ -418,9 +455,10 @@ SV *OSPV_hvarray2::FIRST(ospv_bridge *vmg)
   return out;
 }
 
-SV *OSPV_hvarray2::NEXT(ospv_bridge *vmg)
+SV *OSPV_hvarray2::NEXT(ospv_bridge *br)
 {
-  hvarray2_bridge *mg = (hvarray2_bridge *) vmg;
+  assert(br->info);
+  hvarray2_bridge *mg = (hvarray2_bridge*) br->info;
   SV *out;
   mg->cursor++;
   mg->cursor = first(mg->cursor);
@@ -485,9 +523,8 @@ OSPV_avarray::new(seg, sz)
 	SV *seg;
 	int sz;
 	PPCODE:
-	dOSP;
 	SV *CSV = ST(0);
-	os_segment *area = osp->sv_2segment(ST(1));
+	os_segment *area = osp_thr::sv_2segment(ST(1));
 	PUTBACK;
 	if (sz <= 0) {
 	  croak("Non-positive cardinality");
@@ -495,7 +532,8 @@ OSPV_avarray::new(seg, sz)
 	  sz = 100000;
 	  SERIOUS("Cardinality > 100000; try a more suitable representation");
 	}
-	OSSVPV *pv = new(area, OSPV_avarray::get_os_typespec()) OSPV_avarray(sz);
+	OSSVPV *pv;
+	NEW_OS_OBJECT(pv, area, OSPV_avarray::get_os_typespec(), OSPV_avarray(sz));
 	pv->bless(CSV);
 	return;
 
@@ -506,9 +544,8 @@ OSPV_hvarray2::new(seg, sz)
 	SV *seg;
 	int sz;
 	PPCODE:
-	dOSP;
 	SV *CSV = ST(0);
-	os_segment *area = osp->sv_2segment(ST(1));
+	os_segment *area = osp_thr::sv_2segment(ST(1));
 	PUTBACK;
 	if (sz <= 0) {
 	  croak("Non-positive cardinality");
@@ -516,6 +553,48 @@ OSPV_hvarray2::new(seg, sz)
 	  sz = 1000;
 	  SERIOUS("Cardinality > 1000; try a more suitable representation");
 	}
-	OSSVPV *pv = new(area,OSPV_hvarray2::get_os_typespec()) OSPV_hvarray2(sz);
+	OSSVPV *pv;
+	NEW_OS_OBJECT(pv, area,OSPV_hvarray2::get_os_typespec(), OSPV_hvarray2(sz));
 	pv->bless(CSV);
 	return;
+
+MODULE = ObjStore::REP::Splash	PACKAGE = ObjStore::REP::Splash::Heap
+
+static void
+OSPV_splashheap::new(seg, ...)
+	SV *seg;
+	PROTOTYPE: $$;$
+	PPCODE:
+	SV *CSV = ST(0);
+	os_segment *area = osp_thr::sv_2segment(ST(1));
+	int sz = 20;
+	if (items > 2) sz = SvIV(ST(2));
+	PUTBACK;
+	if (sz <= 0) {
+	  croak("Non-positive cardinality");
+	} else if (sz > 10000) {
+	  sz = 10000;
+	  SERIOUS("Cardinality > 10000; try a more suitable representation");
+	}
+	OSSVPV *pv;
+	NEW_OS_OBJECT(pv, area,OSPV_splashheap::get_os_typespec(), OSPV_splashheap(sz));
+	pv->bless(CSV);
+	return;
+
+void
+OSPV_splashheap::_conf_slot(...)
+	PPCODE:
+	PUTBACK;
+	SV *ret = 0;
+	if (items == 2) {
+	  if (THIS->av.count())
+	    croak("Cannot change configuration of an active heap");
+	  ospv_bridge *br = osp_thr::sv_2bridge(ST(1), 1, os_segment::of(THIS));
+	  THIS->conf_slot = br->ospv();
+	} else if (items == 1) {
+	  ret = osp_thr::ospv_2sv(THIS->conf_slot);
+	} else {
+	  croak("OSPV_splashheap(%p)->_conf_slot: bad args", THIS);
+	}
+	SPAGAIN;
+	if (ret) XPUSHs(ret);

@@ -25,7 +25,7 @@ begin 'update', sub {
     my $john = $db->root('John');
 
     if (! $john) {
-	my $hv = new ObjStore::HV($db, 7);
+	my $hv = ObjStore::HV->new($db, 7);
 	$john = $db->root('John', $hv);
     }
 

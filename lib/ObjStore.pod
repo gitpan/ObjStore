@@ -122,10 +122,10 @@ split your data into lots segments when it makes sense.  Segments
 improve locality and can be a unit of locking or caching.
 
 When you create a database object you must specify the segment in
-which it is to be allocated.  All objects use the form C<'new
-$class($near, ...)'>.  You may pass any persistent object
-(or database, or segment) in place of $near and the new object will
-be created appropriately!
+which it is to be allocated.  All objects use the form
+C<'$class->new($near, ...)'>.  You may pass any persistent object (or
+database, or segment) in place of $near and the new object will be
+created appropriately!
 
 =head2 Hashes
 
@@ -161,20 +161,18 @@ an expected cardinality of ten elements.
 
     my $a7 = ObjStore::AV->new($store, 10);
 
-Complete array support is available now, but you must must have at
-least perl 5.004_57.  If you don't, none of the usually array
-operations are supported except fetch and store.  (Actually push, pop,
-shift and unshift might be available but are undocumented.)  At least
-the following works:
+Complete array support is available, but you must must have at least
+perl 5.004_57.  If you don't, none of the usually array operations are
+supported except fetch and store.  At least the following works:
 
     $a7->[1] = [1,2,3,[4,5],6];
 
 =head2 References
 
 You can generate a reference to any persistent object with the method
-C<new_ref($segment)>.  Since refcnts are not updated remotely, refs
-are the safest way to refer across databases.  They are also designed
-to be allocated transiently.
+C<new_ref($segment, $type)>.  Since reference do not update refcnts,
+refs are a safe way to refer across databases.  They can also be
+allocated transiently.
 
   $r->open($how);              # attempts to open the focus' database
   $yes = $r->deleted;          # is the focus deleted?
@@ -182,26 +180,29 @@ to be allocated transiently.
   $str = $r->dump;             # the ref as a string
 
 Be aware that references can return garbage if they are not open.  You
-will need to C<open> them explicitly (see C<ObjStore::Ref::POSH_ENTER>).
-Also note that references use significantly more memory than pointers.
-(Look up C<os_reference_protected> in the ODI FAQ.)
-
-Unsafe, unprotected references are also available:
+will need to C<open> them explicitly (see
+C<ObjStore::Ref::POSH_ENTER>).  Currently, there are actually two
+types of references supported.  They correspond to C<os_reference> and
+C<os_reference_protected>.  The type passed to C<new_ref> should be
+either 'unsafe' or 'safe' respectively.  For example,
 
   $r = $o->new_ref('transient', 'unsafe');
 
-Care must to taken that these hard reference do not point to objects
-that have already been deleted.  C<SEGV> or garbled data can result.
+creates an C<os_reference>.  Care must to taken that these hard
+reference do not point to objects that have already been deleted.
+C<SEGV> or garbled data can result.
 
 Fortunately, it is always safe to use hard references when they are
 used to merely to avoid circular references within a single database.
-A nice trick:
 
   my $o = ObjStore::HV->new($db);
   $$o{SELF} = $o->new_ref($o,'hard');
 
-Then, use this single reference to point back to the top of the data
-structure (but only from below to the top!).
+Then the reference in the hash slot 'SELF' can be used by any part of
+the data structure to point back to the top-level.  Databases a
+somewhat similar.  Since every object has a C<database_of> method, you
+might say that every member of a database has an implicit reference to
+the top-level of the database.
 
 =head2 Cursors
 
@@ -273,14 +274,13 @@ Where the following invariants hold:
 
 Be aware that index cursors may only be used by one thread at a time.
 Therefore, it is not particularly useful to store pre-created cursors
-in a database.  Just to create them transiently when needed.
+in a database.  Just create them transiently when needed.
 
-To eliminate the possibility of indices becoming out-of-sync with
-actual data, keys are marked read-only as they are indexed.  (Another
-scheme for keeping indices up-to-date is to use os_backptr.  This
-scheme is not supported because it has considerable memory overhead
-(12-bytes per record!) and provides little benefit beyond our
-read-only schemes.)
+Certain representations for indices (trees) are very sensitive to the
+proper order of the records that they contain.  To eliminate the
+possibility of indices becoming out-of-sync with actual data, keys are
+marked read-only as they are added to the index.  This insures that
+the indexed records will stay in the right order.
 
 For example:
 
@@ -304,20 +304,30 @@ shared keys remain read-only until the record is removed from all
 shared indices.  Shared indices also impose a slight performance
 penalty compared to exclusive indices.
 
+To repeat, the use of read-only flags only pertains to tree-based
+index representations.  Other representations (a heap perhaps) may not
+have this constraint.
+
+(Another scheme for keeping indices up-to-date is to use
+C<os_backptr>.  This scheme is not supported because it has
+considerable memory overhead (12-bytes per record!) and provides
+little benefit beyond the read-only scheme.)
+
 Indices should not be used unless other data structures prove
-inadequate.  Hashes and arrays are easier in most cases.  Indices are
-best suited to very large datasets that must be searchable in a
-variety of ways.  If you can just iterate through every record,
-indices probably aren't worth the trouble.
+inadequate.  Some indices cannot be allocated transiently.  Hashes and
+arrays are easier in most cases.  Indices are best suited to very
+large datasets that must be searchable in a variety of ways.  If you
+can just iterate through every record, indices probably aren't worth
+the trouble.
 
 =head2 And Access Paths (Oh My!)
 
-If you cross your eyes, you will see an array of references or cursors
-as an access path.  Two simple implementations are provided for
-manipulating access paths:
+If you cross your eyes, you can imagine an array of references or
+cursors as an access path.  Two simple implementations are provided
+for manipulating access paths:
 
   ObjStore::Path::Ref            # access path composed of refs
-  ObjStore::Path::Cursor         # cursor based access path (EXPERIMENTAL)
+  ObjStore::Path::Cursor         # EXPERIMENTAL
 
 See the source code for details.
 
@@ -341,19 +351,20 @@ morass of disorganization?
 
 How can a relational database scale?!  B<When you write down a central
 schema, you are violating the principle of encapsulation.> This is
-dumb.  None of the usual database management operations require a
-central schema.  Why create artificial dependencies between your
-classes when you can avoid it?
+dumb.  While relational databases might have been a revelation when
+they were conceived, why create artificial dependencies in your class
+heirarchy when it is entirely avoidable?
 
 =head2 The Theory of Lazy Evolution
 
 When you practice lazy evolution, you avoid changing data layouts in
-favor of making queries smarter.  That's what it means.  Since data
-usually out-bulks code, this is the correct trade.  And since there
-isn't a artificial split between the implementation language and some
-goofy database language, schema evolution is reduced to the same
-problem as source code compatibility.  (Database are essentially just
-a rich API.)
+favor of making queries smarter.
+
+Since data usually out-bulks code, this is the correct trade.  And
+since there isn't a artificial split between the implementation
+language and some goofy database language, schema evolution is reduced
+to the same problem as source code compatibility.  (Database are
+essentially just a rich API.)
 
 Now, I'm not saying that data layouts never have to change.  When
 thinking about data, the first thing to consider is how to partition
@@ -362,10 +373,9 @@ and can be used simultaniously.  Therefore, it is entirely unnecessary
 to store all data in one database.  By splitting your data into
 logical chunks, you should be able to minimize the impact of
 structural changes.  (This is the same problem as designing good APIs
-and adding new features while maintaining backward compatibility.)
+and adding new features while maintaining backward compatibility, yes?)
 
-The way you split up your database generally depends on three things
-(wisdom gleened from developing a real-time trading system):
+The way you split up your database generally depends on three things:
 
 =over 4
 
@@ -378,21 +388,21 @@ perfect awareness of nothing.
 
 It is usually good design to create a separate database for each group
 of real-time writers.  Readers of real-time data can open databases in
-mvcc mode and writers will never encounter lock contention (which is a
-major performance win).
+C<mvcc> mode and writers will never encounter lock contention (which
+can cause major performance degradation).
 
 =item * COUPLING TIGHTNESS
 
 Loosely coupled data can easily (and should) be split into multiple
-databases.  (The most exciting data is tightly coupled; keep this data
-close together. :-)
+databases.  The most exciting data is tightly coupled; keep this data
+close together.
 
 =back
 
-Additional considerations can be found in the C<ObjectStore>
-documentation, but that's about it.  Don't over-complicate things; this
-isn't a relational database, remember?  The power and simplicity is
-hard to describe because there's just not much to it.  (Just the
+A few additional considerations can be found in the C<ObjectStore>
+documentation, but that's about it.  Don't over-complicate things;
+this isn't a relational database remember?  The power and simplicity
+is hard to describe because there's just not much to it.  (Just the
 absolute minimum to satisfy every requirement. :-)
 
 (For extra integrity verification, see the C<iscorrupt> method.)
@@ -410,12 +420,13 @@ C<ObjStore::Index> and C<ObjStore::Table3>.
 
 Fortunately, you will probably not need to use most of the API.  It is
 exhibited here mainly to make it seem like this extension has a
-difficult and steep learning curve.  In general, the API mostly
-mirrors the C<C++> API.  Refer to the C<ObjectStore> documentation for
-exact symantics.  The API for C<::UNIVERSAL> is probably of most
-interest to ex-C<C++> developers.  If you need an API that isn't
-available in OS/Perl, send your request to the mailing list (see the
-README).  If you are just getting started, skip to the next section.
+difficult and steep learning curve (it doesn't).  In general, the API
+mostly mirrors the C<C++> API.  Refer to the C<ObjectStore>
+documentation for exact symantics.
+
+The API for C<::UNIVERSAL> is probably of most interest to ex-C<C++>
+developers.  If you are just getting started, skip to the next
+section.
 
 =head2 C<ObjStore>
 
@@ -743,17 +754,10 @@ to support most (maybe all!) of the above features.
 The word I<tuning> implies too high a brain-level requirement.
 B<Getting performance out of C<ObjectStore> is not rocket science.> On
 the other hand, you shouldn't think that perl will ever go as fast as
-optimized C<C++>.  (C<C++> has to be better for something! :-)
+optimized C<C++>.  That's what DLL schemas are for.  [Add a URL to the
+example here]
 
 =over 4
-
-=item * COMPACTNESS
-
-You get 90% of your performance because you can fit your whole working
-data set into RAM.  If you are doing a good job, your un-indexed
-database should be less than twice the size of it's un-compressed ASCII
-dump; i.e., less than 2 times expansion.  (See the section on
-representation.)
 
 =item * DO AS MUCH AS POSSIBLE PER TRANSACTION
 
@@ -773,6 +777,13 @@ Is your data partitioned into a reasonable number of segments?
 =item * AVOID THE NETWORK
 
 Run your program on the same machine as the C<ObjectStore> server.
+
+=item * COMPACTNESS
+
+You get 90% of your performance because you can fit your whole working
+data set into RAM.  If you are doing a good job, your un-indexed
+database should be more compact that it's un-compressed ASCII dump.
+(See the L<ObjStore/Internal> section on data representation.)
 
 =item * DO STUFF IN PARALLEL
 
@@ -794,12 +805,10 @@ Object Design claims that caching and locking parameters also impact
 performance.  (See C<os_segment::set_lock_whole_segment> and
 C<os_database::set_fetch_policy>.)
 
-=item * THROW MONEY AT THE PROBLEM
+=item * AVOID THE DATABASE
 
-Get more memory, more CPUs, and upgrade to your network.  Or throw in
-the towel and hire C<C++> programmers to redo your project in C<C++>.
-(But don't forget to multiple your timeline by at least factor of
-ten! :-)
+Memory is faster than databases.  If you don't need all the guarentees
+of data integrity, then pure RAM is as fast as it gets.
 
 =back
 
@@ -807,29 +816,13 @@ ten! :-)
 
 =over 4
 
-=item * NESTING
-
-Nested transactions are supported but transaction modes must match.
-You can nest reads within reads or updates within updates, but not
-reads within updates (nor updates within reads).  If you need to do a
-read but you don't care if the parent transaction is an update or not,
-you can leave the mode unspecified.
-
-  sub do_extra_push_ups_in_a_transaction {
-    begin sub {
-      ...
-      # Unspecified mode assumes 'read' or the same mode as the parent.
-      ...
-    };
-  }
-
 =item * RELAXING EXCEPTION SEVERITY
 
 Transactions are always executed within an implicit C<eval>.  By
 default, ObjectStore exceptions are fatal (by demand of my
 co-workers).  If you do not want your program to become suicidal when
-an C<ObjectStore> exception occurs, you should indicate that you want
-to have control over your own reflexive behavior:
+an C<ObjectStore> exception occurs, you should declare that you want
+control over your own reflexive behavior:
 
   ObjStore::fatal_exceptions(0);
 
@@ -846,31 +839,40 @@ anything went wrong.
 Is it recommended that any perl extensions explicitly check for
 errors, just in case exceptions are not automatically re-thrown.
 
-=item * DEADLOCK
+=item * NESTING
 
-Built-in automatic deadlock retry is experimental, not because it
-doesn't work but because it doesn't make much sense in perl.  Since
-it's so easy to implement yourself, you probably should.
+Nested transactions are supported with all the restrictions of the C++
+interface.  You can nest reads within reads or updates within updates,
+but not reads within updates (nor updates within reads).  If you need
+to do a read but you don't care if the parent transaction is an update
+or not, you can leave the mode unspecified.
 
-Top level transactions are automatically retried in the case of a
-deadlock.  You can increase the number of retries with
-C<ObjStore::set_max_retries($retries)>.  Or if you need to handle
-deadlocks yourself, you can set the number of retries to zero.
+  sub do_extra_push_ups_in_a_transaction {
+    begin sub {
+      ...
+      # Unspecified mode assumes 'read' or the same mode as the parent.
+      ...
+    };
+  }
 
-(There is not much point to retrying I<non->top-level transactions
-because locks are released only at the top-level [OS 4-5.0.*].)
+=item * DEADLOCK RETRIES
+
+Built-in automatic deadlock retry is not supported.  It is not
+supported not because it is doesn't work but because it doesn't make
+much sense in perl.  Since deadlock retry is so easy to implement
+yourself, you probably should.
 
 =back
 
 =head2 Stargate Mechanics
 
-Create hashes and arrays pre-sized to exactly the right number of
-slots:
+Here is how to create hashes and arrays pre-sized to exactly the right
+number of slots:
 
   ObjStore::HV->new($near, { key => 'value' });  # 1 slot
   ObjStore::AV->new($near, [1..3]);              # 3 slots
 
-Or you can address the stargate directly:
+Or you can interface the stargate directly:
 
   my $persistent_junk = ObjStore::translate($near, [1,2,3,{fat=>'dog'}]);
 
@@ -889,10 +891,10 @@ persistent reference to it or kiss the object goodbye.
 
 Note that the C<DESTROY> method is still invoked every time an object
 becomes unreachable from the current scope.  However, contrary to
-transient objects, this method does not truly preview object
+transient objects this method does not preview persistent object
 destruction.  (Hacking C<DESTROY> such that it can be used as
 C<NOREFS> is desirable, but would require changes to the core perl
-code-base.  This change is under consideration...)
+code-base.  This change is under consideration.)
 
 Also see C<ObjStore::Mortician>!
 
@@ -932,7 +934,7 @@ See C<ObjStore::AVHV> XXX
 =head2 Autoloading
 
 When you use a database, ObjStore tries to C<require> each class that
-doesn't seem loaded.  This means that you can write generic data
+doesn't seem loaded.  This means that you can write B<generic> data
 processing programs that load the appropriate libraries to manipulate
 data in application specific ways.
 
@@ -978,7 +980,7 @@ C<ObjStore::Notification> and C<ObjStore::ServerDB>).  The two
 technologies address different problems, but here is a rough
 comparison:
 
-                      CORBA                     ObjectStore
+ GENERALLY            CORBA                     ObjectStore
  -------------------- ------------------------- -------------------------
  flow                 you follow the data       the data comes to you
  network              important                 what network?
@@ -988,6 +990,9 @@ comparison:
  binary portability   yes                       partially
  reference counted    no (does not store data)  yes
  multivendor          yes                       not yet
+
+ MESSAGING            CORBA                     ObjectStore
+--------------------- ------------------------- ------------------------
  overflow possible?   no?                       yes
  a/syncronous         both?                     async only
 
@@ -1025,26 +1030,10 @@ language.
   my $h1 = { name => undef, title => undef, size => 'perl' };
 
 Only the field-names are specified.  This declaration is actually even
-more flexible than C<SQL> because the field-types are left dynamic.  But
-not only is perl more flexible, it's also fast.  Malcolm Beattie is
-working on a perl compiler which is currently in beta.  Here is his
-brief description of a new hybrid hash-array that is supported: I<An
-array ref $a can be dereferenced as if it were a hash ref.
-$a-E<gt>{foo} looks up the key "foo" in %{$a-E<gt>[0]}. The value is
-the index in the true underlying array @$a. As an addition, if the
-array ref is in a lexical variable tagged with a classname ("my CXX
-$obj" to match your example above) then constant key dereferences of
-the form $obj-E<gt>{foo} are mapped to $obj-E<gt>[123] at compile time
-by looking up the index in %CXX::FIELDS.>
-
-For example:
-
-  my $schema_hashref = { 'field1' => 1, 'field2' => 2 };
-  my $arr = [$schema_hashref, 'fwaz', 'snorf'];
-  print "$arr->{field1} : $arr->{field2}\n";      # "fwaz : snorf"
-
-So perl will soon compile to optimized C<C> (with C<C>-like data access
-times!).  It's almost too good to be true.
+more flexible than C<SQL> because the field-types are left dynamic.
+But not only is perl more flexible, it's also fast.  When you need the
+speed, you can implement specific objects or subsystems directly in
+C++.
 
 =head2 Why Is Perl Easier Than Other Programming Languages?
 
@@ -1120,12 +1109,6 @@ in transient memory and persistent memory
 without violating the principle of encapsulation or obstructing
 general ease of use.
 
-=head2 ETA: 0-3 Months
-
-  perl compiler
-  kernel-managed perl threads
-  dynamically loaded application schemas
-
 =head1 EXPORTS
 
 C<bless> and C<begin> by default.  Most other static methods can also
@@ -1133,7 +1116,7 @@ be exported.
 
 =head1 ENVIRONMENT VARIABLES
 
-OSPERL_SCHEMA_DB
+OSPERL_SCHEMA_DB  [MORE SOON]
 
 =head1 AUTHOR
 

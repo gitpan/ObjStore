@@ -173,9 +173,11 @@ sub peek_any {
     } elsif ($class and $o->{pretty} and $val->can('POSH_PEEK')) {
 	$val->POSH_PEEK($o, $name);
     } elsif ($type eq 'ARRAY') {
-	$o->peek_array($val, $name);
+	ObjStore::AV::POSH_PEEK($val, $o, $name);
+#	$o->peek_array($val, $name);
     } elsif ($type eq 'HASH') {
-	$o->peek_hash($val, $name);
+	ObjStore::HV::POSH_PEEK($val, $o, $name);
+#	$o->peek_hash($val, $name);
     } elsif ($type eq 'REF') {
 	++ $o->{coverage};
 	$o->o('\ ');
@@ -188,9 +190,70 @@ sub peek_any {
     }
 }
 
-sub peek_array {
-    my ($o, $val, $name) = @_;
-    my $blessed = blessed($val);
+package ObjStore::Database;
+
+sub POSH_PEEK {
+    my ($val, $o, $name) = @_;
+    my $path = $val->get_pathname;
+    my $how = $val->is_open;
+    $o->o($name."[$path, $how] {");
+    $o->nl;
+    $o->indent(sub {
+	my @roots = sort { $a->get_name cmp $b->get_name } $val->get_all_roots;
+	push(@roots, $val->_PRIVATE_ROOT) if $o->{all};
+	for my $r (@roots) {
+	    my $name = $o->{addr}? "$r " : '';
+	    $o->o($name,$r->get_name," => ");
+	    $o->peek_any($r->get_value);
+	    $o->nl;
+	}
+	$o->{coverage} += @roots;
+    });
+    $o->o("},");
+    $o->nl;
+}
+sub POSH_CD {
+    my ($db, $rname) = @_;
+    my $r = $db->find_root($rname);
+    $r? $r->get_value : undef;
+}
+
+package ObjStore::Ref;
+
+sub POSH_PEEK {
+    my ($val, $o, $name) = @_;
+    ++ $o->{coverage};
+    $o->o("$name => ");
+    $o->indent(sub {
+	my $at = $val->POSH_ENTER();
+	if (!ref $at) {
+	    $o->o($at);
+	} else {
+	    $o->o(ref($at)." ...");
+#	    $o->peek_any($at); XXX peek styles
+	}
+    });
+    $o->nl;
+}
+sub POSH_ENTER {
+    my ($val) = @_;
+    my $at = '(database not found)';
+    my $ok = 0;
+    $ok = ObjStore::begin(sub {
+	my $db = $val->get_database;
+	$at = '(deleted object in '.$db->get_pathname.')';
+	$db->open($val->database_of->is_open) if !$db->is_open;
+	!$val->deleted;
+    });
+    $at = $val->focus if $ok;
+    $at;
+}
+
+package ObjStore::AV;
+
+sub POSH_PEEK {
+    my ($val, $o, $name) = @_;
+    my $blessed = ObjStore::blessed($val);
     my $len = ($blessed and $val->can("FETCHSIZE"))? $val->FETCHSIZE : @$val;
     $o->{coverage} += $len;
     my $big = $len > $o->{width};
@@ -215,8 +278,9 @@ sub peek_array {
     $o->nl;
 }
 
-sub peek_hash {
-    my ($o, $val, $name) = @_;
+package ObjStore::HV;
+sub POSH_PEEK {
+    my ($val, $o, $name) = @_;
     my @S;
     my $x=0;
     while (my($k,$v) = each %$val) {
@@ -244,6 +308,36 @@ sub peek_hash {
 	}
     });
     $o->o("},");
+    $o->nl;
+}
+
+package ObjStore::Index;
+sub POSH_PEEK {
+    my ($val, $o, $name) = @_;
+    my $len = $val->FETCHSIZE;
+    $o->{coverage} += $len;
+    my $big = $len > $o->{width};
+    my $limit = $big? $o->{summary_width} : $len;
+
+    $o->o("$name ");
+    $val->configure()->POSH_PEEK($o);
+    $o->o(" [");
+    $o->nl;
+    $o->indent(sub {
+		   # factor ObjStore::peek_array XXX
+		   for (my $x=0; $x < $limit; $x++) {
+		       $o->peek_any($val->[$x]);
+		       $o->nl;
+		   }
+		   if ($big) {
+		       $o->o("...");
+		       $o->nl;
+		       $o->peek_any($val->[$len-1]);
+		       $o->o(" (at ".($len-1).")");
+		       $o->nl;
+		   }
+	       });
+    $o->o("],");
     $o->nl;
 }
 

@@ -4,7 +4,9 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 */
 
+#include "osp-preamble.h"
 #include "osperl.h"
+#include <ostore/mop.hh>
 
 /*
 
@@ -26,6 +28,22 @@ readonly(sv)
 	if (!sv || !SvANY(sv)) XSRETURN_NO;
 	if (SvREADONLY(sv)) XSRETURN_YES;
 	XSRETURN_NO;
+
+void
+_lock_method(sub)
+	SV *sub
+	PPCODE:
+	if (SvROK(sub)) {
+	    sub = SvRV(sub);
+	    if (SvTYPE(sub) != SVt_PVCV)
+		sub = Nullsv;
+	} else {
+	    char *name = SvPV(sub, na);
+	    sub = (SV*)perl_get_cv(name, FALSE);
+	}
+	if (!sub)
+	    croak("invalid subroutine reference or name");
+	CvFLAGS(sub) |= CVf_LOCKED|CVf_METHOD;
 
 */
 
@@ -80,11 +98,10 @@ BOOT:
   /*
  "As a prerequisite, such extensions must not need to do anything in
   their BOOT: section which needs to be done at runtime rather than
-  compile time." -- The perl compiler
+  compile time." -- the perl compiler
   */
   PUTBACK;
   osp_thr::boot();
-  // Nuke the following lines if you are dynamic-linking
   newXS("ObjStore::REP::ODI::bootstrap", boot_ObjStore__REP__ODI, file);
   newXS("ObjStore::REP::Splash::bootstrap", boot_ObjStore__REP__Splash, file);
   newXS("ObjStore::REP::FatTree::bootstrap", boot_ObjStore__REP__FatTree, file);
@@ -143,22 +160,6 @@ _debug(mask)
 	osp->debug = mask;
 	XSRETURN_IV(old);
 
-void
-_lock_method(sub)
-	SV *sub
-	PPCODE:
-	if (SvROK(sub)) {
-	    sub = SvRV(sub);
-	    if (SvTYPE(sub) != SVt_PVCV)
-		sub = Nullsv;
-	} else {
-	    char *name = SvPV(sub, na);
-	    sub = (SV*)perl_get_cv(name, FALSE);
-	}
-	if (!sub)
-	    croak("invalid subroutine reference or name");
-	CvFLAGS(sub) |= CVf_LOCKED|CVf_METHOD;
-
 SV *
 set_stargate(code)
 	SV *code
@@ -211,7 +212,7 @@ initialize()
 	SV* isv = perl_get_sv("ObjStore::INITIALIZED", FALSE);
 	sv_inc(isv);
 	objectstore::set_auto_open_mode(objectstore::auto_open_disable);
-	objectstore::set_incremental_schema_installation(0);    //otherwise buggy
+	objectstore::set_incremental_schema_installation(1);
 #ifdef USE_THREADS
 	objectstore::set_thread_locking(1);
 #else
@@ -1165,12 +1166,15 @@ OSSVPV::_new_ref(type, sv1)
 	dOSP;
 	os_segment *seg = osp_thr::sv_2segment(sv1);
 	SV *ret;
+	OSSVPV *tpv;
 	if (type == 0) {
-	  ret = osp->ospv_2sv(new (seg, OSPV_Ref2_protect::get_os_typespec())
-		OSPV_Ref2_protect(THIS), 1);
+	  NEW_OS_OBJECT(tpv, seg, OSPV_Ref2_protect::get_os_typespec(),
+			OSPV_Ref2_protect(THIS));
+	  ret = osp->ospv_2sv(tpv, 1);
 	} else if (type == 1) {
-	  ret = osp->ospv_2sv(new (seg, OSPV_Ref2_hard::get_os_typespec())
-		OSPV_Ref2_hard(THIS), 1);
+	  NEW_OS_OBJECT(tpv, seg, OSPV_Ref2_hard::get_os_typespec(),
+			OSPV_Ref2_hard(THIS));
+	  ret = osp->ospv_2sv(tpv, 1);
 	} else { croak("OSSVPV->new_ref(): unknown type"); }
 	SPAGAIN;
 	XPUSHs(ret);
@@ -1242,19 +1246,15 @@ void
 OSPV_Generic::POP()
 	PPCODE:
 	PUTBACK;
-	SV *ret = THIS->POP();
-	//DEBUG_array(warn("%p->POP: %p", THIS, ret));
-	SPAGAIN;
-	if (ret) XPUSHs(ret);
+	THIS->POP();
+	return;
 
 void
 OSPV_Generic::SHIFT()
 	PPCODE:
 	PUTBACK;
-	SV *ret = THIS->SHIFT();
-	//DEBUG_array(warn("%p->SHIFT: %p", THIS, ret));
-	SPAGAIN;
-	if (ret) XPUSHs(ret);
+	THIS->SHIFT();
+	return;
 
 void
 OSPV_Generic::PUSH(...)
@@ -1387,25 +1387,6 @@ OSPV_Generic::CLEAR()
 MODULE = ObjStore	PACKAGE = ObjStore::Index
 
 void
-OSPV_Generic::add(sv)
-	SV *sv;
-	PPCODE:
-	PUTBACK;
-	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1, os_segment::of(THIS));
-	int added = THIS->add(br->ospv());
-	SPAGAIN;
-	if (added && GIMME_V != G_VOID) PUSHs(sv);
-
-void
-OSPV_Generic::remove(sv)
-	SV *sv
-	PPCODE:
-	PUTBACK;
-	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1);
-	THIS->remove(br->ospv());
-	return;
-
-void
 OSPV_Generic::configure(...)
 	PPCODE:
 	SV *args[32];
@@ -1413,6 +1394,47 @@ OSPV_Generic::configure(...)
 	for (int xx=0; xx < items; xx++) args[xx] = sv_mortalcopy(ST(xx));
 	PUTBACK;
 	THIS->configure(args, items);
+	return;
+
+void
+OSPV_Generic::add(sv)
+	SV *sv;
+	PPCODE:
+	PUTBACK;
+	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1, os_segment::of(THIS));
+	OSSVPV *pv = br->ospv();
+	int added = THIS->add(pv);
+	SPAGAIN;
+	if (added && GIMME_V != G_VOID) {
+	  PUSHs(osp_thr::ospv_2sv(pv));
+	}
+
+void
+OSPV_Generic::remove(sv)
+	SV *sv
+	PPCODE:
+	PUTBACK;
+	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1);
+	char *why = THIS->remove(br->ospv());
+	if (why) {
+		SPAGAIN;
+		XPUSHs(sv_2mortal(newSVpv(why, 0)));
+		PUTBACK;
+	}
+	return;
+
+void
+OSPV_Generic::POP()
+	PPCODE:
+	PUTBACK;
+	THIS->POP();
+	return;
+
+void
+OSPV_Generic::SHIFT()
+	PPCODE:
+	PUTBACK;
+	THIS->SHIFT();
 	return;
 
 void
@@ -1558,38 +1580,6 @@ OSPV_Cursor2::keys()
 	PUTBACK;
 	THIS->keys();
 	return;
-
-#-----------------------------# Set - DEPRECIATED!!
-
-MODULE = ObjStore	PACKAGE = ObjStore::Set
-
-void
-OSPV_Generic::add(...)
-	CODE:
-	/* CCov: off */
-	for (int xx=1; xx < items; xx++) THIS->set_add(ST(xx));
-
-int
-OSPV_Generic::contains(val)
-	SV *val;
-	CODE:
-	THIS->set_contains(val);
-
-void
-OSPV_Generic::rm(nval)
-	SV *nval
-	CODE:
-	THIS->set_rm(nval);
-
-SV *
-OSPV_Generic::first()
-	CODE:
-	ST(0) = THIS->FIRST( THIS_bridge );  //buggy
-
-SV *
-OSPV_Generic::next()
-	CODE:
-	ST(0) = THIS->NEXT( THIS_bridge );  //buggy
 
 #-----------------------------# Cursor
 

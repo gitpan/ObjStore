@@ -1,5 +1,4 @@
-^blib/
 ^MANIFEST\.bak$
-^Makefile(\.old)?$
+Makefile(\.old)?$
 \.rej$
 ^t/peek.out$

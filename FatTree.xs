@@ -1,4 +1,5 @@
 // -*-C++-*- mode
+#include "osp-preamble.h"
 #include "osperl.h"
 #include "FatTree.h"
 #include "XSthr.h"
@@ -96,28 +97,38 @@ OSSV *OSPV_fattree_av::STORE(SV *sv, SV *value)
   return 0;
 }
 
-SV *OSPV_fattree_av::POP()
+void OSPV_fattree_av::POP()
 {	
   OSSV *ret0;
   dGCURSOR(&ary);
+  if (TvFILL(&ary) == 0) return;
   tc_moveto(&gl->tc, TvFILL(&ary)-1);
-  if (!avtc_fetch(&gl->tc, &ret0)) return 0;
-  dOSP;
-  SV *ret = osp->ossv_2sv(ret0);
+  dTHR;
+  if (GIMME_V != G_VOID) {
+    avtc_fetch(&gl->tc, &ret0);
+    SV *ret = osp_thr::ossv_2sv(ret0);
+    djSP;
+    XPUSHs(ret);
+    PUTBACK;
+  }
   avtc_delete(&gl->tc);
-  return ret;
 }
 
-SV *OSPV_fattree_av::SHIFT()
+void OSPV_fattree_av::SHIFT()
 {
   OSSV *ret0;
   dGCURSOR(&ary);
+  if (TvFILL(&ary) == 0) return;
   tc_moveto(&gl->tc, 0);
-  if (!avtc_fetch(&gl->tc, &ret0)) return 0;
-  dOSP;
-  SV *ret = osp->ossv_2sv(ret0);
+  dTHR;
+  if (GIMME_V != G_VOID) {
+    avtc_fetch(&gl->tc, &ret0);
+    SV *ret = osp_thr::ossv_2sv(ret0);
+    djSP;
+    XPUSHs(ret);
+    PUTBACK;
+  }
   avtc_delete(&gl->tc);
-  return ret;
 }
 
 void OSPV_fattree_av::PUSH(SV **base, int items)
@@ -222,6 +233,8 @@ char *OSPV_fatindex2::rep_class(STRLEN *len)
 int OSPV_fatindex2::get_perl_type()
 { return SVt_PVAV; }
 
+// Is it really true that only one reference is auto-dereferenced? XXX
+
 void OSPV_fatindex2::CLEAR()
 {
   if (conf_slot) {
@@ -232,8 +245,10 @@ void OSPV_fatindex2::CLEAR()
     dGCURSOR(&tv);
     tc_moveto(&gl->tc, 0);
     OSSVPV *pv;
+    int is_transient = os_segment::of(this) == os_segment::of(0);
     while (dex2tc_fetch(&gl->tc, &pv)) {
-      osp_pathexam exam(paths, pv, 'u', is_excl);
+      if (pv->is_OSPV_Ref2()) pv = ((OSPV_Ref2*)pv)->focus();
+      osp_pathexam exam(paths, pv, 'u', is_excl, is_transient);
       assert(!exam.failed);
       exam.commit();
       pv->REF_dec();
@@ -245,12 +260,15 @@ void OSPV_fatindex2::CLEAR()
 
 int OSPV_fatindex2::add(OSSVPV *target)
 {
+  OSSVPV *orig_target = target;
+  if (target->is_OSPV_Ref2()) target = ((OSPV_Ref2*)target)->focus();
   if (!conf_slot) croak("%p->add(%p): index not configured", this, target);
   OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
   dGCURSOR(&tv);
   OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
   OSSV *excl = conf->avx(3);
-  osp_pathexam exam(paths, target, 's', excl? excl->istrue() : 0);
+  int is_transient = os_segment::of(this) == os_segment::of(0);
+  osp_pathexam exam(paths, target, 's', excl? excl->istrue() : 0, is_transient);
   if (exam.failed) return 0;
   int unique = conf->avx(1)->istrue();
   int match = dex2tc_seek(&gl->tc, unique, exam);
@@ -262,6 +280,7 @@ int OSPV_fatindex2::add(OSSVPV *target)
       ok = dex2tc_fetch(&gl->tc, &obj);
       assert(ok);
       exam.abort();
+      if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
       if (obj == target) {
 	return 0; //already added
       } else {
@@ -270,10 +289,12 @@ int OSPV_fatindex2::add(OSSVPV *target)
     } else {
       ok = dex2tc_fetch(&gl->tc, &obj);
       assert(ok);
+      if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
       if (obj == target) { exam.abort(); return 0; } //already here
       while (1) {
 	if (!tc_step(&gl->tc, 1)) break;
 	dex2tc_fetch(&gl->tc, &obj);
+	if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
 	if (obj == target) { exam.abort(); return 0; } //found it here
 	int cmp;
 	TV_ESEEK_CMP(cmp, IGNORE, obj);
@@ -286,43 +307,84 @@ int OSPV_fatindex2::add(OSSVPV *target)
   }
   exam.commit();
   DEBUG_index(warn("%p->add(%p)", this, target));
-  target->REF_inc();
-  dex2tc_insert(&gl->tc, target);
+  orig_target->REF_inc();
+  dex2tc_insert(&gl->tc, orig_target);
   return 1;
 }
 
-void OSPV_fatindex2::remove(OSSVPV *target)
+char *OSPV_fatindex2::remove(OSSVPV *target)
 {
+  OSSVPV *orig_target = target;
+  if (target->is_OSPV_Ref2()) target = ((OSPV_Ref2*)target)->focus();
   assert(conf_slot);
   dGCURSOR(&tv);
   OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
   OSPV_Generic *paths = (OSPV_Generic*) conf->avx(2)->get_ospv();
   OSSV *excl = conf->avx(3);
-  osp_pathexam exam(paths, target, 'u', excl? excl->istrue() : 0);
-  if (exam.failed) return;
+  int is_transient = os_segment::of(this) == os_segment::of(0);
+  osp_pathexam exam(paths, target, 'u', excl? excl->istrue() : 0, is_transient);
+  if (exam.failed) return "exam.failed";
   int unique = conf->avx(1)->istrue();
   int match = dex2tc_seek(&gl->tc, unique, exam);
-  if (!match) return;
+  if (!match) return "!match";
   if (unique) {
     OSSVPV *obj;
     dex2tc_fetch(&gl->tc, &obj);
+    if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
     if (target != obj) croak("%p->remove: path matches but pointer doesn't", this);
   } else {
     OSSVPV *obj;
     while (dex2tc_fetch(&gl->tc, &obj)) {
+      if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
       if (obj == target) break;
-      if (!tc_step(&gl->tc, 1)) return; //not here!
+      if (!tc_step(&gl->tc, 1)) return "!tc_step"; //not here!
       int cmp;
       TV_ESEEK_CMP(cmp, IGNORE, obj);
-      if (cmp != 0) return;  //must not be here already
+      if (cmp != 0) return "cmp != 0";  //must not be here already
     }
   }
   DEBUG_index(warn("%p->remove(%p)", this, target));
   dex2tc_delete(&gl->tc);
   exam.commit();
-  target->REF_dec();
+  orig_target->REF_dec();
+  return 0;
 }
 
+/*
+need pathexam stuff XXX
+
+void OSPV_fatindex2::POP()
+{	
+  OSSV *ret0;
+  dGCURSOR(&tv);
+  if (TvFILL(&tv) == 0) return;
+  tc_moveto(&gl->tc, TvFILL(&tv)-1);
+  dSP;
+  if (GIMME_V != G_VOID) {
+    dex2tc_fetch(&gl->tc, &ret0);
+    XPUSHs(osp_thr::ossv_2sv(ret0));
+    PUTBACK;
+  }
+  dex2tc_delete(&gl->tc);
+}
+
+void OSPV_fatindex2::SHIFT()
+{
+  OSSV *ret0;
+  dGCURSOR(&tv);
+  if (TvFILL(&tv) == 0) return;
+  tc_moveto(&gl->tc, 0);
+  dSP;
+  if (GIMME_V != G_VOID) {
+    dex2tc_fetch(&gl->tc, &ret0);
+    XPUSHs(osp_thr::ossv_2sv(ret0));
+    PUTBACK;
+  }
+  dex2tc_delete(&gl->tc);
+}
+*/
+
+// XXX factor
 OSSVPV *OSPV_fatindex2::FETCHx(SV *key)
 {
   if (!conf_slot) return 0;
@@ -333,9 +395,6 @@ OSSVPV *OSPV_fatindex2::FETCHx(SV *key)
   dex2tc_fetch(&gl->tc, &pv);
   return pv;
 }
-
-OSSV *OSPV_fatindex2::traverse(char *keyish) 
-{ return 0; }
 
 OSSVPV *OSPV_fatindex2::traverse2(char *keyish)
 {
@@ -406,6 +465,7 @@ void OSPV_fatindex2_cs::keys()
 
 int OSPV_fatindex2_cs::seek(SV **top, int items)
 {
+  // factor into osp_pathref XXX
   OSPV_Generic *conf = (OSPV_Generic *) myfocus->conf_slot;
   OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
   osp_pathref exam;
@@ -464,7 +524,9 @@ OSPV_fattree_av::new(seg, sz)
 	if (sz < 40) {
 	  SERIOUS("ObjStore::REP::FatTree::AV->new(%d): representation not efficient for small arrays", sz);
 	}
-	OSPV_fattree_av *pv = new(area, OSPV_fattree_av::get_os_typespec()) OSPV_fattree_av();
+	OSPV_fattree_av *pv;
+	NEW_OS_OBJECT(pv, area, OSPV_fattree_av::get_os_typespec(), OSPV_fattree_av());
+//	pv = new(area, OSPV_fattree_av::get_os_typespec()) OSPV_fattree_av();
 	init_tv(&pv->ary);
 	pv->bless(CSV);
 	return;
@@ -475,10 +537,13 @@ static void
 OSPV_fatindex2::new(seg)
 	SV *seg;
 	PPCODE:
-	dOSP;
-	os_segment *area = osp->sv_2segment(ST(1));
+	os_segment *area = osp_thr::sv_2segment(ST(1));
 	PUTBACK;
-	OSPV_fatindex2 *pv = new(area, OSPV_fatindex2::get_os_typespec()) OSPV_fatindex2();
+	OSPV_fatindex2 *pv;
+	if (area == os_segment::get_transient_segment())
+	  croak("transient indices are too easily corrupted");
+	NEW_OS_OBJECT(pv, area, OSPV_fatindex2::get_os_typespec(), OSPV_fatindex2());
+//	pv = new(area, OSPV_fatindex2::get_os_typespec()) OSPV_fatindex2();
 	init_tv(&pv->tv);
 	pv->bless(ST(0));
 	return;
@@ -487,7 +552,6 @@ void
 OSPV_fatindex2::_conf_slot(...)
 	PPCODE:
 	PUTBACK;
-        dOSP;
 	SV *ret = 0;
 	if (items == 2) {
 	  if (TvFILL(&THIS->tv)) {
@@ -499,7 +563,7 @@ OSPV_fatindex2::_conf_slot(...)
 	  if (THIS->conf_slot) THIS->conf_slot->REF_dec();
 	  THIS->conf_slot = nconf;
 	} else if (items == 1) {
-	  ret = osp->ospv_2sv(THIS->conf_slot);
+	  ret = osp_thr::ospv_2sv(THIS->conf_slot);
 	} else {
 	  croak("OSPV_fatindex2(%p)->_conf_slot: bad args", THIS);
 	}

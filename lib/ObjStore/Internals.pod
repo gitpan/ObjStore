@@ -28,7 +28,7 @@ belong.
 =head2 Perl & C<C++> APIs: What's The Difference?
 
 Most stuff should be roughly the same.  The few exceptions have
-generally arisen because there was an easy way to make the interface
+generally arisen because there was a perl way to make the interface
 more programmer friendly.
 
 =over 4
@@ -116,8 +116,7 @@ possible to directly compare these numbers to RDBMS statistics.  (Part
 of the problem is that RDBMS vendors can't even give you these
 statistics.)  At least note that relational data can be stored with
 much less duplication when moved into C<ObjectStore>.  (Definitely
-true if you write C++ extensions.)  Of course, the real test must
-always be to code up your problem and make experimental measurements.
+true if you design your own C++ extensions!)
 
 =head2 Hard-Coded Limits
 
@@ -139,7 +138,7 @@ in practice (actually, not even in theory).
 =item *
 
 Strings are limited to a length of 32767 bytes.  (This limit will be
-relaxed...)
+relaxed!)
 
 =back
 
@@ -164,20 +163,17 @@ For example:
 
     package main;
 
-    my Scottie $dog = new Scottie($db);
+    my Scottie $dog = Scottie->new($db);
     # once a Scottie, always a Scottie
 
 Persistent C<bless> also does some extra work to make evolution
 easier.  It stores the current C<@ISA> tree along with the C<$VERSION>
-of every class in the C<@ISA> tree.  (This necessitates assigning a
-C<$VERSION> to every class in the C<@ISA> tree.  If this seems
-draconeion, recall that you have been spared the maintanance of a
-centralize schema.)  Furthermore, the C<isa> method is tweaked such
-that it reports according to the moment of the C<bless>.  Similarly,
-the C<versionof> method lets you query the saved C<$VERSION>s.  This
-is helpful when doing evolution, as you can compare the old C<@ISA>
-and C<$VERSION>s to figure out what to change (and
-how). (C<UNIVERSAL::can> is unmodified.)
+of every class in the C<@ISA> tree.  Furthermore, the C<isa> method is
+tweaked such that it reports according to the moment of the C<bless>.
+Similarly, the C<versionof> method lets you query the saved
+C<$VERSION>s.  This is helpful when doing evolution, as you can
+compare the old C<@ISA> and C<$VERSION>s to figure out what to change
+(and how).  C<UNIVERSAL::can> is unmodified.
 
 Technically speaking, C<bless> is re-implemented such that it can be
 extended by the I<bless from> and the I<bless to> classes via the
@@ -194,13 +190,12 @@ are funnelled through a single C<BLESS> method like this:
 =head2 UNLOADED
 
 Generic tools such as C<posh> or C<ospeek> must C<bless> objects when
-reading from an arbitrary database.  Prior to trying to locate the
-implementations of arbitrary objects, C<get_INC> is used to fetch the
-stored C<@INC> and syncronize it with the transient C<@INC>.  Then,
-each class found in the database is C<require>'d.  However, if the
-C<require> fails, a package must be faked-up:
-C<${"${package}::UNLOADED"}> is set to true.  This signals that the
-@ISA tree should not be considered authoritative.
+reading from an arbitrary database.  To C<bless>, there must be
+support code.  To try to get support code, classes found in the
+database are C<require>'d.  However, the C<require> may fail.  A
+package must be faked-up and C<${"${package}::UNLOADED"}> is set to
+true.  This signals that the @ISA tree should not be considered
+authoritative for a particular package.
 
 =head2 Go Extension Crazy
 
@@ -222,15 +217,9 @@ The C<new> method decides on the best representation, calls the best
 creation function from the C<%REP> hash, returning the newly minted
 persistent object.
 
-You can add your own C<C++> representation.  If you want to know the
-specifics, look at the code for the built-in representations.
-
-You can add new families of objects that inherit from
-C<ObjStore::UNIVERSAL>.  Suppose you want highly optimized, persistent
-bit vectors?  Or matrics?  These would not be difficult to add.
-Especially once Object Design figures out how to support multiple
-application schemas within the same executable.  They claim that this
-tonal facility will be available in the next release.
+Add your own C<C++> representation.  New families of objects can
+inherit from C<ObjStore::UNIVERSAL>.  Suppose you want highly
+optimized, persistent bit vectors?  Or matrics?  No problem.
 
 =head2 ObjStore::Index
 
@@ -246,7 +235,7 @@ never relocated.
 =item *
 
 Functions or methods starting with '_' are internal to the C<ObjStore>
-extension.  They are subject to change entirely without notice.
+extension.  They are subject to change (entirely) without notice.
 
 =item *
 
@@ -341,40 +330,40 @@ statement in any way, shape, or form.
 
 
 While there have been gains in software quality in the form of GNU,
-Perl, Apache, Linux, Qt, and recently the Netscape browser, we are
-still in the dark ages with respect to database technology.  After
-avoiding relational databases for years, I sensed a combination of
-persistance and perl could offer the same level of quality and
-simplicity that I find invaluable in addressing the hurdles I face as
-a software professional.
+Perl, Apache, Linux, Qt, and recently the Netscape browser
+(potentially), we are still in the dark ages with respect to database
+technology.  After avoiding relational databases for years, I sensed a
+combination of persistance and perl could offer the same level of
+quality and simplicity that I find invaluable in addressing the
+hurdles I face as a software professional.
 
 It might seem obvious in hindsight (doesn't it always?!), but it is my
 conviction that it was something in particular (not just luck!) that
-allowed me imagine and implement this cutting-edge technology years
+encouraged me imagine and implement this cutting-edge technology years
 before it would be recognized and adopted.  Therefore, I would like to
 express a poignant "thank you!" to all the wonderful teachers with
 whom I've had the opportunity of studying.  My ideas are truly theirs.
 While I predict that this software will be considered a world-class
 inter-disciplinary achievement, I do not see it as such.  Rather, I
 see it as a simple mechanical exercise employed to bring me to a basic
-level of clear understanding.  My subsequent hope was that people who
-use the software will also be able to learn from its clarity.  But
+level of clear understanding.  My subsequent hope is that people who
+use this software will also be able to learn from its clarity.  But
 what are my real aspirations?
 
 I should keep quiet about that but I can say this much: One of my
 friends had an email signature: "Life would be so much easier if we
 could just look at the source code."  (Imagine, "computational
 metaphysics" :-) In using this module, you might feel a hint of it?
-That's my real interest.  You might be interested also.  Perhaps even
+That's my real interest.  You might also be interested!?  Perhaps even
 interested in understanding more (even beyond the bounds of all
-thought and limitations).  "With our thoughts we make the world."
+thought and limitations)?  "With our thoughts we make the world."
 Perhaps it's not common knowledge, but some things don't require
 belief to be true.  If you want to find out for yourself (first hand),
-I would encourage such an inquiry.  You must seriously consider the
-hard, imporant questions in concert with a well regarded teacher.  If
-you have never studied in this way, I highly recommend it!  (It is a
-priceless opportunity.)  And I guarantee that if you look sincerely
-you will find what you seek.  (Or I'll give you double your money
-back. :-) Trust me, it's worth it.
+I would strongly encourage such an inquiry.  You must seriously
+consider the hard, imporant questions in concert with a well regarded
+teacher.  If you have never studied in this way, I highly recommend
+it.  (It is a priceless opportunity.)  And I guarantee that if you
+look sincerely you will find what you seek.  (Or I'll give you double
+your money back. :-) Trust me, it's worth it.
 
 =cut

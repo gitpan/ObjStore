@@ -1,22 +1,24 @@
 // Splash collections
 #include "splash.h"
 
-struct hvent2 {
-  static os_typespec *get_os_typespec();
-  char *hk;
-  OSSV hv;
-  hvent2();
-  ~hvent2();
-  void FORCEUNDEF();
-  void set_undef();
-  int valid() const;
-  void set_key(char *nkey);
-//  hvent2 *operator=(int zero);
-  int rank(const char *v2);
-  SV *key_2sv();
-};
-
 //Splash REDUX
+
+struct OSPV_splashheap : OSPV_Generic {
+  static os_typespec *get_os_typespec();
+  SPList < OSPVptr > av;
+  OSPVptr conf_slot;
+  OSPV_splashheap(int);
+  virtual ~OSPV_splashheap();
+  virtual char *os_class(STRLEN *);
+  virtual char *rep_class(STRLEN *);
+  virtual int get_perl_type();
+  virtual int FETCHSIZE();
+  virtual void CLEAR();
+  virtual int add(OSSVPV*);
+  virtual void SHIFT();
+  virtual OSSVPV *FETCHx(SV *xx);
+  virtual OSSVPV *traverse2(char *keyish);
+};
 
 struct OSPV_avarray : OSPV_Generic {
   static os_typespec *get_os_typespec();
@@ -30,8 +32,8 @@ struct OSPV_avarray : OSPV_Generic {
   virtual OSSV *avx(int xx);
   virtual OSSV *FETCH(SV *xx);
   virtual OSSV *STORE(SV *xx, SV *value);
-  virtual SV *POP();
-  virtual SV *SHIFT();
+  virtual void POP();
+  virtual void SHIFT();
   virtual void PUSH(SV **base, int items);
   virtual void UNSHIFT(SV **base, int items);
   virtual void SPLICE(int offset, int length, SV **base, int count);
@@ -57,7 +59,6 @@ struct OSPV_hvarray2 : OSPV_Generic {
   OSPV_hvarray2(int);
   virtual ~OSPV_hvarray2();
   virtual OSSVPV *new_cursor(os_segment *seg);
-  virtual ospv_bridge *new_bridge();
   virtual char *os_class(STRLEN *);
   virtual char *rep_class(STRLEN *);
   virtual int get_perl_type();
@@ -85,3 +86,4 @@ struct OSPV_hvarray2_cs : OSPV_Cursor {
   virtual void at();
   virtual void next();
 };
+

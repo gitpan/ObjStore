@@ -1,3 +1,4 @@
+#include "osp-preamble.h"
 #include "osperl.h"
 #include "XSthr.h"
 
@@ -101,11 +102,17 @@ osp_thr::osp_thr()
   debug = 0;
   errsv = newSVpv("",0);
   report=0;
+  ospv_freelist = 0;
 }
 
 osp_thr::~osp_thr()
 {
   SvREFCNT_dec(errsv);
+  while (ospv_freelist) {
+    ospv_bridge *br = ospv_freelist;
+    ospv_freelist = (ospv_bridge*) br->next;
+    delete br;
+  }
   // OS_END_FAULT_HANDLER;
 }
 
@@ -234,7 +241,7 @@ void osp_txn::checkpoint()
 
 /*--------------------------------------------- osp_bridge */
 
-osp_bridge::osp_bridge()
+void osp_bridge::init()
 {
   detached = 0;
   holding = 0;
@@ -302,10 +309,12 @@ void osp_bridge::leave_txn()
     detached=1;
   }
   assert(refs >= 0);
-  if (refs == 0) delete this;
+  if (refs == 0) freelist();
 }
 int osp_bridge::invalid()
 { return detached; }
+void osp_bridge::freelist() //move to freelist
+{ delete this; }
 osp_bridge::~osp_bridge()
 {
   DEBUG_bridge(this, warn("bridge(%p)->DESTROY", this));

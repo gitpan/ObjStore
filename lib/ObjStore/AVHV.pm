@@ -64,6 +64,7 @@ sub is_newest_layout {
     $l == $o->[0];
 }
 
+# should create a transient ref to the layout and cache that! XXX
 sub new { #XS? XXX
     my ($class, $db, $of) = @_;
     my $layouts = $db->_private_root_data('layouts');
@@ -81,6 +82,9 @@ sub new { #XS? XXX
     }
 
     $l = $layouts->{$of} = get_transient_layout($of);
+    my $width = 1;
+    for (keys %$l) { ++$width if $_ !~ /^_/; }
+    $l->{__MAX__} = $width;
     $l->{__VERSION__} = $ObjStore::RUN_TIME;
     $l->{__CLASS__} = $of;
     bless $l, $class;

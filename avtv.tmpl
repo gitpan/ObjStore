@@ -3,6 +3,7 @@
 #ifndef _tv_setup_
 #define _tv_setup_
 
+#include "osp-preamble.h"
 #include "osperl.h"
 
 /*
@@ -12,9 +13,13 @@
 */
 #define TnWIDTH		41
 
+#ifndef TV_TEST
+// #define TV_TEST
+#endif
 
-#define NEW_TN(near)\
-	new(os_segment::of(near), TN::get_os_typespec()) TN
+#define NEW_TN(ret, near)\
+	NEW_OS_OBJECT(ret, os_segment::of(near), TN::get_os_typespec(), TN)
+//	ret = new(os_segment::of(near), TN::get_os_typespec()) TN
 
 #define TnDATA_T		OSSV
 #define TV_PLANT_DAT(d)

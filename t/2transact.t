@@ -1,6 +1,6 @@
 # test all transaction types for -*-perl-*-
 use Test;
-BEGIN { plan tests => 20 }
+BEGIN { plan tests => 19 }
 
 use strict;
 use ObjStore ':ALL';
@@ -83,7 +83,7 @@ begin('update', sub {
 });
 ok(! $@);
 
-if (1) {
+if (0) {
 my $debug =0;
 
 # retry deadlock

@@ -1,30 +1,55 @@
 ------------------------------------------------------------ INSTALLATION
 
+*** If do not have (or cannot upgrade) to ObjectStore 5.1, you should
+*** stick with version 1.40 of this extension.
+
+
 Tested Configurations:
 
-   perl 5.004_04, 5.004_53-5.004_64
+  + perl 5.004_04, 5.004_68
 
 
-   Solaris 2.5.1
+  + Solaris 2.5.1 & 2.6
 
-     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1+
-     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0.*
+     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.1
 
+
+  + gmake
 
 -------------------------------------------------------------------------
+*** BUILD STEPS
+
+1. edit lib/ObjStore/Config.pm
+
+2. cd API; perl Makefile.PL; make install
+
+3. cd ..; perl Makefile.PL
+
+4. make
+
+5. make test
+
+6. make install
+
+You have to install the API separately before building the rest of the
+package.  This is because everything depends on the libosperl.so
+library being in the right place.  (Is there a better way?)
+
+-------------------------------------------------------------------------
+*** TEST SUITE
 
 - ./t/zpeek.t is very sensitive to the success of the other tests.
 
 - Keep running 'make test' until the database size matches.  It takes
-me three trials.  If it will not match, there is probably a serious
-refcnt problem.  Also see 'ossize -c'.
+me about three trials.  If it will not match, there is probably a
+serious REFCNT problem.  If you are feeling paranoid, you can check
+that object counts do not increase between runs with 'ossize -c'.
 
-- If something strange happens, mail the output & the output of
-ossvrstat to the mailing list.
+- The mailing list wants to know if something strange happens!
 
 -------------------------------------------------------------------------
 
-If you succeed on a system that is not listed in above, please send
-a note to perl-objectstore@parallax.co.uk announcing your success!
+Once you succeed on a system not listed (above) please send a note to
+the mailing list announcing your success!
 
 -------------------------------------------------------------------------

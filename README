@@ -13,7 +13,7 @@ any flattening of nested or circular structures.  Virtual memory
 mechanism used to make read/write access nearly as fast as memory
 mapped files.
 
-Available via http://www.perl.org/CPAN/modules/by-module/ObjStore
+Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
 
            << This is the relational database killer app! >>
 
@@ -31,6 +31,22 @@ see ./CHANGES for a historical perspective
 ### RECENT CHANGES ###
 
 
+** 10-03-97 Released 1.16
+
+- All transient data related to persistent memory is now garbage
+collected immediately after a transaction finishes.  This should fix
+any strange reference count problems that extensive testing has been
+uncovering.  I am very interested to see any examples of code that
+still leaks memory.  To recover memory already lost, a script to copy
+databases is in the works.
+
+- The default stargate now destroys data as it is copied into the
+database.  This is necessary to prevent the inadvertant creation of
+uncollectable circular structures.
+
+- Started implementation of persistent cursors.
+
+
 ** 09-27-97 Released 1.15
 
 - Expanded analysis of Perl, Java, C++, and SQL as database languages.
@@ -39,7 +55,7 @@ see ./CHANGES for a historical perspective
 
 - Automatic retry in the event of deadlock (69).
 
-- Blessed classes now try to 'require' themselves the first time they
+- Blessed objects now try to 'require' their class the first time they
 are instantiated in transient memory.
 
 - Renamed $Exception to $EXCEPTION.

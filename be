@@ -44,6 +44,7 @@ See $SchemaDir in ./be.
 	
 	my $r = Maker::Rules->new($pk, 'perl-module');
 	$r->opt(1);
+#	$r->flags('cxx', '-g');
 #	$r->flags('ossg', '-padc', '-arch','set1');
 	$r->flags('ld-dl', '-ztext');   # SunPro specific?
 	my $build =
@@ -52,7 +53,7 @@ See $SchemaDir in ./be.
 					     ($r->cxx('perlmain.c'),
 					      $r->embed_perl('ObjStore')) :
 					     ()),
-					    $r->objstore($SchemaDir, 'osperl-05',
+					    $r->objstore($SchemaDir, 'osperl-07',
 							 ['collections']),
 					    $r->cxx('osperl.c'),
 					    $r->xs('GENERIC.xs'),

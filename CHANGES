@@ -6,7 +6,7 @@ modify it under the same terms as Perl itself.
 ** 08-16-97 Released 1.11
 
 - Update refcnts for transient referers in update & abort_only
-transactions.  Persistent memory leaks now impossible.
+transactions.  Persistent memory leaks no longer possible.
 
 - ospeek restricted to show only three instances per class.
 
@@ -20,8 +20,6 @@ transactions.  Persistent memory leaks now impossible.
 - ospeek [-addr]
 
 - Important typemap fixes plus other minor stuff.
-
-- No schema changes.
 
 
 ** 08-06-97 Released 1.09
@@ -44,25 +42,24 @@ blazingly fast!
 structures.  Peek reports percent utilization to the delight of the
 accountants everywhere.
 
-- Unions removed from the schema.  This major fix makes it possible to
+- Unions removed from the schema.  This fix makes it possible to
 evolve databases in the event of future schema enhancements.
 
 - Reference counts are now 32bits wide and check for overflow.
 
 - Static functions (e.g. ObjStore::Segment::of) are now called with ::
-instead of -> for greater efficiency.
+instead of -> for greater efficiency.  You wouldn't want to subclass
+the core classes anyway.
 
 
 ** 07-05-97 Released 1.06 
 
 - Improved peek.  Now peek from the command line - 'ospeek <database>'!
 
-- Database::get_all_roots Root::get_name
-
 
 ** Released 1.03
 
-- Can't wait for reasonable tied arrays!  Added array-based Sacks.
+- Can't wait for reasonable tied arrays!  Added array-based Sets.
 They're not tied, but at least they're inefficient.
 
 - Found and fixed problems with reference counting.  Now the tests
@@ -73,8 +70,6 @@ can be run and the database does not grow.
 
 ** Released 1.02
 
-- Fixed version numbering for Exporter.  1.2 => 1.02
-
 - Added ObjStore::peek($var) - like Data::Dumper except that it will work better
 on gigantic databases.  Only three elements are printed from large hashes,
 while small hashes are printed completely.  The meaning of 'large' can be
@@ -84,4 +79,4 @@ customized (not yet).
 ** Released 1.00
 
 - The first release, written during our 60 day ObjectStore evaluation.
-Why ObjectStore have a reputation of being difficult to work with?
+Why does ObjectStore have a reputation of being difficult to work with?

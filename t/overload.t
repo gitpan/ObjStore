@@ -21,4 +21,3 @@ try_read {
     my ($a,$b) = @fun;
     "$a" eq "$b" ? not_ok : ok;
 };
-die if $@;

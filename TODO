@@ -21,50 +21,51 @@ databases.  Small memory efficiency improvements in a 5TB database
 have a big impact.
 
 3. Speed
-Speed is pretty good already, compared to a relational database.
-Of course, there is always room for improvement!
+Speed is pretty good already, compared to a relational database!
+Of course, there is always room for improvement.
+
+
++ FOR CORE SCHEMA EVOLUTION +
+
+Weak references!
+
+Don't store the hash key's length in the database (save 4 bytes and an
+allocation)!
 
 
 + IDEAS +
 
-Better test scripts?
+$hv->new_cursor($seg);
 
-Strings can be turned into BLOBs and back.  BLOBs support various
-indexing, including Verity TOM.  Verity full text indexing.
+Persistent cursors!
 
-Support for abort_top_level(), acquire_lock(), and transaction hooks.
+osp_copy -> database cursor (focus)
 
-Support for notification, database access control?
+Factor Peeker
 
-Support for the database utility API, os_object_cursor?  Who cares?
+Tk osp_edit?
 
-ospeek option to re-bless all classes?
+Support for acquire_lock(), transaction hooks, notification, database
+access control, utility API, os_object_cursor?  Who cares?
 
-Avoid stomping on some other version of ref,bless?
+Split GENERIC into ObjectStore & Splash parts?
+
+ObjStore::File.  Support Verity full text indexing?
+
+Encapsulate all the transaction stuff.  Figure out nested transactions.
+
+ObjStore::Transaction::Bridge as a perl object?
 
 Track down any/all XS transient memory leaks.  (Any?)
 
-
-+ CORE-PERL WISH LIST +
-
-There should be a less kludgy way to extend bless and ref.  Why aren't
-these special methods of UNIVERSAL?  :-(
-
-Why do FIRSTKEY, NEXTKEY accept a string instead of a (string, length) pair
-or an (SV*)?  The TIE interfaces should be more XS friendly!
-
-Make 'reftype' an official built-in!
+Avoid stomping on some other version of bless?
 
 
 + BIGGISH PROJECTS +
 
-Split out representations into their own shared libraries.  Requires
-support for multiple application schemas (expected 1Q98).
+Support for multiple application schemas!  (Expected 1Q98)
 
-Fix the TIEARRAY interface.
-
-Add support for parts of the TimeSeries Object Manager?  Wait for
-dynamic application schemas.
+Add support for parts of the TimeSeries Object Manager?
 
 Could perl performance be improve?  Streamline typemap?
 
@@ -72,5 +73,19 @@ Add MOP support for editing & reporting of abritrary databases. [HARD]
 Object Design working on this problem?
 
 Expand Maker to encompass all architectures/compilers/situations.
-Integrate with and replace MakeMaker?  Why bother?
+
+
++ CORE-PERL WISH LIST +
+
+According to Devel::Peek, tied hashes/arrays take up transient memory
+proportional to their underlying structure.  This needs to be fixed!
+
+There should be a less kludgy way to extend bless.  Why isn't it a
+special method of UNIVERSAL?  :-(
+
+Why do FIRSTKEY, NEXTKEY accept a string instead of a (string, length) pair
+or an (SV*)?  The TIE interfaces should be more XS friendly!
+
+Make 'reftype' an official built-in!
+
 

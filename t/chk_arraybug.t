@@ -14,5 +14,4 @@ try_abort_only {
     for (1..200) { $mess->{$_} = $_; }
     $dict->{foo} = 'bar';
 };
-die if $@;
 ok;

@@ -42,6 +42,4 @@ for my $rep (keys %ObjStore::Set::REP) {
 	
 	delete $john->{c};
     };
-    die if $@;
 };
-print "[Abort] $@\n" if $@;

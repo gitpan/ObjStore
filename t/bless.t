@@ -20,10 +20,8 @@ try_update {
     
     $john->{obj} = new PTest($DB);
 };
-die if $@;
 
 try_update {
     my $john = $DB->root('John');
     $john->{obj}->bonk ? ok : not_ok;
 };
-print "[Abort] $@\n" if $@;

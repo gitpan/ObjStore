@@ -7,7 +7,7 @@ use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS
 	    $EXCEPTION %CLASSLOAD $CLASSLOAD);
 
-$VERSION = '1.15';  #is a string, not a number!
+$VERSION = '1.16';  #is a string, not a number!
 
 use Carp;
 use Config;
@@ -17,9 +17,9 @@ require DynaLoader;
 @ISA         = qw(Exporter DynaLoader);
 @EXPORT      = qw(&bless &try_read &try_abort_only &try_update);
 {
-    my @x_tra = qw(&peek &reftype &schema_dir &set_gateway 
+    my @x_tra = qw(&peek &reftype &schema_dir &set_stargate 
 		   &release_name &release_major &release_minor &release_maintenance
-		   &network_servers_available 
+		   &network_servers_available &rethrow_exceptions
 		   &get_page_size &return_all_pages &get_lock_status
 		   &set_transaction_priority &is_lock_contention
 		   &get_max_retries &set_max_retries
@@ -28,17 +28,19 @@ require DynaLoader;
 		   &abort_in_progress
 		   &get_all_servers &get_n_databases
 		   &set_auto_open_mode &database_of &segment_of
-		   &DEFAULT_GATEWAY &PoweredByOS);
+		   &DEFAULT_STARGATE &PoweredByOS);
 
     %EXPORT_TAGS = (ALL => [@EXPORT, @x_tra]);
 
-    my @x_old = qw(&gateway);
+    my @x_old = qw(&stargate);
     my @x_priv = qw(%CLASSLOAD $CLASSLOAD $EXCEPTION &_PRIVATE_ROOT);
 
     @EXPORT_OK   = (@EXPORT, @x_tra, @x_old, @x_priv);
 }
 
 bootstrap ObjStore $VERSION;
+
+require ObjStore::GENERIC;
 
 sub reftype ($);
 sub bless ($;$);
@@ -67,6 +69,7 @@ sub disable_auto_class_loading {
 	$CLASSLOAD{$class} = 1;
     };
 }
+*ObjStore::disable_class_auto_loading = \&disable_auto_class_loading; #silly
 
 $EXCEPTION = sub {
     my $reason = shift;
@@ -74,26 +77,29 @@ $EXCEPTION = sub {
     confess "ObjectStore: $reason\t";
 };
 
-sub DEFAULT_GATEWAY {
+sub DEFAULT_STARGATE {
     my ($seg, $sv) = @_;
     my $type = reftype $sv;
     my $class = ref $sv;
     if ($type eq 'HASH') {
 	my $hv = new ObjStore::HV($seg);
 	while (my($hk,$v) = each %$sv) { $hv->STORE($hk, $v); }
+	%$sv = ();
 	if ($class ne 'HASH') { ObjStore::bless $hv, $class; }
-	else { $hv }
+	$hv
     } elsif ($type eq 'ARRAY') {
 	my $av = new ObjStore::AV($seg, scalar(@$sv));
 	for (my $x=0; $x < @$sv; $x++) { $av->STORE($x, $sv->[$x]); }
+	@$sv = ();
 	if ($class ne 'ARRAY') { ObjStore::bless $av, $class; }
-	else { $av }
+	$av
     } else {
-	croak("ObjStore::DEFAULT_GATEWAY: Don't know how to translate $sv");
+	croak("ObjStore::DEFAULT_STARGATE: Don't know how to translate $sv");
     }
 };
-set_gateway(\&DEFAULT_GATEWAY);
-sub gateway { carp 'depreciated; call set_gateway instead'; set_gateway(@_); }
+set_stargate(\&DEFAULT_STARGATE);
+sub gateway { carp 'depreciated; call set_stargate instead'; set_stargate(@_); }
+sub set_gateway { carp 'depreciated; call set_stargate instead'; set_stargate(@_); }
 
 # Bless should be a member of UNIVERSAL so we can override it
 # in a less impolite manner.
@@ -108,9 +114,10 @@ sub bless ($;$) {
 }
 
 sub peek {
+    croak "ObjStore::peek(top)" if @_ != 1;
     require ObjStore::Peeker;
     my $pk = new ObjStore::Peeker;
-    $pk->Peek(@_);
+    $pk->Peek($_[0]);
 }
 
 package ObjStore::Database;
@@ -132,7 +139,7 @@ sub root {
 sub destroy_root {
     my ($o, $tag) = @_;
     my $root = $o->find_root($tag);
-    $root->destroy if $root
+    $root->destroy;
 }
 
 sub _get_private_root {
@@ -155,7 +162,7 @@ sub _get_persistent_raw_string {
     $root->{Brahma} = new ObjStore::HV($db, 30) if !$root->{Brahma};
     my $bhava = $root->{Brahma};
     $bhava->{$class} = $class if !$bhava->{$class};
-    $bhava->_at($class);
+    $bhava->_get_raw_string($class);
 }
 
 sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
@@ -186,9 +193,6 @@ sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
 
-package ObjStore::Transaction;
-use Carp;
-
 package ObjStore::UNIVERSAL;
 use Carp;
 use overload ('""' => \&_pstringify,
@@ -201,6 +205,31 @@ sub persistent_name {
 
 #XS: sub new($area, $rep, $card)
 
-require ObjStore::GENERIC;
+package ObjStore::UNIVERSAL::Container;
+use vars qw(@ISA);
+@ISA = qw(ObjStore::UNIVERSAL);
+
+package ObjStore::AV;
+use vars qw(@ISA %REP);
+@ISA=qw(ObjStore::UNIVERSAL::Container);
+
+package ObjStore::HV;
+use vars qw(@ISA %REP);
+@ISA=qw(ObjStore::UNIVERSAL::Container);
+
+package ObjStore::Set;
+use vars qw(@ISA %REP);
+@ISA=qw(ObjStore::UNIVERSAL::Container);
+use Carp;
+
+sub a { carp "depreciated; you must type 'add' instead of 'a'"; add(@_); }
+sub r {
+    carp "depreciated; you must type 'rm' instead of 'r'";
+    rm($_[0], $_[1]);
+}
+
+package ObjStore::Cursor;
+use vars qw(@ISA);
+@ISA = qw(ObjStore::UNIVERSAL);
 
 1;

@@ -15,6 +15,9 @@ os_database_root *	O_OBJECT
 os_segment *		O_OBJECT
 OSSV *			O_OSSV
 OSSVPV *		O_OSSVPV
+OSPV_Container *	O_OSSVPV
+OSPV_Cursor *		O_OSSVPV
+OSPV_Generic *		O_OSSVPV
 RAW_STRING *		T_PTRREF
 ossv_bridge *		O_OBJECT
 
@@ -39,13 +42,9 @@ O_OSSV
 
 O_OSSVPV
 	ossv_bridge * ${var}_bridge = osperl::sv_2bridge($arg);
-	if (! ${var}_bridge ) {
+	if (  ${var}_bridge ) $var = ($type) ${var}_bridge->ospv();
+	if (! ${var}_bridge || ! $var ) {
 		warn( \"${Package}::$func_name() -- $var is not a persistent type\" );
-		XSRETURN_UNDEF;
-	}
-	$var = ${var}_bridge->ospv();
-	if (! $var ) {
-		warn( \"${Package}::$func_name() -- $var is not a persistent object\" );
 		XSRETURN_UNDEF;
 	}
 

@@ -54,5 +54,4 @@ use ObjStore ':ALL';
 	}
 	$seg->destroy;			# must be empty
     };
-    print "[Abort] $@\n" if $@;
 }

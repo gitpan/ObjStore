@@ -7,8 +7,6 @@ bootstrap ObjStore::GENERIC $ObjStore::VERSION;
 
 package ObjStore::AV;
 use Carp;
-use vars qw(@ISA %REP);
-@ISA=qw(ObjStore::UNIVERSAL);
 
 sub new {
     my ($class, $loc, $rep, @REST) = @_;
@@ -29,8 +27,6 @@ sub new {
 
 package ObjStore::HV;
 use Carp;
-use vars qw(@ISA %REP);
-@ISA=qw(ObjStore::UNIVERSAL);
 
 sub new {
     my ($class, $loc, $rep, @REST) = @_;
@@ -55,10 +51,6 @@ sub new {
 
 package ObjStore::Set;
 use Carp;
-use vars qw(@ISA %REP);
-@ISA=qw(ObjStore::UNIVERSAL);
-#use overload ('+=' => \&a,
-#	      '-=' => \&r);
 
 sub new {
     my ($class, $loc, $rep, @REST) = @_;
@@ -80,8 +72,5 @@ sub new {
 	}
     }
 }
-
-sub a { carp "depreciated; you must type 'add' instead of 'a'"; add(@_); }
-sub r { carp "depreciated; you must type 'rm' instead of 'r'"; rm(@_); }
 
 1;

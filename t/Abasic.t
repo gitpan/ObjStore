@@ -88,7 +88,6 @@ ok; #1
 	    ok;
 	}
     };
-    die "[Abort] $@\n" if $@;
     
     ok;
 }

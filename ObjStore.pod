@@ -1,27 +1,26 @@
 =head1 NAME
 
-ObjStore - Perl extension for ObjectStore OODBMS
+ObjStore - perl extension for ObjectStore OODBMS
 
 =head1 SYNOPSIS
 
-    use ObjStore;
+  use ObjStore ':ALL';
 
-    my $osdir = ObjStore->schema_dir;
-    my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
+  my $db = ObjStore::open(&schema_dir . "/perltest.db", 0, 0666);
 
-    try_update {
-        my $top = $DB->root('whiteboard');
-        $top ||= $DB->root('whiteboard', new ObjStore::HV($DB, 1000));
-        for (my $x=1; $x < 10000; $x++) {
-	    $top->{$x} ||= {
-	        id => $x,
-	        m1 => "I will not talk in ObjectStore/Perl class.",
-	        m2 => "I will study the documentation before asking questions.",
-	    };
-        }
-	print "Very impressive.  I see you are already an expert.\n";
-    };
-    print "[Abort] $@\n" if $@;
+  try_update {
+      my $top = $db->root('whiteboard') ||
+                $db->root('whiteboard', new ObjStore::AV($db, 1000));
+      for (my $x=1; $x < 10000; $x++) {
+          my $z= $top->[$x];
+          $top->[$x] ||= {
+               id => $x,
+               m1 => "I will not talk in ObjectStore/perl class.",
+               m2 => "I will study the documentation before asking questions.",
+          };
+      }
+      print "Very impressive.  I see you are already an expert.\n";
+  };
 
 =head1 DESCRIPTION
 
@@ -46,7 +45,7 @@ ObjectStore was too radical a design decision for many applications.
 
 =item *
 
-Perl5 did not have a simple way of storing complex data persistently.
+perl5 did not have a simple way of storing complex data persistently.
 
 =back
 
@@ -55,12 +54,15 @@ preserving your ideals of data encapsulation.  (See below!)>
 
 =head1 API
 
-Much of the Perl API is a direct interface to the C++ API.  Refer to
+Much of the perl API is a direct interface to the C++ API.  Refer to
 the ObjectStore documentation for exact symantics.  If you need a
-function that isn't available in Perl, send mail to the OS/Perl
+function that isn't available in perl, send mail to the OS/perl
 mailing list (see the README).
 
-=head2 OBJSTORE
+Fortunately, you probably wont need to use most of the API.  It is
+listed below simply to make you feel more comfortable.
+
+=head2 ObjStore
 
 =over 4
 
@@ -84,13 +86,13 @@ mailing list (see the README).
 
 =item * $in_abort = ObjStore::abort_in_progress();
 
-=item * $DB = ObjStore::open($pathname, $read_only, $mode);
+=item * $db = ObjStore::open($pathname, $read_only, $mode);
 
 =item * $num = ObjStore::get_n_databases();
 
 =back
 
-=head2 ::SERVER
+=head2 ::Server
 
 =over 4
 
@@ -106,69 +108,69 @@ mailing list (see the README).
 
 =back
 
-=head2 ::DATABASE
+=head2 ::Database
 
 =over 4
 
-=item * $DB->close();
+=item * $db->close();
 
-=item * $DB->destroy();
+=item * $db->destroy();
 
-=item * $DB->get_default_segment_size();
+=item * $db->get_default_segment_size();
 
-=item * $DB->get_sector_size();
+=item * $db->get_sector_size();
 
-=item * $DB->size();
+=item * $db->size();
 
-=item * $DB->size_in_sectors();
+=item * $db->size_in_sectors();
 
-=item * $ctime = $DB->time_created();
+=item * $ctime = $db->time_created();
 
-=item * $is_open = $DB->is_open();
+=item * $is_open = $db->is_open();
 
-=item * $DB->open_mvcc();
+=item * $db->open_mvcc();
 
-=item * $is_mvcc = $DB->is_open_mvcc();
+=item * $is_mvcc = $db->is_open_mvcc();
 
-=item * $read_only = $DB->is_open_read_only();
+=item * $read_only = $db->is_open_read_only();
 
-=item * $can_write = $DB->is_writable();
+=item * $can_write = $db->is_writable();
 
-=item * $DB->set_fetch_policy(policy[, blocksize]);
+=item * $db->set_fetch_policy(policy[, blocksize]);
 
 Policy can be one of C<segment>, C<page>, or C<stream>.
 
-=item * $DB->set_lock_whole_segment(policy);
+=item * $db->set_lock_whole_segment(policy);
 
 Policy can be one of C<as_used>, C<read>, or C<write>.
 
-=item * $DB = ObjStore::Database::of($pvar);
+=item * $db = ObjStore::Database::of($pvar);
 
-=item * $Seg = $DB->create_segment();
+=item * $Seg = $db->create_segment();
 
-=item * $Seg = $DB->get_segment($segment_number);
+=item * $Seg = $db->get_segment($segment_number);
 
-=item * @Segments = $DB->get_all_segments();
+=item * @Segments = $db->get_all_segments();
 
-=item * @Roots = $DB->get_all_roots();
+=item * @Roots = $db->get_all_roots();
 
-=item * $root = $DB->create_root($root_name);
+=item * $root = $db->create_root($root_name);
 
-=item * $root = $DB->find_root($root_name);
+=item * $root = $db->find_root($root_name);
 
-=item * $value = $DB->root($root_name[, $new_value]);
+=item * $value = $db->root($root_name[, $new_value]);
 
 This is the recommended API for roots.  If the given root is not
 found, creates a new one.  Sets the root's value if $new_value is
 defined.  Returns the root's current value.
 
-=item * $DB->destroy_root($root_name);
+=item * $db->destroy_root($root_name);
 
 Destroys the root with the given name if it exists.
 
 =back
 
-=head2 ::ROOT
+=head2 ::Root
 
 =over 4
 
@@ -182,31 +184,26 @@ Destroys the root with the given name if it exists.
 
 =back
 
-=head2 ::TRANSACTION
+=head2 ::Transaction
 
 ObjectStore transactions and exceptions are seemlessly integrated into
-Perl.
+perl.  ObjectStore exceptions cause a C<die> in perl just as perl
+exceptions cause a transaction abort.
 
     try_update {
-        $top = $DB->root('top');
+        $top = $db->root('top');
         $top->{abc} = 3;
         die "Oops!  abc should not change!";       # aborts the transaction
     };
-    print $@ if $@;
 
 There are three types of transactions: C<try_read>, C<try_update>,
-and C<try_abort_only>.  Each execute the given block within an implicit
-C<eval>.  After a transaction, be sure to check the value of C<$@> to
-see if anything went wrong.  For example,
+and C<try_abort_only>.  In a read transaction, you are not allowed
+to modify persistent data.
 
     try_read {
-	my $var = $DB->root('top');
-	$var->{abc} = 7;	# write to $var triggers exception
+	my $var = $db->root('top');
+	$var->{abc} = 7;	# write to $var triggers die(...)
     };
-    die if $@;			# exception rethrown to top-level
-
-Needless to say, you cannot access or modify persistent data outside
-of a transaction.
 
 =over 4
 
@@ -226,6 +223,8 @@ of a transaction.
 
 =item * ObjStore::set_max_retries($oops);
 
+=item * ObjStore::rethrow_exceptions
+
 =item * my $oops = ObjStore::get_max_retries();
 
 =item * my $yes = ObjStore::is_lock_contention();
@@ -242,7 +241,7 @@ of a transaction.
 
 =back
 
-=head2 ::SEGMENT
+=head2 ::Segment
 
 =over 4
 
@@ -278,10 +277,10 @@ Policy can be one of C<as_used>, C<read>, or C<write>.
 
 =head1 CREATING CONTAINERS
 
-Databases are composed of segments.  Segments dynamically resize very
-small to very big.  You should split your data into lots segments when
-it makes sense.  Segment improve locality of reference and can be a
-unit of locking or caching.
+Databases are comprised of segments.  Segments dynamically resize from
+very small to very big.  You should split your data into lots segments
+when it makes sense.  Segment improve locality of reference and can be
+a unit of locking or caching.
 
 When you create a container you must specify the segment in which it
 is to be allocated.  All containers are created using the form C<'new
@@ -289,7 +288,7 @@ ObjStore::$type($store, $cardinality)'>.  You may pass any persistent
 object in place of $store and the new container will be created in the
 same segment as the $store object!
 
-=head2 ARRAYS
+=head2 Arrays
 
 The following code snippet creates a persistent array reference with
 an expected cardinality of ten elements.
@@ -297,7 +296,7 @@ an expected cardinality of ten elements.
     my $a7 = new ObjStore::AV($store, 10);
 
 None of the usually array operations are supported except fetch and
-store.
+store.  At least the following works:
 
     $a7->[1] = [1,2,3,[4,5],6];
 
@@ -305,7 +304,7 @@ Complete array support will be available as soon as Larry and friends
 fix the TIEARRAY interface.  (See perltie(3) or http://www.perl.com
 more info.)
 
-=head2 HASHES
+=head2 Hashes
 
 The following code snippet creates a persistent hash reference with an
 expected cardinality of ten elements.
@@ -315,6 +314,8 @@ expected cardinality of ten elements.
 An array representation is used for low cardinalities.  Arrays do not
 scale well, but they do afford a compact representation.
 ObjectStore's C<os_Dictionary> is used for large cardinalities.
+
+Data structures can be built with the normal perl syntax:
 
     $h7->{foo} = { 'fwaz'=> { 1=>'blort', 'snorf'=>3 }, b=>'ouph' };
 
@@ -328,7 +329,7 @@ Or the equally effective but unbearibly tedious:
 
 Perl saves us again!  Relief.
 
-=head2 SETS
+=head2 Sets
 
 The following code snippet creates a set with an expected cardinality
 of ten elements.
@@ -338,8 +339,8 @@ of ten elements.
 Sets are simple collections.  They do not support duplicates.  The
 following methods are supported:
 
-    $set->a($obj, { hello=>1 });
-    $set->r($obj);
+    $set->add($obj, { hello=>1 });
+    $set->rm($obj);
     $yes = $set->contains($obj);
     for (my $obj = $set->first; $obj; $obj = $set->next) {
 	# do something with $obj
@@ -352,56 +353,23 @@ used for large cardinalities.
 Changing the membership of a set while iterating over the members
 has undefined results.
 
-=head1 BLESS
-
-The ObjStore module replaces C<bless>.  Once you create a
-container, you may C<bless> it in your own package.  The blessing is
-persistent.  For example,
-
-    package MyObject;
-    use ObjStore;
-    @ISA = qw(ObjStore::HV);
-    sub new {
-        my ($class, $store) = @_;
-        my $o = bless(new ObjStore::HV($store), $class);
-        $o->{attribute} = 5;
-        $o;
-    }
-
-If you store each class in a separate C<.pm> file in your @INC path
-(see C<require>), then the classes will be autoloaded as you access
-them.
-
-=head2 CLASS AUTOLOADING
-
-ObjStore tries to C<require> each class as you access persistent
-instances the first time.  This means that you can write generic data
-processing programs that automatically load the appropriate libraries
-to manipulate data as the data is accessed.
-
-To disable the class autoloading behavior:
-
-  ObjStore::disable_auto_class_loading();
-
-This mechanism is orthogonal to the C<AUTOLOAD> mechanism for
-autoloading functions.
-
 =head1 OSPEEK
 
-While there is no official schema for a Perl database, the C<ospeek>
+While there is no official schema for a perl database, the C<ospeek>
 utility generates a sample of data content and structure.  The
 following output was snapped from a database that supports a CGI
 application we have developed.  Note how circular references and
 pointers between objects are summarized.
 
-=head2 WAIT!  NO SCHEMA?!  HOW CAN THIS WORK?
+=head2 Wait!  No Schema?!  How Can This Scale?
 
-When you write down a central schema, you are violating the principle
-of encapsulation.  This is dumb.  None of the usual database
-operations require a central schema.  Why create artificial
-dependencies between your classes when you can avoid it?
+How can relational databases scale?!  When you write down a central
+schema, you are violating the principle of encapsulation.  This is
+dumb.  None of the usual database operations require a central schema.
+Why create artificial dependencies between your classes when you can
+avoid it?
 
-=head2 LAZY EVOLUTION
+=head2 Lazy Evolution
 
 Even schema evolution can be done piecemeal.  Give all your objects an
 C<evolve> method that insures that the representation is up-to-date.
@@ -410,7 +378,7 @@ C<evolve> method that insures that the representation is up-to-date.
 
 =item *
 
-Either version stamp your objects.
+Either tag your objects with version numbers,
 
 =item *
 
@@ -422,11 +390,11 @@ current structure.
 The main thing is to keep an archive of prior formats of object
 instances to regression test your new C<evolve> methods.  If you can
 do extracts to a mini-database, that would do the trick.  Then just
-run your new code over a historical collection of mini-databases.
+run your new code through a historical mini-database.
 
-=head2 OSPEEK EXAMPLE
+=head2 ospeek Example Output
 
- ObjStore::Root=SCALAR(0x18aa6c) Bright = Node {
+ ObjStore::Root Bright = Node {
     VERSION => 5,
     center => 1,
     ctime => '19970814113317',
@@ -624,7 +592,7 @@ syncronization between the two languages creates a lot of extra
 complexity.  So much so that there are many software companies that
 exist solely to help address this headache.
 
-Perl is better because it spans all the requirements in a single
+perl is better because it spans all the requirements in a single
 language.  For example, this is similar to an SQL table:
 
   my $h1 = { name => undef, title => undef, size => undef };
@@ -632,7 +600,7 @@ language.  For example, this is similar to an SQL table:
 Only the field-names are specified.
 
 To address the other side of the spectrum, Malcolm Beattie is working
-on a Perl compiler which is currently in beta-test.  Here is his brief
+on a perl compiler which is currently in beta-test.  Here is his brief
 description of a new hybrid hash-array that is supported:
 
 	An array ref $a can be dereferenced as if it were a hash
@@ -650,28 +618,28 @@ For example:
   print "$arr->{field1} : $arr->{field2}\n";      # "fwaz : snorf"
 
 I haven't done benchmarks yet, but considering the implementation,
-compiled fake hashes should make Perl very competitive with Java /
+compiled fake hashes should make perl very competitive with Java /
 ObjectStore database applications in terms of raw performance.
 
-=head2 SUMMARY (LONG)
+=head2 Summary (long)
 
 =over 4
 
 =item * SQL
 
-All Perl databases use the same flexible schema that can be examined
+All perl databases use the same flexible schema that can be examined
 and updated with generic tools.  This is the key advantage of SQL, now
-available in Perl.
+available in perl.
 
 Perl / ObjectStore is definitely faster than SQL too. Not to mention
-that Perl is a general purpose programming language and SQL is at best
+that perl is a general purpose programming language and SQL is at best
 a 'query language'.
 
 =item * C++
 
 Special purpose data types can be coded in C++ and dynamically linked
-into Perl.  Since C++ will always be faster than Java, this gives Perl
-an edge in the long run.  Perl is to C/C++ as C/C++ is to assembly language.
+into perl.  Since C++ will always be faster than Java, this gives perl
+an edge in the long run.  perl is to C/C++ as C/C++ is to assembly language.
 
 =item * JAVA
 
@@ -698,8 +666,8 @@ Perl will soon integrate with Java enough to use SwingSet - AWT.
 =item *
 
 I'd like to see some comparisions of code length when solving the same
-problems in Java and in Perl.  I have a strong suspicion that it is
-easier to do data processing in Perl.
+problems in Java and in perl.  I have a strong suspicion that it is
+easier to do data processing in perl.
 
 =back
 
@@ -715,11 +683,13 @@ Perl compiler; kernel threads; fake hashes
 
 =item * 3-6 MONTHS
 
-Dynamically loaded application schemas; Perl-Java integration
+Dynamically loaded application schemas;
+proper tied arrays; debugged tie interface;
+perl-Java integration
 
 =back
 
-=head2 SUMMARY (SHORT)
+=head2 Summary (short)
 
 Perl can store data
 
@@ -738,6 +708,99 @@ in transient memory or persistent memory
 without violating the principle of encapsulation or obstructing
 general ease of use.
 
+=head1 ADVANCED FEATURES
+
+=head2 Bless
+
+The ObjStore module installs its own version of C<bless> which assures
+that blessings are persistent.  For example:
+
+    package MyObject;
+    use ObjStore;
+    @ISA = qw(ObjStore::HV);
+    sub new {
+        my ($class, $store) = @_;
+        my $o = $class->SUPER::new($store, $class);
+        $o->{attribute} = 5;
+        $o;
+    }
+
+    package main;
+    my $o = new MyObject($db);
+
+If you store each class in a separate C<.pm> file in your @INC path
+(see C<require>), then the classes will be autoloaded as you traverse
+your data.
+
+=head2 Class Autoloading
+
+ObjStore tries to C<require> each class as you access persistent
+instances the first time.  This means that you can write generic data
+processing programs that automatically load the appropriate libraries
+to manipulate data as the data is accessed.
+
+To disable the class autoloading behavior:
+
+  ObjStore::disable_class_auto_loading();
+
+This mechanism is orthogonal to the C<AUTOLOAD> mechanism for
+autoloading functions.
+
+=head2 Transactions Part Two
+
+=over 4
+
+=item * EVAL
+
+Transactions are always executed within an implicit C<eval>.  If you
+do not want to abort your program when an ObjectStore exception
+occurs, you should indicate that you want to check errors yourself:
+
+  ObjStore::rethrow_exceptions(0);
+
+After a transaction, you will need to check the value of C<$@> to see
+if anything went wrong and determine how to proceed.
+
+  try_update {
+     ...
+  };
+  die if $@;    # check for errors!
+
+=item * DEADLOCK
+
+Transactions are automatically retried in the case of a deadlock.  If
+you need to handle deadlocks specially, you can use
+ObjStore::set_max_retries(0) and write the logic (or illogic)
+yourself.
+
+=back
+
+=head2 Stargate
+
+The stargate determines which collection representations are used to
+store implicitly created hashes and arrays.  It is called recursively
+on data structures in order to copy them into persistent memory.  If
+you replace the default stargate with your own, make sure to dismember
+the transient structures as they are processed to insure that circular
+structures will be collected in transient memory.
+
+  ObjStore::set_stargate(sub {
+    my ($seg, $sv) = @_;
+    my $type = reftype $sv;
+    my $class = ref $sv;
+    if ($type eq 'HASH') {
+	my $hv = new ObjStore::HV($seg, ...);
+	while (my($hk,$v) = each %$sv) { $hv->STORE($hk, $v); }
+	%$sv = ();
+	if ($class ne 'HASH') { ObjStore::bless $hv, $class; }
+	$hv
+    } elsif ($type eq 'ARRAY') {
+        ...
+    } else {
+	croak("Stargate: Don't know how to translate $sv");
+    }
+  };
+
 =head1 TECHNICAL IMPLEMENTATION
 
 You don't have to understand anything about the technical
@@ -752,38 +815,16 @@ over-engineered.
 
 =item *
 
-The Perl interface is optimized for simplicity and easy of use.  I<(If it's
+The perl interface is optimized for simplicity and easy of use.  I<(If it's
 not fun, why bother?)>
 
 =back
 
 The performance of raw ObjectStore is so good that even with a gunky
-Perl layer, benchmarks will show that relational databases can be
+perl layer, benchmarks will show that relational databases can be
 safely left on the bookshelf where they belong.
 
-=head2 UNDER THE HOOD
-
-It is not practical to simply make Perl's internal data structures
-persistent.  Values in the database have different requirements than
-transient values.  The dress code is upscale, New York style attire.
-
-=over 4
-
-=item * MEMORY
-
-Memory usage is much more important in a database than in transient
-memory.  When databases can be as large or larger than ten million
-megabytes, a few percent difference in compactness can mean a lot.
-
-=item * REFERENCE COUNTING
-
-Persistent data is reference counted separately from transient data.
-
-=back
-
-Sounds like New York, yes?
-
-=head2 DIFFERENCES BETWEEN THE PERL AND C++ APIs
+=head2 Differences Between The Perl And C++ APIs
 
 Most stuff should be exactly the same.  However,
 
@@ -791,22 +832,91 @@ Most stuff should be exactly the same.  However,
 
 =item *
 
-Some static methods are directly under C<ObjStore::>.
+Some static methods sit directly under C<ObjStore::>.
 
 =item *
 
-Transactions are significantly different:  I<simple>.
+Transactions are simplified.
 
 =back
 
-=head2 GO EXTENSION CRAZY
+=head2 Data Representation
 
-C<ObjStore::UNIVERSAL> is the base class for all persistent types.
+Memory usage is much more important in a database than in transient
+memory.  When databases can be as large or larger than ten million
+megabytes, a few percent difference in compactness can mean a lot.
+Therefore, I am always thinking about ways of conserving persistent
+memory.
 
-You cannot directly access persistent scalars from Perl. They are
+  enum ossvtype {
+    ossv_undef=1,
+    ossv_iv=2,    // integer
+    ossv_nv=3,    // double
+    ossv_pv=4,    // string
+    ossv_obj=5	  // ref counted objects (containers or complex objects)
+  };
+
+  struct OSSV {               // persistent scalar
+    void *vptr;
+    os_unsigned_int16 _refs;  //unused
+    os_int16 _type;
+  };
+
+  struct hkey {               // hash key
+    char *pv;
+    os_unsigned_int32 len;
+  };
+
+  struct hent {               // hash element
+    hkey hk;
+    OSSV hv;
+  };
+
+  struct OSPV_iv {            // IV storage
+    os_int32 iv;
+  };
+
+  struct OSPV_nv {            // NV storage
+    double nv;
+  };
+
+There are number of weaknesses in the current schema:
+
+=over 4
+
+=item * OSSV
+
+The refcnt is no longer used and the type of an OSSV could be inferred
+instead of stored (save 4 bytes per OSSV).  The same I32 can be used
+for an integer value or string length (save an allocation per I32).
+
+=item * HASH KEYS
+
+Hash keys store their length but not their hash.  Actually, hash keys
+probably shouldn't even cache their hashed value, just a straight
+char* to minimize memory usage (save 4 bytes & an allocation).
+
+=item * STRINGS
+
+Strings do not store their length so you can't store strings with
+embedded NULLs.
+
+=item * NO WEAK REFERENCES
+
+=back
+
+Changes will be made as soon as I finish the database evolver.
+
+=head2 Go Extension Crazy
+
+C<ObjStore::UNIVERSAL> is the base class for all persistent objects.
+You cannot directly access persistent scalars from perl. They are
 always immediately copied into transient scalars.  So the
 C<ObjStore::UNIVERSAL> base class is only for objects (or
 collections).
+
+C<ObjStore::UNIVERSAL::Container> is the base class for all
+containers.
 
 C<ObjStore::Set> is the base class for sets.
 
@@ -814,7 +924,9 @@ C<ObjStore::HV> is the base class for tied hashes.
 
 C<ObjStore::AV> is the base class for tied arrays.
 
-C<ObjStore::Text> will be the base class for large binary data.
+C<ObjStore::Cursor> is the base class for cursors.
+
+C<ObjStore::File> will be the base class for large binary data.
 
 When an ObjectStore exception occurs, C<$ObjStore::EXCEPTION> is
 called with an explaination.  You can replace the default handler with
@@ -826,14 +938,8 @@ hash.  Each packages' C<new> method decides on the best
 representation, calls the creation function, and returns the
 persistent object.
 
-How does the ObjStore module know how to translate nested transient
-structures into nested persistent structures?
-C<ObjStore::DEFAULT_GATEWAY> makes the determination.  You can replace
-it with your own code by using C<my $oldgw =
-ObjStore::set_gateway($coderef)>.
-
 You can add your own C++ representations for each of Set, AV, and HV.
-If you want to know the specifics, look at the code for the standard
+If you want to know the specifics, look at the code for the provided
 built-in representations (C<GENERIC.*>).
 
 You can add new families of objects that inherit from
@@ -843,24 +949,19 @@ Especially once Object Design figures out how to support multiple
 application schemas within the same executable.  They claim that this
 tonal facility will be available in the next release.
 
-=head2 OSSV_BRIDGE
+=head2 ossv_bridge typemap
 
 The following explaination may be helpful to developers trying to
-understand the inner workings of the typemap.  If you don't know what
-a typemap is, just skip to the next section.
+understand the ObjStore typemap.  If you don't know what a typemap is,
+just skip to the next section.
 
-The struct C<ossv_bridge> is used to bridge between Perl and C++
+The struct C<ossv_bridge> is used to bridge between perl and C++
 objects.  It contains transient cursors and transient pointers to
-persistent data.  C<OSSV>'s are scalars.  C<OSSVPV> are non-scalars.
-An C<OSSV> must be used to store a reference to an C<OSSVPV>.  This
-corresponds roughly to how things are done in the Perl internals.
-
-An instance of C<ossv_bridge> stores pointers to both an C<OSSV> and
-C<OSSVPV>.  Only one pointer need be set, but if both are set they
-must refer to the same persistent object.  The preferance is that the
-C<OSSV> be used, but the C<OSSVPV> should be used if the C<OSSV> is
-not already created or may become invalid (e.g. &ar[4] then array
-resizes).
+persistent data.  Immediately after a transaction finishes,
+C<invalidate> is invoked on all outstanding bridges.  This is
+necessary in order to update the reference counts properly.  This was
+also the most difficult part to get right.  But hey, how many
+databases do reference counting?
 
 =head1 DIRECTION
 
@@ -874,10 +975,15 @@ Support for bit vectors and matrics.
 
 =item * MORE APIS
 
-Support for notification, database access control, and any
-other interesting ObjectStore APIs.
+Support for notification, database access control, and any other
+interesting ObjectStore APIs.
 
 =back
+
+=head1 EXPORTS
+
+C<bless>, C<try_read>, C<try_update>, C<try_abort_only> by default.
+Most other static methods can also be exported.
 
 =head1 BUGS
 
@@ -885,28 +991,7 @@ other interesting ObjectStore APIs.
 
 =item * NESTED TRANSACTIONS
 
-Retry in the event of deadlock seems to run into an infinite loop
-within nested transactions.  Nested transactions are disabled for till
-further notice.
-
-=item * TROMPED KEYWORDS
-
-The ObjStore version of C<bless> replaces the built-in and is imported
-by default.
-
-=item * STRING CAVEAT
-
-The length of string values are not stored in the database.  Since
-lengths are calculated at each access, lengthy strings should be
-stored in a text object.  Text objects will be available in a future
-release.
-
-=item * NUMERICS
-
-Numbers (integers and doubles) are stored in separately allocated
-memory blocks.  This is probably not as efficient as a union, but
-unions are nearly impossible to manage in ObjectStore.  Would pool
-allocation be a good trade-off?
+Disabled until the transaction support is cleaned up.
 
 =item * CURSED OBJECTS
 
@@ -914,15 +999,8 @@ The strings used to record the blessed nature of persistent objects
 are allocated in a private hash in the default segment of a database
 (See C<'ospeek -all'>).  If you accidentally mess up or change any of
 these strings, your objects will be cursed.  You will need to re-bless
-each to fix the broken pointers.
-
-=item * REFERENCE CAVEAT
-
-Object reference counts are 32 bits wide, but scalar (C<OSSV>)
-reference counts are only 16 bits.  This does not restrict perl
-developers from creating zillions of references to a single hash (a
-hash is not a scalar), but it can cause some confusion in arcane
-cases.  [Give example and work-around.]
+each to fix the broken pointers.  A database copy script is in the
+works.
 
 =back
 
@@ -931,7 +1009,7 @@ cases.  [Give example and work-around.]
 Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
 
 This package is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.  Perl / ObjectStore is available
+it under the same terms as perl itself.  perl / ObjectStore is available
 via any CPAN mirror site.  See
 http://www.perl.com/CPAN/modules/by-module/ObjStore
 
@@ -943,7 +1021,7 @@ had the opportunity of studying.
 
 =head1 SEE ALSO
 
-Examples in the t/ directory, Perl5, ObjectStore, I<and happily not
+Examples in the t/ directory, perl5, ObjectStore, I<and happily not
 SQL!>
 
 =cut

@@ -7,6 +7,7 @@ sub not_ok { print "not ok $tx\n"; $tx++; }
 
 use strict;
 use ObjStore ':ALL';
+rethrow_exceptions(0);
 set_transaction_priority(0);
 
 my $db = ObjStore::open(&schema_dir . "/perltest.db", 0, 0666);
@@ -26,7 +27,6 @@ warn $@ if $@;
 try_abort_only {
     my $john = $db->root('John');
     $john->{right} = 3;
-    (1,'two');
 };
 
 try_read {
@@ -40,20 +40,11 @@ try_read {
 if ($@) { ok }
 else { not_ok; warn $@; }
 
-# abort_top_level
-try_update {
-    my $john = $db->root('John');
-    try_update {
-	++ $john->{right};
-        abort_top_level();
-    };
-    warn $@ if $@;
-    not_ok;
-};
-ok if $@ =~ m/abort_top_level/;  #5
-
 # retry deadlock
-try_update { $db->root("tripwire", new ObjStore::HV($db->create_segment, 7)); };
+try_update {
+    my $tw = new ObjStore::HV($db->create_segment, 7);
+    $db->root("tripwire", $tw);
+};
 die if $@;
 set_max_retries(2);
 my $attempt=0;
@@ -87,6 +78,13 @@ try_update {
 $attempt==2? ok:not_ok;
 
 try_update {
+    my $tw = $db->root('tripwire');
+    $db->destroy_root('tripwire');
     my $john = $db->root('John');
     delete $john->{right};
 };
+die if $@;
+try_update {
+    for ($db->get_all_segments) { $_->destroy if $_->is_empty; }
+};
+die if $@;

@@ -79,10 +79,14 @@ osperl_abort_top_level()
 
 static int txn_nested;
 
+int osperl::txn_is_ok;
+int osperl::is_update_txn;
+
 static void
 osperl_transaction(os_transaction::transaction_type_enum tt,
 		   os_transaction::transaction_scope_enum scope_in)
 {
+  os_transaction *txn;
   int retries;
 
   dSP; dMARK;
@@ -98,6 +102,7 @@ osperl_transaction(os_transaction::transaction_type_enum tt,
     retries=0;
     txn_nested=0;
     deadlocked=0;
+    osperl::txn_is_ok = 1;
   }
 
   PUTBACK ;
@@ -111,35 +116,44 @@ osperl_transaction(os_transaction::transaction_type_enum tt,
     tix_handler *old_handler = current_handler;
     current_handler = &bang;
 
+    osperl::is_update_txn = (tt != os_transaction::read_only);
     os_transaction::begin(tt, scope_in, os_transaction::get_current());
     
     SPAGAIN ;
-    //    ENTER ;
-    //    SAVETMPS;
+    ENTER ;
+    SAVETMPS;
     PUSHMARK(sp) ;
     PUTBACK ;
     ++ txn_nested;
     int count = perl_call_sv(code, G_NOARGS|G_EVAL|G_DISCARD);
     assert(count==0);
     -- txn_nested;
+    txn = os_transaction::get_current();
+    osperl::txn_is_ok = (txn && !txn->is_aborted());
+    osperl::destroy_bridge();
     //    warn("return to level %d", txn_nested);
-    //    FREETMPS ;
-    //    LEAVE ;
+    FREETMPS ;
+    LEAVE ;
     
     if (got_os_exception) {
       got_os_exception=0;
       current_handler->_unwind_part_2();
+      osperl_abort_top_level();
       tix_exception *ex = current_handler->get_exception();
       if (ex && ex->ancestor_of(&err_deadlock)) {  //deadlock
 	//	warn("deadlock");
-	SV *error = GvSV(errgv);
-	sv_setpv(error, current_handler->get_report());
+//	SV *error = GvSV(errgv);
+//	sv_setpv(error, current_handler->get_report());
 	deadlocked=1;
-	osperl_abort_top_level();
       }
     }
+    if (osperl::rethrow_exceptions && !deadlocked && SvTRUE(GvSV(errgv))) {
+      char *tmps = SvPV(GvSV(errgv), na);
+      if (!tmps || !*tmps) tmps = "Died";
+      die("%s", tmps);
+    }
     current_handler=old_handler;
-    os_transaction *txn = os_transaction::get_current();
+    txn = os_transaction::get_current();
     //    warn("transaction=0x%x", txn);
     if (!txn) {
       if (txn_nested) {
@@ -149,18 +163,24 @@ osperl_transaction(os_transaction::transaction_type_enum tt,
 	die("%s", tmps);
       }
     } else {
-      if (SvTRUE(GvSV(errgv)) || tt == os_transaction::abort_only)
-	os_transaction::abort(txn);
-      else
+      if (osperl::txn_is_ok && tt != os_transaction::abort_only)
         os_transaction::commit(txn);
+      else
+	os_transaction::abort(txn);
       delete txn;
     }
   }
-  if (txn_nested==0 &&
-      deadlocked && retries++ < os_transaction::get_max_retries()) {
+  if (txn_nested==0 && deadlocked) {
     deadlocked=0;
-    //    warn("goto retry");
-    goto RETRY;
+    if (retries++ < os_transaction::get_max_retries()) {
+      goto RETRY;
+    } else {
+      if (osperl::rethrow_exceptions) {
+	char *tmps = SvPV(GvSV(errgv), na);
+	if (!tmps || !*tmps) tmps = "Died";
+	die("%s", tmps);
+      }
+    }
   }
   //  if (!txn_nested) warn("end top");
 }
@@ -221,13 +241,28 @@ _enable_blessings(yes)
 	OUTPUT:
 	RETVAL
 
+int
+_tie_objects(yes)
+	int yes
+	CODE:
+	RETVAL = osperl::tie_objects;
+	osperl::tie_objects = yes;
+	OUTPUT:
+	RETVAL
+
 SV *
-set_gateway(code)
+set_stargate(code)
 	SV *code
 	CODE:
-	ST(0) = osperl::gateway? sv_2mortal(newSVsv(osperl::gateway)): &sv_undef;
-	if (!osperl::gateway) { osperl::gateway = newSVsv(code); }
-	else { sv_setsv(osperl::gateway, code); }
+	ST(0) = osperl::stargate? sv_2mortal(newSVsv(osperl::stargate)):&sv_undef;
+	if (!osperl::stargate) { osperl::stargate = newSVsv(code); }
+	else { sv_setsv(osperl::stargate, code); }
+
+void
+rethrow_exceptions(yes)
+	int yes;
+	CODE:
+	osperl::rethrow_exceptions = yes;
 
 char *
 release_name()
@@ -508,8 +543,7 @@ MODULE = ObjStore	PACKAGE = ObjStore::Root
 void
 os_database_root::destroy()
 	CODE:
-	OSSV *ossv = (OSSV*) THIS->get_value();  // check type! XXX
-	if (ossv) ossv->REF_dec();
+	delete (OSSV*) THIS->get_value();
 	delete THIS;
 
 char *
@@ -526,17 +560,13 @@ void
 os_database_root::set_value(sv)
 	SV *sv
 	CODE:
-	OSSV *ossv=0;
-	ossv_bridge *mg = osperl::sv_2bridge(sv);
-	if (mg) ossv = mg->force_ossv();
-	if (!ossv) {
-	  ossv = new(os_segment::of(THIS), OSSV::get_os_typespec()) OSSV(sv);
-	  ossv->_refs=0;
+	OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
+	if (ossv) {
+	  *ossv = sv;
+	} else {
+	  ossv = osperl::plant_sv(os_segment::of(THIS), sv);
+	  THIS->set_value(ossv, OSSV::get_os_typespec());
 	}
-	OSSV *prior = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
-	if (prior) prior->REF_dec();
-	THIS->set_value(ossv, OSSV::get_os_typespec());
-	ossv->REF_inc();
 
 #-----------------------------# Transaction
 
@@ -740,7 +770,7 @@ of(sv)
 
 #-----------------------------# Magic
 
-MODULE = ObjStore	PACKAGE = ObjStore::Magic
+MODULE = ObjStore	PACKAGE = ObjStore::Bridge
 
 void
 ossv_bridge::DESTROY()
@@ -753,12 +783,19 @@ void
 OSSVPV::_bless(pstr)
 	char *pstr
 	CODE:
-	THIS->BLESS(pstr);
+	THIS->_bless(pstr);
 
 char *
 OSSVPV::_ref()
 	CODE:
 	RETVAL = THIS->get_blessing();
+	OUTPUT:
+	RETVAL
+
+int
+OSSVPV::_refcnt()
+	CODE:
+	RETVAL = THIS->_refs;
 	OUTPUT:
 	RETVAL
 
@@ -774,17 +811,160 @@ OSSVPV::_paddress(...)
 	CODE:
 	ST(0) = sv_2mortal(newSViv((long) THIS));
 
-double
-OSSVPV::cardinality()
+#-----------------------------# UNIVERSAL::Container
+
+MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL::Container
+
+RAW_STRING *
+OSSVPV::_get_raw_string(key)
+	char *key;
 	CODE:
-	RETVAL = THIS->cardinality();
+	char *CLASS = "ObjStore::RAW_STRING";
+	RETVAL = THIS->_get_raw_string(key);
 	OUTPUT:
 	RETVAL
 
 double
-OSSVPV::percent_unused()
+OSSVPV::_percent_filled()
 	CODE:
-	RETVAL = THIS->percent_unused();
+	RETVAL = THIS->_percent_filled();
+	if (RETVAL < 0 || RETVAL > 1) XSRETURN_UNDEF;
 	OUTPUT:
 	RETVAL
 
+SV *
+OSSVPV::new_cursor(...)
+	CODE:
+	XSRETURN_UNDEF;
+	os_segment *seg=0;
+	if (items == 0) { seg = os_segment::of(THIS); }
+	else if (items == 1) { seg = osperl::sv_2segment(ST(0)); }
+	if (!seg)
+	  croak("OSSVPV(0x%x)->new_cursor([segment]) was passed junk", THIS);
+	ST(0) = osperl::ospv_2sv(THIS->new_cursor(seg));
+
+#-----------------------------# AV
+
+MODULE = ObjStore	PACKAGE = ObjStore::AV
+
+SV *
+OSSVPV::FETCH(xx)
+	int xx;
+	CODE:
+	ST(0) = THIS->FETCHi(xx);
+
+SV *
+OSSVPV::STORE(xx, nval)
+	int xx;
+	SV *nval;
+	CODE:
+	SV *ret;
+	ret = THIS->STOREi(xx, nval);
+	if (ret) { ST(0) = ret; }
+	else     { XSRETURN_EMPTY; }
+
+int
+OSSVPV::_LENGTH()
+
+#-----------------------------# HV
+
+MODULE = ObjStore	PACKAGE = ObjStore::HV
+
+SV *
+OSSVPV::FETCH(key)
+	char *key;
+	CODE:
+	ST(0) = THIS->FETCHp(key);
+
+SV *
+OSSVPV::STORE(key, nval)
+	char *key;
+	SV *nval;
+	CODE:
+	SV *ret;
+	ret = THIS->STOREp(key, nval);
+	if (ret) { ST(0) = ret; }
+	else     { XSRETURN_EMPTY; }
+
+void
+OSSVPV::DELETE(key)
+	char *key
+
+int
+OSSVPV::EXISTS(key)
+	char *key
+
+SV *
+OSSVPV::FIRSTKEY()
+	CODE:
+	ST(0) = THIS->FIRST( THIS_bridge );
+
+SV *
+OSSVPV::NEXTKEY(ign)
+	char *ign;
+	CODE:
+	ST(0) = THIS->NEXT( THIS_bridge );
+
+void
+OSSVPV::CLEAR()
+
+#-----------------------------# Set
+
+MODULE = ObjStore	PACKAGE = ObjStore::Set
+
+void
+OSSVPV::add(...)
+	CODE:
+	for (int xx=1; xx < items; xx++) {
+	  SV *ret = THIS->add(ST(xx));
+	}
+
+int
+OSSVPV::contains(val)
+	SV *val;
+
+void
+OSSVPV::rm(nval)
+	SV *nval
+
+SV *
+OSSVPV::first()
+	CODE:
+	ST(0) = THIS->FIRST( THIS_bridge );
+
+SV *
+OSSVPV::next()
+	CODE:
+	ST(0) = THIS->NEXT( THIS_bridge );
+
+#-----------------------------# Cursor
+
+MODULE = ObjStore	PACKAGE = ObjStore::Cursor
+
+SV *
+OSPV_Cursor::focus()
+	PPCODE:
+	XPUSHs(THIS->focus());
+
+int
+OSPV_Cursor::more()
+
+void
+OSPV_Cursor::first()
+	PPCODE:
+	PUTBACK; THIS->first(); return;
+
+void
+OSPV_Cursor::next()
+	PPCODE:
+	PUTBACK; THIS->next(); return;
+
+void
+OSPV_Cursor::prev()
+	PPCODE:
+	PUTBACK; THIS->prev(); return;
+
+void
+OSPV_Cursor::last()
+	PPCODE:
+	PUTBACK; THIS->last(); return;

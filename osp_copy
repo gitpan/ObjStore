@@ -1,0 +1,8 @@
+#!/usr/local/bin/perl -w
+
+use strict;
+use integer;
+use ObjStore;
+
+# -f set_transaction_priority(0xffff) ?
+

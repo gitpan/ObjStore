@@ -46,14 +46,11 @@ sub chk1 {
     $ok? ok : not_ok;
 }
 
-{
-    try_update {
-	my $john = $DB->root('John');
-	$john ? ok : not_ok;
-
-	for my $rep (keys %ObjStore::HV::REP) {
-	    chk1($john, $rep);
-	}
-    };
-    print "[Abort] $@\n" if $@;
-}
+try_update {
+    my $john = $DB->root('John');
+    $john ? ok : not_ok;
+    
+    for my $rep (keys %ObjStore::HV::REP) {
+	chk1($john, $rep);
+    }
+};

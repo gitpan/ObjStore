@@ -27,35 +27,30 @@ sub new {
 	instances => $MaxInstances,
 	width => 20,
 	depth => 20,
-	level => 0,
-	seen => {},
 	to => $To,
 	all => $All,
-	output => '',
-	has_sep => 0,
-	has_prefix => 0,
-	pct_unused => [],
     }, $class;
     while (my ($k,$v) = each %cnf) { $o->{$k} = $v; }
     $o;
 }
 
 sub Peek {
-    my $o = shift;
-    for my $top (@_) { $o->_peek($top); }
+    my ($o, $top) = @_;
+    $o->{output} = '';
+    $o->{seen} = {};
+    $o->{level} = 0;
+    $o->{has_sep} = 0;
+    $o->{has_prefix} = 0;
+    $o->{coverage} = 0;
+    $o->_peek($top);
     $o->{output};
 }
 
-sub PercentUnused {
+sub PercentUnused { die "wildy inaccurate metric unsupported"; }
+
+sub Coverage {
     my ($o) = @_;
-    my $count=0;
-    my $sum=0;
-    for my $h (@{$o->{pct_unused}}) {
-	$count += $h->{card};
-	$sum += $h->{card} * $h->{unused};
-    }
-    $count = -1 if $count == 0;
-    ($sum, $count);
+    $o->{coverage};
 }
 
 sub prefix {
@@ -88,12 +83,20 @@ sub o {
     }
 }
 
+sub avg {
+    if (@_) {
+	my $sum=0;
+	for (@_) { $sum += $_ }
+	$sum / @_;
+    } else { 0 }
+}
+
 sub _peek {
     my ($o, $val) = @_;
     my $type = ObjStore::reftype $val;
     my $class = ref $val;
 
-    # Since persistent blessing likely turned off...
+    # Since persistent blessing is likely turned off...
     $class = $val->_ref if ($class and $class->isa('ObjStore::UNIVERSAL'));
 
     if (!$class) {
@@ -105,6 +108,7 @@ sub _peek {
 	    $val =~ s/([\\\'])/\\$1/g;
 	    $o->o("'$val',");
 	}
+	++ $o->{coverage};
 	return;
     }
 
@@ -112,7 +116,7 @@ sub _peek {
     my $name = $o->{addr} ? $addr : $class;
     $o->{seen}{$class} ||= 0;
 
-    if ($o->{level} > $o->{depth} or $o->{seen}{$addr} or
+    if ($o->{level} > $o->{depth} or defined($o->{seen}{$addr}) or
 	($class !~ /^ObjStore::/ and $o->{seen}{$class} > $o->{instances})) {
 	if ($type eq 'HASH') {
 	    $o->o("$name { ... }");
@@ -123,15 +127,11 @@ sub _peek {
 	} else {
 	    $o->o("$class ...");
 	}
+	++ $o->{coverage};
 	return;
     }
     $o->{seen}{$addr}=1;
     ++ $o->{seen}{$class};
-
-    if ($val->can('cardinality') and $val->can('percent_unused')) {
-	push(@{$o->{pct_unused}}, {card=>$val->cardinality,
-				   unused=>$val->percent_unused});
-    }
 
     $o->prefix;
     if ($class eq 'ObjStore::Database') {
@@ -140,16 +140,19 @@ sub _peek {
 
 	    $o->prefix;
 	    ++$o->{level};
-	    $o->o("$r ",$r->get_name," = ");
+	    my $name = $o->{addr}? "$r" : 'ObjStore::Root';
+	    $o->o("$name ",$r->get_name," = ");
 	    $o->{has_prefix}=1;
 	    $o->_peek($r->get_value);
 	    --$o->{level};
 	    $o->nl;
+	    ++ $o->{coverage};
 	}
     } elsif ($class->isa('ObjStore::Set')) {
 	my @S;
 	my $x=0;
 	for (my $v=$val->first; $v; $v=$val->next) {
+	    ++ $o->{coverage};
 	    last if $x++ > $o->{width}+1;
 	    push(@S, $v);
 	}
@@ -178,6 +181,7 @@ sub _peek {
 	my @S;
 	my $x=0;
 	while (my($k,$v) = each %$val) {
+	    ++ $o->{coverage};
 	    last if $x++ > $o->{width}+1;
 	    push(@S, [$k,$v]);
 	}
@@ -207,7 +211,40 @@ sub _peek {
 	$o->o("},");
 	$o->nl;
     } elsif ($type eq 'ARRAY') {
-	$o->o($name . " [ ?? ],");
+	my $len = $val->can("_LENGTH")? $val->_LENGTH : @$val;
+	$o->{coverage} += $len;
+	my $big = $len > $o->{width};
+	my $limit = $big? $o->{summary_width} : $len;
+
+	$o->o($name . " [");
+	$o->nl;
+	++$o->{level};
+	for (my $x=0; $x < $limit; $x++) {
+	    $o->prefix;
+	    $o->_peek($val->[$x]);
+	    $o->nl;
+	}
+	if ($big) {
+	    $o->prefix;
+	    $o->o("...");
+	    $o->nl;
+	}
+	--$o->{level};
+	$o->prefix;
+	$o->o("],");
+	$o->nl;
+    } elsif ($class->isa('ObjStore::Cursor')) {
+	++ $o->{coverage};
+	$o->o("$name => ");
+	$o->{has_prefix}=1;
+	++ $o->{level};
+	my $at = $val->focus;
+	$o->_peek($at);
+	-- $o->{level};
+	$o->nl;
+    } elsif ($type eq 'SCALAR') {
+	++ $o->{coverage};
+	$o->o($name);
     } else {
 	die "Unknown type '$type'";
     }

@@ -56,6 +56,11 @@ query is unique among database architectures.
 =head1 R!CENT CHANGES
 
 
+** 03-23-99 RELEASE 1.55 [STABLE]
+
+- Switch to new mailing list.
+
+
 ** 03-22-99 RELEASE 1.54 [STABLE]
 
 - Minor updates to ObjStore::Serve and ObjStore::Table3.
@@ -83,10 +88,11 @@ see ./TODO for a list of stuff in the tuit queue
 see ./CHANGES for a visionary perspective
 
 
-Send any questions or comments to perl-objectstore@parallax.co.uk.
+Send any questions or comments to osperl@listbox.com.
 
 If you'd like to subscribe to the mailing list, send email to
-majordomo@parallax.co.uk.  Thanks!
+majordomo@listbox.com with 'subscribe osperl' in the body of your
+message.  Thanks!
 
 -------------------------------------------------------------------------
 Copyright © 1997-1999 Joshua Nathaniel Pritikin.  All rights reserved.

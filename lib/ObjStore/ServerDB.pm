@@ -77,23 +77,24 @@ sub FETCH {
     croak "$p service is not available in ".$h->database_of;
 }
 
-sub _install2 {
+sub _install {
     my ($o, $i, $pk) = @_;
     $pk ||= ref $i;
     $$o{ $pk } = $i; #overwrite!
     no strict 'refs';
     for my $u (@{"$pk\::ISA"}) {
-	$o->_install2($i, $u);
+	$o->_install($i, $u);
     }
 }
 
 use ObjStore::notify qw(boot_class);
 sub do_boot_class {
+    # flag to override?
     my ($o,$class) = @_;
-    next if $o->SUPER::FETCH($class);
+    return if $o->SUPER::FETCH($class);
     ObjStore::require_isa_tree($class);
     my $i = $class->new($o->create_segment($class));
-    $o->_install2($i);
+    $o->_install($i);
 }
 
 sub boot {

@@ -340,7 +340,9 @@ int OSSV::morph(int nty)
     }
     break;
 
-  case OSVt_RV: break;
+  case OSVt_RV: 
+    assert(vptr==0);
+    break;
   case OSVt_IV16: break;
 
   default: croak("OSSV(0x%p)->morph type %s unknown! (serious error)",
@@ -409,7 +411,8 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)
   if (!morph(OSVt_PV)) {
     if (xiv == nlen) {
       //already ok
-    } else if (xiv - nlen <= 8) {
+      assert(vptr);
+    } else if (xiv > nlen && xiv - nlen <= 8) {
       //small waste; just fixup null terminator
       ((char*)vptr)[nlen] = 0;
     } else {

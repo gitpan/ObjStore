@@ -100,13 +100,15 @@ for (@DB) {
 	bless $top, $class.'::Top' if
 	    $class ne $default_server || blessed $top eq 'ObjStore::HV';
 	$top->boot(split /,/, $_->[2]);
-	for (values %$top) {
+	my %objs;
+	for (values %$top) { $objs{$_} = $_ if blessed $_ }
+	for (values %objs) {
 	    # not much point in checking is_evolved...
-	    $_->evolve() if blessed $_;
+	    $_->evolve();
 	}
 	$top->restart() if $top->can('restart');
-	for (values %$top) {
-	    $_->restart() if blessed $_ && $_->can('restart');
+	for (values %objs) {
+	    $_->restart() if $_->can('restart');
 	}
     };
     die if $@;

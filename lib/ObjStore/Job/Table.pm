@@ -62,7 +62,6 @@ sub work {
     return $slices if $WorkLevel || !@$priorities;
 
     local $WorkLevel = 1;
-    ObjStore::Process->meter('jobs');
     begin 'update', sub {
 	$Interrupt = 0;
 	my @todo = @$priorities; #snapshot
@@ -107,6 +106,8 @@ sub work {
 	    return 0;  #retry immediately
 	}
 	$slices = 0;  #did work and also lost it!
+    } else {
+	ObjStore::Process->meter('idle') if $slices > 0;
     }
     $slices
 }

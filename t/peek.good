@@ -11,23 +11,6 @@ TestDB {
     7 => 'String 7',
     8 => 'String 8',
     9 => 'String 9',
-    avhv => Test::AVHV2 (1) [
-      ObjStore::AVHV::Fields (2) {
-        __CLASS__ => 'Test::AVHV2',
-        __MAX__ => 5,
-
-        horsht => 5,
-        is => 4,
-        my => 1,
-        name => 3,
-        pretty => 2,
-      },
-      1,
-      4,
-      2,
-      3,
-      5,
-    ],
     c => ObjStore::SetEmulation (1) [
     ObjStore::HV (1) {
       joe => 1,
@@ -73,17 +56,17 @@ TestDB {
         12,
         13,
       ],
-      sptr => ObjStore::Ref (1) => ObjStore::HV (1) {
-          a => 'b',
-          c => 'd',
-          e => 'f',
-          g => 'h',
-          i => ObjStore::AV (1) [
-            'a',
-            1,
-          ],
-        },
-      strs => ObjStore::HV (1) ...
+      sptr => ObjStore::Ref (1) => ObjStore::HV ...
+      strs => ObjStore::HV (1) {
+        a => 'b',
+        c => 'd',
+        e => 'f',
+        g => 'h',
+        i => ObjStore::AV (1) [
+          'a',
+          1,
+        ],
+      },
     },
 
     obj => PTest (1) {
@@ -112,4 +95,4 @@ TestDB {
   tripwire => ObjStore::HV (1) {
   },
 },
-count = 270
+count = 241

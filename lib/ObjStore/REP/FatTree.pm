@@ -64,6 +64,8 @@ sub configure {
 
 package ObjStore::REP::FatTree::Index::Conf;
 use base 'ObjStore::AV';
+use vars qw($VERSION);
+$VERSION = '1.00';
 
 # goofy because arrays don't work XXX
 sub POSH_PEEK {

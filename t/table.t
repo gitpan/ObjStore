@@ -1,6 +1,5 @@
 #-*-perl-*-
 BEGIN { $| = 1; $tx=1; print "1..3\n"; }
-BEGIN { require 5.00452; }
 
 use ObjStore;
 use lib './t';
@@ -36,13 +35,13 @@ begin 'update', sub {
     $tbl->new_index('Field', 'long', 'f3->0');
 
     bless $tbl, 'ObjStore::Table2';
-    ok(! $tbl->is_corrupted(1)) or ObjStore::peek($tbl);
+    ok(! $tbl->iscorrupt(1)) or ObjStore::peek($tbl);
 
     $tbl->add(new Row($tbl));
     $tbl->remove($ar->[16]);
 
 #    $tbl->rebuild_indices;
-    ok(! $tbl->is_corrupted(1)) or ObjStore::peek($tbl);
+    ok(! $tbl->iscorrupt(1)) or ObjStore::peek($tbl);
 };
 
 begin 'update', sub {

@@ -1,4 +1,5 @@
 # Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
+#
 # This package is free software and is provided "as is" without express
 # or implied warranty.  It may be used, redistributed and/or modified
 # under the terms of the Perl Artistic License (see
@@ -10,35 +11,39 @@ use strict;
 use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $DEFAULT_OPEN_MODE $EXCEPTION %CLASSLOAD $CLASSLOAD
-	    $COMPILE_TIME $TRANSACTION_PRIORITY
+	    $RUN_TIME $TRANSACTION_PRIORITY
 	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD);
 
-$VERSION = '1.23';
+$VERSION = '1.24';
 
 require Exporter;
 require DynaLoader;
 @ISA = qw(Exporter DynaLoader);
 {
-    my @x_adv = qw(&blessed &reftype
-		   &translate &set_default_open_mode
-		   &get_all_servers &get_lock_status 
-		   &is_lock_contention &peek &subscribe &unsubscribe);
-    my @x_tra = qw(&set_transaction_priority &schema_dir
-		   &fatal_exceptions &release_name
-		   &release_major &release_minor &release_maintenance
-		   &network_servers_available 
-		   &get_max_retries &set_max_retries
-		   &get_page_size &return_all_pages 
-		   &get_readlock_timeout &get_writelock_timeout
-		   &set_readlock_timeout &set_writelock_timeout
-		   &abort_in_progress &get_n_databases &set_stargate
-		   &DEFAULT_STARGATE &PoweredByOS);
-    my @x_old = qw();
+    my @x_adv = qw(&peek &blessed &reftype &os_version &translate 
+		   &subscribe &unsubscribe &get_all_servers 
+		   &set_default_open_mode
+		   &get_lock_status &is_lock_contention 
+		  );
+    my @x_tra = (qw(&fatal_exceptions &release_name
+		    &network_servers_available &set_transaction_priority
+		    &get_max_retries &set_max_retries
+		    &get_page_size &return_all_pages 
+		    &get_readlock_timeout &get_writelock_timeout
+		    &set_readlock_timeout &set_writelock_timeout
+		    &abort_in_progress &get_n_databases
+		    &set_stargate &DEFAULT_STARGATE
+		    &PoweredByOS),
+		 # depreciated
+		 qw(&release_major &release_minor &release_maintenance
+		   ));
+    my @x_old = qw(&schema_dir);
     my @x_priv= qw($DEFAULT_OPEN_MODE %CLASSLOAD $CLASSLOAD $EXCEPTION
 		   &_PRIVATE_ROOT);
 
-    @EXPORT      = qw(&bless &begin
-		      &try_read &try_abort_only &try_update);
+    @EXPORT      = (qw(&bless &begin),
+		    # depreciated
+		    qw(&try_read &try_abort_only &try_update));
     @EXPORT_FAIL = ('PANIC');
     @EXPORT_OK   = (@EXPORT, @x_adv, @x_tra, @x_old, @x_priv, @EXPORT_FAIL);
     %EXPORT_TAGS = (ADV => [@EXPORT, @x_adv],
@@ -62,6 +67,8 @@ bootstrap ObjStore($VERSION,
 		   'Thread::Specific'->can('key_create')?
 		   'Thread::Specific'->key_create() : 0);
 
+warn "You need at least ObjectStore 4.0.1!  How did you get this extension compiled?\n" if ObjStore::os_version() < 4.0001;
+
 require ObjStore::GENERIC;
 require ObjStore::REP::FatTree;
 
@@ -76,46 +83,24 @@ sub reftype ($);
 sub blessed ($);
 sub bless ($;$);
 
-# private root keys: qw(BRAHMA INC database_blessed_to layouts)
-#  depreciated keys: qw(Brahma) 1.19
-
-$TRANSACTION_PRIORITY = 0x8000;
+$TRANSACTION_PRIORITY = 0x8000; #tied scalar? XXX
 sub set_transaction_priority {
     my ($pri) = @_;
     $TRANSACTION_PRIORITY = $pri;
     _set_transaction_priority($pri);
 }
 
-sub schema_dir() {
-    carp "schema_dir is depreciated.  Instead use ObjStore::Config";
-    require ObjStore::Config;
-    &ObjStore::Config::SCHEMA_DBDIR;
-}
-
 sub PoweredByOS {
     use Config;
+    warn "PoweredByOS wont work until Makefile.PL is fixed.  Sorry";
     "$Config{sitelib}/ObjStore/PoweredByOS.gif";
 }
 
-sub try_read(&) { 
-    carp "try_read is depreciated.  Use begin('read', sub {...})";
-    ObjStore::begin('read', $_[0]); ();
-}
-sub try_update(&) { 
-    carp "try_update is depreciated.  Use begin('update', sub {...})";
-    ObjStore::begin('update', $_[0]); ();
-}
-sub try_abort_only(&) { 
-    carp "try_abort_only is depreciated.  Use begin('abort_only', sub {...})";
-    ObjStore::begin('abort_only', $_[0]); ();
-}
-
-$FATAL_EXCEPTIONS = 1;   #happy default for newbie or my co-workers
+$FATAL_EXCEPTIONS = 1;   #happy default for newbies... or my co-workers!
 sub fatal_exceptions {
     my ($yes) = @_;
     $FATAL_EXCEPTIONS = $yes;
 }
-*rethrow_exceptions = \&fatal_exceptions;
 
 $MAX_RETRIES = 10;
 sub get_max_retries { $MAX_RETRIES; }
@@ -172,7 +157,7 @@ sub begin {
     if (!defined wantarray) { () } else { wantarray ? @result : $result; }
 }
 
-# For speed, you may assume that ONLY TRANSIENT data will be
+# For speed, you may assume that ONLY TRANSIENT DATA will be
 # transferred through the stargate.
 
 sub DEFAULT_STARGATE {
@@ -202,8 +187,8 @@ sub bless ($;$) {
     $ref->BLESS($class) if $old;
     $class->BLESS($ref);
 }
-# Once CORE::GLOBAL works -
-#   *CORE::GLOBAL::bless = \&bless;
+# When CORE::GLOBAL works -
+#   *CORE::GLOBAL::bless = \&bless;  XXX
 
 #sub BLESS {
 #    my ($r1,$r2);
@@ -212,7 +197,6 @@ sub bless ($;$) {
 #    $r1->SUPER::BLESS($r2);
 #}
 
-# This is allowed to be expensive: it is only called once per class!
 sub require_isa_tree {
     no strict 'refs';
     my $class = shift;
@@ -234,17 +218,14 @@ sub require_isa_tree {
     for my $c (@{"$class\::ISA"}) { require_isa_tree($c) }
 }
 
-package UNLOADED;
-package ObjStore;
-
 sub mark_unloaded {
-    # Is there a trick to undo the damage if finally loaded? XXX
+    # Is there a hook to undo the damage if eventually loaded? XXX
     no strict;
     my $class = shift;
     warn "[marking $class as UNLOADED]\n" if $ObjStore::REGRESS;
-    push(@{"${class}::ISA"}, 'UNLOADED');
+    $ {"${class}::UNLOADED"} = 1;
     eval "package $class; ".' sub AUTOLOAD {
-Carp::croak(qq[Sorry, "$AUTOLOAD" is not loaded.  You may need to adjust \@INC in order for your support code to be automatically loaded when the database is opened.\n]);
+Carp::croak(qq[Sorry, "$AUTOLOAD" is not loaded.  You may need to adjust \@INC in order for your database code to be automatically loaded when the database is opened.\n]);
 };';
     die if $@;
 }
@@ -275,7 +256,6 @@ $CLASSLOAD = sub {
 sub disable_auto_class_loading {
     $CLASS_AUTO_LOAD = 0;
 }
-*ObjStore::disable_class_auto_loading = \&disable_auto_class_loading; #silly me
 
 sub lookup {
     my ($path, $mode) = @_;
@@ -339,21 +319,260 @@ sub debug {
     _debug($mask);
 }
 
+#------ ------ ------ ------
+sub schema_dir() {
+    carp "schema_dir is depreciated.  Instead use ObjStore::Config";
+    require ObjStore::Config;
+    &ObjStore::Config::SCHEMA_DBDIR;
+}
+
+sub try_read(&) { 
+    carp "try_read is depreciated.  Use begin('read', sub {...})";
+    ObjStore::begin('read', $_[0]); ();
+}
+sub try_update(&) { 
+    carp "try_update is depreciated.  Use begin('update', sub {...})";
+    ObjStore::begin('update', $_[0]); ();
+}
+sub try_abort_only(&) { 
+    carp "try_abort_only is depreciated.  Use begin('abort_only', sub {...})";
+    ObjStore::begin('abort_only', $_[0]); ();
+}
+*rethrow_exceptions = \&fatal_exceptions; # depreciated
+*ObjStore::disable_class_auto_loading = \&disable_auto_class_loading; #silly me
+
+# Psuedo-class to animate persistent bless!  (Kudos to Devel::Symdump!)
+#
+package ObjStore::BRAHMA;
+use Carp;
+use vars qw(@ISA @EXPORT %CLASS_DOGTAG);
+BEGIN {
+    @ISA = qw(Exporter);
+    @EXPORT = (qw(&_isa &_versionof &_is_evolved &iscorrupt &GLOBS
+		  %CLASS_DOGTAG &_get_certified_blessing &_engineer_blessing
+		  &_conjure_brahma
+		 ),
+	       # depreciated
+	       qw(&is_corrupted));
+}
+
+'ObjStore::Database'->
+    _register_private_root_key('BRAHMA', sub { 'ObjStore::HV'->new(shift, 30) });
+sub _conjure_brahma { shift->_private_root_data('BRAHMA'); }
+
+# persistent per-class globals
+'ObjStore::Database'->
+    _register_private_root_key('GLOBAL', sub { 'ObjStore::HV'->new(shift, 30) });
+sub GLOBS {
+    my ($db, $class) = @_;
+    if (!defined $class) {
+	$class = ref $db;
+	$db = $db->database_of;
+    }
+    my $G = $db->_private_root_data('GLOBAL');
+    return if !$G;
+    my $g = $G->{$class};
+    if (!$g) {
+	$g = $G->{$class} = 'ObjStore::HV'->new($G);
+    }
+    # can't bless what is essentially a symbol table...
+    my %fake;
+    tie %fake, 'ObjStore::HV', $g;
+    \%fake;
+}
+
+# classname => [
+#   [0] = 0          (version)
+#   [1] = classname  (must always be [1]; everything else can change)
+#   [2] = dogtag
+#   [3] = [@ISA]     (depth-first array-tree)
+# ]
+# classname => [
+#   [0] = 1
+#   [1] = classname
+#   [2] = dogtag
+#   [3] = [@ISA]
+#   [4] = { map { $_ => $_\::VERSION } @ISA }
+# ]
+
+# We can elide the recursion check, since 
+# If the persistent tree
+# Has a LOOP, 
+# We made a much more major mistake!
+#                 -- Vogon Poetry, volume 3
+
+sub isa_tree_matches {
+    my ($class, $isa) = @_;
+    no strict 'refs';
+    my $x=0;
+    for my $z (@{"$class\::ISA"}) {
+	return 0 if (!$isa->[$x] or $isa->[$x] ne $z or
+		     !isa_tree_matches($z, $isa->[$x+1]));
+	$x+=2;
+    }
+    return if $isa->[$x+1];
+    1;
+}
+
+sub _get_certified_blessing {  #XS? XXX
+    my ($br, $o, $toclass) = @_;
+
+    my $bs = $br->{$toclass};
+    return if !$bs;
+
+    return $bs if (ObjStore::blessed($o) ne $toclass and
+		   ($CLASS_DOGTAG{$toclass} or 0) == $bs->[2]);
+
+    # dogtag invalid; do a full check...
+
+    return if ($bs->[0] != 1 ||
+	       !isa_tree_matches($toclass, $bs->[3]));
+
+    no strict 'refs';
+    my $then = $bs->[4];
+    for (my ($c,$v) = each %$then) {
+	return if ($ {"$c\::VERSION"} || '') gt $v;
+    }
+
+    # looks good; fix dogtag so we short-cut next time
+    $CLASS_DOGTAG{$toclass} = $bs->[2];
+    # warn "ok $toclass ".$bs->[2];
+    $bs;
+}
+
+sub isa2 { #recode in XS ? XXX
+    my ($class, $isa) = @_;
+    for (my $x=0; $x < $isa->_count; $x++) {
+	my $z = $isa->[$x];
+	if (ref $z) { return 1 if isa2($class, $z); }
+	else { return 1 if $class eq $z; }
+    }
+    0;
+}
+
+sub _isa {
+    my ($o, $class, $txn) = @_;
+    return $o->SUPER::isa($class) if !ref $o;
+    my $x = sub {
+	my $bs = $o->_blessto_slot;
+	return $o->SUPER::isa($class) if !$bs;
+	return 1 if $class eq $bs->[1];
+	isa2($class, $bs->[3]);
+    };
+    $txn? &ObjStore::begin($x) : &$x;
+}
+
+sub _versionof {
+    my ($o, $class, $txn) = @_;
+    return $o->SUPER::versionof($class) if !ref $o;
+    my $x = sub {
+	my $bs = $o->_blessto_slot;
+	return $o->SUPER::versionof($class) if !$bs || !$bs->[4];
+	$bs->[4]->{$class};
+    };
+    $txn? &ObjStore::begin($x) : &$x;
+}
+
+sub _is_evolved {
+    my ($o, $txn) = @_;
+    croak("is_evolved($o) is only meaningful on real objects") if !ref $o;
+    my $x = sub {
+	my $bs = $o->_blessto_slot;
+	croak("is_evolved($o) only works on re-blessed objects")
+	    if !$bs || !$bs->[4];
+	
+	no strict 'refs';
+	my $then = $bs->[4];
+	for (my ($c,$v) = each %$then) {
+	    return if ($ {"$c\::VERSION"} || '') gt $v;
+	}
+	1;
+    };
+    $txn? &ObjStore::begin($x) : &$x;
+}
+
+# can skip the top-level class
+sub isa_tree {
+    my ($pkg, $depth) = @_;
+    confess "ObjStore::BRAHMA::isa_tree: loop in \@$pkg\::ISA"
+	if ++$depth > 100;
+    my @isa;
+    no strict 'refs';
+    for my $z (@{"$pkg\::ISA"}) { push(@isa, $z, isa_tree($z, $depth)); }
+    \@isa;
+}
+
+sub isa_versions {
+    my ($pkg, $vmap, $depth) = @_;
+    return $vmap if $pkg eq 'Exporter';  #apparently doesn't make sense?
+    confess "ObjStore::BRAHMA::isa_versions: loop in \@$pkg\::ISA"
+	if ++$depth > 100;
+    no strict 'refs';
+    if (!defined $ {"$pkg\::VERSION"}) {
+	warn "\$$pkg\::VERSION must be assigned a version string!\n";
+    } else {
+	$vmap->{$pkg} = $ {"$pkg\::VERSION"};
+    }
+    for my $z (@{"$pkg\::ISA"}) { isa_versions($z, $vmap, $depth); }
+    $vmap;
+}
+
+sub _engineer_blessing {
+    my ($br, $bs, $o, $toclass) = @_;
+    if (! $bs) {
+	confess "ObjStore::BRAHMA must be notified of run-time manipulation of VERSION strings by changing \$ObjStore::RUN_TIME to be != \$CLASS_DOGTAG{$toclass}" 
+	    if ($CLASS_DOGTAG{$toclass} or 0) == $ObjStore::RUN_TIME; #majify? XXX
+
+	$bs = $br->{$toclass} =
+	    [1, $toclass, $ObjStore::RUN_TIME,
+	     isa_tree($toclass,0), isa_versions($toclass, {}, 0)];
+	$bs->const;
+	$CLASS_DOGTAG{$toclass} = $bs->[2];
+#	warn "fix $toclass ".$bs->[2];
+    }
+    $o->_blessto_slot($bs);
+}
+
+sub iscorrupt {
+    my ($o, $vlev) = @_;
+    $vlev = 'all' if !defined $vlev;
+    if ($vlev !~ m/^\d+$/) {
+	if ($vlev eq 'quiet') { $vlev = 0; }
+	elsif ($vlev eq 'err') { $vlev = 1; }
+	elsif ($vlev eq 'warn') { $vlev = 2; }
+	elsif ($vlev eq 'info') { $vlev = 3; }
+	elsif ($vlev eq 'all') { $vlev = 4; }
+	else { croak("iscorrupt($vlev): unrecognized verbosity level"); }
+    }
+
+    my $err=0;
+    if ($o->can('_iscorrupt')) {
+	$err += $o->_iscorrupt($vlev);
+    } elsif ($o->can('_is_corrupted')) {
+	warn "Please rename ".ref($o)."::_is_corrupted to _iscorrupt" if $vlev >=2;
+	$err += $o->_is_corrupted($vlev);
+    } else {
+	warn "$o->iscorrupt: no _iscorrupt method found\n" if $vlev >= 2;
+    }
+    $err;
+}
+sub is_corrupted {
+    warn "Please use iscorrupt, it's shorter too";
+    iscorrupt(@_);
+}
+
 # 'bless' for databases is totally, completely, and utterly
 # special-cased.  It's like stuffing a balloon inside itself.
+#
 package ObjStore::Database;
+BEGIN { ObjStore::BRAHMA->import(); }
 use Carp;
-use vars qw(@OPEN0 @OPEN1);
+use vars qw($VERSION @OPEN0 @OPEN1 %_ROOT_KEYS);
 
+$VERSION = '1.00';
 @OPEN0=(sub { shift->sync_INC() });
 @OPEN1=();
 
-sub BLESS_ROOT { 'database_blessed_to' }  #root XXX
-
-sub of {
-    carp "ObjStore::Database::of() is depreciated: use the database_of method";
-    $_[0]->database_of()
-}
 sub database_of { $_[0]; }
 sub segment_of { $_[0]->get_default_segment; }
 
@@ -384,41 +603,17 @@ sub open {
     1;
 }
 
-sub is_open_mvcc {
-    my ($db) = @_;
-    carp "is_open_mvcc is unnecessary; simply use is_open";
-    $db->is_open eq 'mvcc';
-}
-
 sub is_open_read_only {
     my ($db) = @_;
     $db->is_open eq 'read' or $db->is_open eq 'mvcc';
 }
 
-sub _get_private_root {
-    my ($db) = @_;
-    my $rt = $db->_PRIVATE_ROOT();
-    return if !$rt;
-    my $priv = $rt->get_value;
-    if (!$priv) {
-	$priv = ObjStore::HV->new($db, 30);
-	$rt->set_value($priv);
-    }
-    $priv;
-}
+'ObjStore::Database'->_register_private_root_key('INC');
 
-sub get_INC {
-    my ($db) = @_;
-    my $priv = $db->_get_private_root;
-    if (&ObjStore::Transaction::get_current()->get_type() ne 'read') {
-	$priv->{INC} ||= [];
-    }
-    ($priv and exists $priv->{INC})? $priv->{INC} : undef;
-}
-
+sub get_INC { shift->_private_root_data('INC', sub { [] }); }
 sub sync_INC {
     my ($db) = @_;
-    my $inc = $db->get_INC();
+    my $inc = $db->_private_root_data('INC');
     return if !$inc;
     # optimize with a hash XXX
     for (my $x=0; $x < $inc->_count; $x++) {
@@ -427,7 +622,7 @@ sub sync_INC {
 	for (@INC) { $ok=1 if $_ eq $dir }
 	if (!$ok) {
 #	    warn "sync_INC: adding $dir";
-	    push @INC, $dir;
+	    unshift @INC, $dir;
 	}
     }
 }
@@ -442,46 +637,37 @@ sub import_blessing {
     my ($db) = @_;
     my $bs = $db->_blessto_slot;
     if ($bs) {
-	if (!ref $bs) {
-	    #depreciated 1.19
-	} else { $bs = $bs->[1]; }
-	&ObjStore::safe_require('ObjStore::Database', $bs);
+	my $class = $bs->[1];
+	&ObjStore::safe_require('ObjStore::Database', $class);
 
-	# Must use CORE::bless here because it must be fully transparent.
-	CORE::bless($db, $bs);
+	# Must use CORE::bless here: this is strictly an import.
+	CORE::bless($db, $class);
     }
     $db;
 }
 
+'ObjStore::Database'->_register_private_root_key('database_blessed_to');
 sub _blessto_slot {
-    my ($db) = @_;
-    my $priv = $db->_get_private_root;
-    return if !$priv;
-    $priv->{&BLESS_ROOT};
+    my ($db, $new) = @_;
+    my $bs = $db->_private_root_data('database_blessed_to', $new);
+    return if $bs && !ref $bs; #depreciated 1.19
+    $bs;
 }
 
-sub isa {
-    my ($db, $class) = @_;
-    return $db->SUPER::isa($class) if !ref $db;
-    &ObjStore::begin(sub {
-	my $bs = $db->_blessto_slot;
-	return 0 if !$bs;
-	return 1 if $class eq $bs->[1];
-	&ObjStore::UNIVERSAL::_isa($class, $bs->[3]);
-    });
-}
+sub isa { _isa(@_, 1); }
+sub versionof { _versionof(@_, 1); }
+sub is_evolved { _is_evolved(@_, 1); }
 
 # Even though the transient blessing doesn't match, the persistent
-# blessing might be correct.  We need to check before doing a super
+# blessing might be correct.  We need to check before doing a super-
 # slow update transaction.
 
 # There are potentially four blessings to be aware of:
 # 1. the current bless-to
 # 2. the destination bless-to
 # 3. the database bless-info
-# 4. the per-class bless-info in BRAHMA
+# 4. the per-class bless-info (in BRAHMA)
 
-# figure out how to import stuff from ObjStore::UNIVERSAL XXX
 sub BLESS {
     if (ref $_[0]) {
 	my ($r, $class) = @_;
@@ -490,37 +676,31 @@ sub BLESS {
 	return $r->SUPER::BLESS($class);
     }
     my ($class, $db) = @_;
-    my $ok=0;
+    my $need_rebless = 1;
     &ObjStore::begin(sub {
-	my $priv = $db->_get_private_root;
-	return if !$priv;
-	my $bs = $priv->{&BLESS_ROOT};
+	my $br = $db->_conjure_brahma;
+	return if !$br;
+	my $bs = _get_certified_blessing($br, $db, $class);
 	return if !$bs;
-	return if !ref $bs; #depreciated 1.19
-
-	$ok=1 if
-	    &ObjStore::blessed($db) ne $bs->[1] &&
-		$bs->[1] eq $class &&
-		    $bs->[2] <= ($ObjStore::UNIVERSAL::BLESS_VERSION{$class} || 0)
+	if ($bs->[1] eq $class) {
+	    # Already blessed and certified: way cool dude!
+	    $need_rebless = 0;
+	}
     });
     die if $@;
-    my $ct = ObjStore::Transaction::get_current();
-    if (!$ok and
-	!$db->is_open_read_only and (!$ct or $ct->get_type ne 'read') and
-	!$class->isa('UNLOADED')) {
-	
-	# This can be slow because it doesn't happen often.
-	&ObjStore::begin('update', sub {
-	    my $priv = $db->_get_private_root;
-	    my $brah = ($priv->{BRAHMA} ||= ObjStore::HV->new($db, 30));
-	    my $bs = $brah->{$class} ||= ObjStore::UNIVERSAL::_bless_info($class,$ObjStore::COMPILE_TIME);
-	    if (!ObjStore::UNIVERSAL::_isa_tree_matches($class, $bs->[3])) {
-		$bs = $brah->{$class} = ObjStore::UNIVERSAL::_bless_info($class,time);
-	    }
-	    $ObjStore::UNIVERSAL::BLESS_VERSION{$class} = $bs->[2];
-	    $priv->{&BLESS_ROOT} = $bs;
-	});
-	die if $@;
+    no strict 'refs';
+    if ($need_rebless and
+	!$ {"$class\::UNLOADED"} and
+	!$db->is_open_read_only) {
+
+	my $ct = ObjStore::Transaction::get_current();
+	if (!$ct or $ct->get_type ne 'read') {
+	    &ObjStore::begin('update', sub {
+		 my $br = $db->_conjure_brahma;
+		 _engineer_blessing($br, scalar(_get_certified_blessing($br, $db, $class)), $db, $class);
+	    });
+	    die if $@;
+	}
     }
     $class->SUPER::BLESS($db);
 }
@@ -581,15 +761,13 @@ sub destroy_root {
     $root->destroy;
 }
 
-*is_corrupted = \&ObjStore::UNIVERSAL::is_corrupted; #usual hack
-
-sub _is_corrupted {
+sub _iscorrupt {
     my ($db, $v) = @_;
-    warn "$db->is_corrupted: checking...\n" if $v >= 3;
+    warn "$db->iscorrupt: checking...\n" if $v >= 3;
     my $err=0;
     for my $r ($db->get_all_roots()) {
 	my $z = $r->get_value;
-	$err += $z->is_corrupted($v);
+	$err += $z->iscorrupt($v);
     }
     $err;
 }
@@ -621,6 +799,57 @@ sub POSH_CD {
     $r? $r->get_value : undef;
 }
 
+sub _register_private_root_key {
+    my ($class, $key, $mk) = @_;
+    croak "$_ROOT_KEYS{$key}->{owner} has already reserved private root key '$key'"
+	if $_ROOT_KEYS{$key};
+    $_ROOT_KEYS{$key} = { owner => scalar(caller), $mk? (mk => $mk):() };
+}
+
+sub _private_root_data {  #XS? XXX
+    my ($db, $key, $new) = @_;
+#    confess "_private_root_data(@_)" if @_ != 2 && @_ != 3;
+    confess "Detected attempt to subvert security check on private root key '$key'"
+	if !$_ROOT_KEYS{$key};
+    my $rt = $db->_PRIVATE_ROOT();
+    return if !$rt;
+    my $priv = $rt->get_value;
+    if (!$priv) {
+	my $s = $db->create_segment;
+	$s->set_comment("_osperl_private");
+	$priv = 'ObjStore::HV'->new($s, 30);
+	$rt->set_value($priv);
+    }
+    if ($new) {
+	if (ref $new eq 'CODE') {
+	    my $d = $priv->{$key};
+	    if (!$d) {
+		$d = $priv->{$key} = $new->($priv);
+	    }
+	    $d
+	} else {
+	    $priv->{$key} = $new;	    
+	}
+    } else {
+	my $d = $priv->{$key};
+	if (!$d and $_ROOT_KEYS{$key}->{mk}) {
+	    $d = $priv->{$key} = $_ROOT_KEYS{$key}->{mk}->($priv)
+	}
+	$d;
+    }
+}
+
+#------- ------- ------- -------
+sub is_open_mvcc {
+    my ($db) = @_;
+    carp "is_open_mvcc is unnecessary; simply use is_open";
+    $db->is_open eq 'mvcc';
+}
+
+sub of {
+    carp "ObjStore::Database::of() is depreciated: use the database_of method";
+    $_[0]->database_of()
+}
 sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
@@ -629,37 +858,32 @@ sub get_n_databases {
     carp "ObjStore::Database::get_n_databases depreciated; use ObjStore::get_n_databases";
     ObjStore::get_n_databases();
 }
-
-package ObjStore::Database::HV;
-sub new { die "ObjStore::Database::HV has been renamed to ObjStore::HV::Database" }
-sub BLESS {
-    return $_[0]->SUPER::BLESS($_[1]) if ref $_[0];
-    my ($class, $db) = @_;
-    $class = 'ObjStore::HV::Database';
-    $class->SUPER::BLESS($db);
-}
+$_ROOT_KEYS{Brahma} = { owner => 'ObjStore::Database' }; #depreciated 1.19
 
 package ObjStore::Segment;
 use Carp;
 
+sub segment_of { $_[0]; }
+sub database_of { $_[0]->_database_of->import_blessing; }
+
+sub BLESS { croak "Segments absolutely cannot be blessed (you segment head!)" }
+
+sub destroy {
+    my ($o) = @_;
+    if (!$o->is_empty()) {
+	croak("Attempt to destroy unempty os_segment!  You may use osp_hack if you really need to do this");
+    }
+    $o->_destroy;
+}
+
+#------- ------- ------- ------- -------
 sub of {
     carp "ObjStore::Segment::of() is depreciated: use the segment_of method";
     $_[0]->segment_of()
 }
-sub segment_of { $_[0]; }
-sub database_of { $_[0]->_database_of->import_blessing; }
-
-sub BLESS { croak "Segments absolutely cannot be re-blessed!" }
-
 sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
-
-sub destroy {
-    my ($o) = @_;
-    if (!$o->is_empty()) { croak("attempt to destroy unempty os_segment"); }
-    $o->_destroy;
-}
 
 package ObjStore::Notification;
 
@@ -675,55 +899,18 @@ sub get_database {
 }
 
 package ObjStore::UNIVERSAL;
+BEGIN { ObjStore::BRAHMA->import(); }
+use vars qw($VERSION);
+$VERSION = '1.00';
 use Carp;
-use vars qw(%BLESS_VERSION);
 use overload ('""' => \&_pstringify,
 	      'bool' => sub {1},
 	      '==' => \&_peq,
 	      '!=' => \&_pneq,
 	     );
 
-sub set_readonly { carp "set_readonly depreciated"; shift->const }
-
 sub database_of { $_[0]->_database_of->import_blessing; }
 
-# adapted from Devel::Symdump
-sub _isa_tree {
-    my ($pkg, $depth) = @_;
-    $depth ||= 0;
-    ++ $depth;
-    if ($depth > 100) {warn "Deep recursion searching \@$pkg\::ISA\n"; return}
-    my @isa;
-    no strict 'refs';
-    for my $z (@{"$pkg\::ISA"}) { push(@isa, $z, _isa_tree($z, $depth)); }
-    \@isa;
-}
-
-sub _isa_tree_matches {
-    my ($pkg, $isa, $depth) = @_;
-    $depth ||= 0;
-    ++ $depth;
-    if ($depth > 100) {warn "Deep recursion searching \@$pkg\::ISA\n"; return}
-    no strict 'refs';
-    my $x=0;
-    for my $z (@{"$pkg\::ISA"}) {
-	return 0 if (!$isa->[$x] or $isa->[$x] ne $z or
-		     !_isa_tree_matches($z, $isa->[$x+1], $depth));
-	$x+=2;
-    }
-    return 0 if $isa->[$x+1];
-    1;
-}
-
-sub _bless_info {
-    my ($class, $when) = @_;
-    $BLESS_VERSION{$class} = $when;
-    # Can't use AVHV because AVHV uses bless.
-    [0, $class, $when, _isa_tree($class)];
-}
-
-# insure(transient VERSION >= persistent VERSION)
-# (transient side must drive evolution, yes?)
 sub BLESS {
     if (ref $_[0]) {
 	my ($r, $class) = @_;
@@ -731,55 +918,25 @@ sub BLESS {
 	    if !$class->isa('ObjStore::UNIVERSAL');
 	$r->SUPER::BLESS($class);
     }
+    no strict 'refs';
     my ($class, $r) = @_;
-    if (_is_persistent($r) and !$class->isa('UNLOADED')) {
-	my $db = $r->database_of;
-	my $priv = $db->_get_private_root;
-	my $brah = ($priv->{BRAHMA} ||= new ObjStore::HV($db, 30));
-	my $bs = ($brah->{$class} ||= _bless_info($class,$ObjStore::COMPILE_TIME));
-	# Be suspicious if bless-to is not going to change.
-	if (ObjStore::blessed($r) eq $class or
-	    $bs->[2] > ($BLESS_VERSION{$class} || 0)) {
-	    if (!_isa_tree_matches($class, $bs->[3])) {
-		$bs = $brah->{$class} = _bless_info($class, time);
-	    }
-	}
-	$BLESS_VERSION{$class} = $bs->[2];
-	$r->_blessto_slot($bs);
+    if (_is_persistent($r) and !$ {"$class\::UNLOADED"}) {
+	# recode in XS ? XXX
+	my $br = $r->database_of->_conjure_brahma;
+	_engineer_blessing($br, scalar(_get_certified_blessing($br, $r, $class)), $r, $class);
     }
     $class->SUPER::BLESS($r);
 }
 
-sub _isa {
-    my ($class, $isa, $depth) = @_;
-    $depth ||= 0;
-
-    ++ $depth;
-    confess "ObjStore::UNIVERSAL::_isa: loop in \@ISA" if $depth > 100;
-    for (my $x=0; $x < $isa->_count; $x++) {
-	my $z = $isa->[$x];
-	if (ref $z) { return 1 if _isa($class, $z, $depth); }
-	else { return 1 if $class eq $z; }
-    }
-    0;
-}
-
-sub isa {
-    my ($ref, $class) = @_;
-    return $ref->SUPER::isa($class) if !ref $ref;
-    my $bs = $ref->_blessto_slot;
-    return $ref->SUPER::isa($class) if !$bs;
-    return 1 if $class eq $bs->[1];
-    _isa($class, $bs->[3]);
-}
+sub isa { _isa(@_, 0); }
+sub versionof { _versionof(@_, 0); }
+sub is_evolved { _is_evolved(@_, 0); }
 
 #shallow copy
-sub clone_to { croak($_[0]."->clone_to(where) unimplemented") }
+sub clone_to { croak($_[0]."->clone_to() unimplemented") }
 
-sub set_weak_refcnt_to_zero { croak "set_weak_refcnt_to_zero is unnecessary"; }
-
-# Do fancy argument parsing to make it creating unsafe
-# references a very intentional endevor.
+# Do fancy argument parsing to make creation of unsafe references a
+# very intentional endevor.
 sub new_ref {
     my ($o, $seg, $safe) = @_;
     $seg = ObjStore::Segment::get_transient_segment()
@@ -791,32 +948,18 @@ sub new_ref {
     $o->_new_ref($type, $seg->segment_of);
 }
 
-sub is_evolved {1}
-sub evolve {}
-
-sub is_corrupted {
-    my ($o, $vlev) = @_;
-    $vlev = 'all' if !defined $vlev;
-    if ($vlev !~ m/^\d+$/) {
-	if ($vlev eq 'quiet') { $vlev = 0; }
-	elsif ($vlev eq 'err') { $vlev = 1; }
-	elsif ($vlev eq 'warn') { $vlev = 2; }
-	elsif ($vlev eq 'info') { $vlev = 3; }
-	elsif ($vlev eq 'all') { $vlev = 4; }
-	else { croak("is_corrupted($vlev): unrecognized verbosity"); }
-    }
-
-    my $err=0;
-    if ($o->can('_is_corrupted')) {
-	$err += $o->_is_corrupted($vlev);
-    } else {
-	warn "$o->is_corrupted: no _is_corrupted method found\n" if $vlev >= 2;
-    }
-    $err;
+sub evolve {
+    # Might be as simple as this:  bless $_[0], ref($_[0]);
+    # but you have to code it!
 }
 
+#-------- -------- --------
+sub set_weak_refcnt_to_zero { croak "set_weak_refcnt_to_zero is unnecessary"; }
+sub set_readonly { carp "set_readonly depreciated"; shift->const }
+
 package ObjStore::Ref;
-use vars qw(@ISA);
+use vars qw($VERSION @ISA);
+$VERSION = '1.00';
 @ISA = qw(ObjStore::UNIVERSAL);
 
 # Legal arguments:
@@ -870,7 +1013,8 @@ sub POSH_PEEK {
 	if (!ref $at) {
 	    $o->o($at);
 	} else {
-	    $o->peek_any($at);
+	    $o->o(ref($at)." ...");
+#	    $o->peek_any($at); XXX peek styles
 	}
     });
     $o->nl;
@@ -891,7 +1035,8 @@ sub POSH_ENTER {
 }
 
 package ObjStore::Cursor;
-use vars qw(@ISA);
+use vars qw($VERSION @ISA);
+$VERSION = '1.00';
 @ISA = qw(ObjStore::UNIVERSAL);
 
 sub count { $_[0]->focus->_count; }
@@ -902,7 +1047,8 @@ sub clone_to {
 }
 
 package ObjStore::Container;
-use vars qw(@ISA);
+use vars qw($VERSION @ISA);
+$VERSION = '1.00';
 @ISA = qw(ObjStore::UNIVERSAL);
 
 sub new_cursor {
@@ -921,16 +1067,17 @@ sub clone_to {
 sub count { shift->_count; }  #goofy XXX
 
 package ObjStore::AV;
-use vars qw(@ISA %REP);
+use vars qw($VERSION @ISA %REP);
+$VERSION = '1.00';
 @ISA=qw(ObjStore::Container);
 
-sub _is_corrupted {
+sub _iscorrupt {
     my ($o, $vlev) = @_;
-    warn "$o->is_corrupted: checking...\n" if $vlev >= 3;
+    warn "$o->iscorrupt: checking...\n" if $vlev >= 3;
     my $err=0;
     for (my $z=0; $z < $o->_count; $z++) {
 	my $e = $o->[$z];
-	$err += $e->is_corrupted($vlev) if ObjStore::blessed($e);
+	$err += $e->iscorrupt($vlev) if ObjStore::blessed($e);
     }
     $err;
 }
@@ -944,15 +1091,21 @@ sub map {
 
 package ObjStore::HV;
 use Carp;
-use vars qw(@ISA %REP);
+use vars qw($VERSION @ISA %REP);
+$VERSION = '1.00';
 @ISA=qw(ObjStore::Container);
 
-sub _is_corrupted {
+sub TIEHASH {
+    my ($class, $object) = @_;
+    $object;
+}
+
+sub _iscorrupt {
     my ($o, $vlev) = @_;
-    warn "$o->is_corrupted: checking...\n" if $vlev >= 3;
+    warn "$o->iscorrupt: checking...\n" if $vlev >= 3;
     my $err=0;
     while (my($k,$v) = each %$o) {
-	$err += $v->is_corrupted($vlev) if ObjStore::blessed($v);
+	$err += $v->iscorrupt($vlev) if ObjStore::blessed($v);
     }
     $err;
 }
@@ -969,7 +1122,8 @@ sub map {
 
 package ObjStore::Index;
 use Carp;
-use vars qw(@ISA %REP);
+use vars qw($VERSION @ISA %REP);
+$VERSION = '1.00';
 @ISA='ObjStore::Container';
 
 sub new {
@@ -1011,11 +1165,24 @@ sub POSH_PEEK {
     $o->nl;
 }
 
-sub _is_corrupted {0}  #write your own!
+sub _iscorrupt {0}  #write your own!
+
+#----------- ----------- ----------- ----------- ----------- -----------
+
+package ObjStore::Database::HV;
+sub new { die "ObjStore::Database::HV has been renamed to ObjStore::HV::Database" }
+sub BLESS {
+    return $_[0]->SUPER::BLESS($_[1]) if ref $_[0];
+    my ($class, $db) = @_;
+    $class = 'ObjStore::HV::Database';
+    $class->SUPER::BLESS($db);
+}
 
 package ObjStore::Set;
-use base 'ObjStore::HV';
 use Carp;
+use base 'ObjStore::HV';
+use vars qw($VERSION);
+$VERSION = 'You suck!';
 
 sub new {
     carp "ObjStore::Set is depreciated";
@@ -1059,13 +1226,17 @@ sub STORE { add(@_) }
 
 #----------- ----------- ----------- ----------- ----------- -----------
 package ObjStore;
-$COMPILE_TIME = time;
-die "COMPILE_TIME must be positive" if $COMPILE_TIME < 0;
+$RUN_TIME = time;
+die "RUN_TIME must be positive" if $RUN_TIME <= 0;
 
 package UNIVERSAL;
 
 if (!defined &{"UNIVERSAL::BLESS"}) {
     eval 'sub BLESS { ref($_[0])? () : CORE::bless($_[1],$_[0]) }';
+    die if $@;
+}
+if (!defined &{"UNIVERSAL::versionof"}) {
+    eval 'sub versionof { no strict "refs"; $ {"$_[1]::VERSION"} }';
     die if $@;
 }
 

@@ -20,10 +20,10 @@ dextv.tmpl
 edit.c
 hints/dec_osf.pl
 hints/solaris_2.pl
-junk/challenge.pl
 junk/posh2pod.pl
 junk/rename.pl
 lib/ObjStore.pm
+lib/ObjStore.pod
 lib/ObjStore/AV/Set.pm
 lib/ObjStore/AVHV.pm
 lib/ObjStore/AppInstance.pm
@@ -31,7 +31,6 @@ lib/ObjStore/CSV.pm
 lib/ObjStore/Config.pm
 lib/ObjStore/GENERIC.pm
 lib/ObjStore/HV/Database.pm
-lib/ObjStore/ObjStore.pod
 lib/ObjStore/Path/Cursor.pm
 lib/ObjStore/Path/Ref.pm
 lib/ObjStore/Peeker.pm
@@ -66,12 +65,13 @@ t/PTest.pm
 t/Row.pm
 t/TestDB.pm
 t/array.t
+t/avgrow.t
 t/avhv.t
 t/avset.t
 t/bless.t
-t/avgrow.t
 t/cursor.t
 t/deadlock.pl
+t/globs.t
 t/hash.t
 t/index.t
 t/int16.t
@@ -86,7 +86,7 @@ t/stargate.t
 t/table.t
 t/test.pm
 t/transact.t
-t/z_ospeek.t
+t/z_peek.t
 tv.os.h
 txn.c
 txn.h

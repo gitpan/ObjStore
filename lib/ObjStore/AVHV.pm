@@ -1,94 +1,92 @@
 use strict;
 package ObjStore::AVHV::Fields;
+use Carp;
+use ObjStore;
 use base 'ObjStore::HV';
+use vars qw($VERSION %LAYOUT_VERSION);
+$VERSION = '0.02';
 
-# '__VERSION__' is appropriate because it might not be a timestamp.
+'ObjStore::Database'->
+    _register_private_root_key('layouts', sub { 'ObjStore::HV'->new(shift, 30) });
+push(@ObjStore::Database::OPEN1, \&verify_class_fields);
 
-sub is_system_field {  #depreciated?
-    my ($o, $name) = @_;
-    $name =~ m'^_';
+sub verify_class_fields {
+    return if $] < 5.00450;
+    my ($db) = @_;
+    my $layouts = $db->_private_root_data('layouts');
+    map { get_certified_layout($layouts, $_) } keys %$layouts;
 }
 
-sub is_compatible {
-    my ($pfields, $fields) = @_;
-    my $yes=1;
-    for my $k (keys %$fields) {
-	next if $pfields->is_system_field($k);
-	my $xx = $pfields->{$k} || -1;
-	if ($xx != $fields->{$k}) { $yes=0; last }
+sub is_compat {
+    my ($l, $tlay) = @_;
+    for my $k (keys %$tlay) {
+	next if $k =~ m'^_';
+	return if ($l->{$k} || -1) != $tlay->{$k};
     }
-    $yes;
+    1;
 }
+
+sub get_transient_layout {
+    my ($class) = @_;
+    no strict 'refs';
+    croak '\%{'.$class.'\::FIELDS} not found'
+	if !defined %{"$class\::FIELDS"};
+    \%{"$class\::FIELDS"};
+}
+
+sub get_certified_layout {
+    my ($layouts, $of) = @_;
+    my $l = $layouts->{$of};
+    return if !$l || !$l->{__VERSION__};
+
+    return $l if $l->{__VERSION__} == ($LAYOUT_VERSION{$of} or 0);
+
+    my $tlay = get_transient_layout($of);
+    return if !is_compat($l, $tlay);
+
+    $LAYOUT_VERSION{$of} = $l->{__VERSION__};
+    $l;
+}
+
+sub new { #XS? XXX
+    my ($class, $db, $of) = @_;
+    my $layouts = $db->_private_root_data('layouts');
+
+    my $l = get_certified_layout($layouts, $of);
+    return $l if $l;
+
+    my $old = $layouts->{$of};
+    if ($old and $ObjStore::RUN_TIME == ($old->{__VERSION__} or 0)) {
+	confess "ObjStore::AVHV must be notified of run-time manipulation of field layouts by changing \$ObjStore::RUN_TIME to be != \$layout->{__VERSION__}";
+
+	# We only check the previous layout.  Potentially, an older layout
+	# could have the same version.  This will be caught by the
+	# UNIVERSAL is_evolved check (given a version mismatch!).
+    }
+
+    $l = $layouts->{$of} = get_transient_layout($of);
+    $l->{__VERSION__} = $ObjStore::RUN_TIME;
+    $l->{__CLASS__} = $of;
+    bless $l, $class;
+    $l->const;
+    $LAYOUT_VERSION{$of} = $l->{__VERSION__};
+    $l;
+}
+
+sub is_evolved {1} #const anyway
 
 package ObjStore::AVHV;
 use Carp;
 use base 'ObjStore::AV';
-
-push(@ObjStore::Database::OPEN1, \&verify_class_fields);
-sub LAYOUTS { 'layouts' }  #root XXX
-
-sub FETCH_TRANSIENT_LAYOUT {
-    my ($class) = @_;
-    no strict 'refs';
-    croak '\%{'.$class.'\::FIELDS} not found' if !defined %{"$class\::FIELDS"};
-    my $fm = \%{"$class\::FIELDS"};
-    $fm->{__VERSION__} ||= $ObjStore::COMPILE_TIME;
-    $fm;
-}
-
-sub fetch_class_fields {
-    my ($db, $class) = @_;
-    my $priv = $db->_get_private_root;
-    my $layouts = ($priv->{&LAYOUTS} ||= ObjStore::HV->new($db, 40));
-    my $pfields = ($layouts->{$class} ||=
-		   bless { __VERSION__ => 0 }, 'ObjStore::AVHV::Fields');
-
-    my $fields = FETCH_TRANSIENT_LAYOUT($class);
-    my $redo = ($pfields->{__CLASS__} or '') ne $class;
-
-    if ($redo or $pfields->{__VERSION__} != $fields->{__VERSION__}) {
-
-	if ($redo or !$pfields->is_compatible($fields)) {
-	    $pfields = $layouts->{$class} =
-		bless($fields, 'ObjStore::AVHV::Fields');
-	    $pfields->{__CLASS__} = $class;
-	    $pfields->{__VERSION__} = $fields->{__VERSION__};
-	}
-    }
-    $pfields->const;
-    $pfields;
-}
-
-# insure(transient __VERSION__ >= persistent __VERSION__)
-# (transient side must drive evolution, yes?)
-sub verify_class_fields {
-    my ($db) = @_;
-    return if $] < 5.00450;
-    my $priv = $db->_get_private_root;
-    return if (!$priv or !exists $priv->{&LAYOUTS});
-    my $layouts = $priv->{&LAYOUTS};
-
-    # for all class layouts
-    while (my ($class, $pfields) = each %$layouts) {
-	croak "Field map for $class is set to $pfields->{__CLASS__}" if
-	    $pfields->{__CLASS__} ne $class;
-	no strict 'refs';
-	next if !defined %{"$class\::FIELDS"};
-	my $fields = \%{"$class\::FIELDS"};
-	if (!$pfields->is_compatible($fields)) {
-	    if ($fields->{__VERSION__} <= $pfields->{__VERSION__}) {
-		$fields->{__VERSION__} = $pfields->{__VERSION__}+1;
-	    }
-	}
-    }
-}
+use vars qw($VERSION);
+$VERSION = '0.04';
 
 sub new {
-    require 5.00452;
-    my ($class, $where, $init) = @_;
-    croak "$class->new(where, init)" if @_ < 2;
-    my $fmap = fetch_class_fields($where->database_of, $class);
-    my $o = $class->SUPER::new($where, $fmap->{__MAX__}+1);
+    require 5.00450;
+    my ($class, $near, $init) = @_;
+    croak "$class->new(near, init)" if @_ < 2;
+    my $fmap = 'ObjStore::AVHV::Fields'->new($near->database_of, $class);
+    my $o = $class->SUPER::new($near, $fmap->{__MAX__}+1);
     $o->[0] = $fmap;
     if ($init) {
 	while (my ($k,$v) = each %$init) {
@@ -101,47 +99,52 @@ sub new {
 
 sub is_evolved {
     my ($o) = @_;
-    my $class = ref $o;
-    my $fields = FETCH_TRANSIENT_LAYOUT($class);
-    my $pfm = $o->[0];
-    ($pfm->{__CLASS__} eq $class &&
-     $pfm->{__VERSION__} == $fields->{__VERSION__});
+    ($o->SUPER::is_evolved() and
+     $o->[0]{__VERSION__} == $ObjStore::AVHV::Fields::LAYOUT_VERSION{ ref($o) });
 }
 
-sub evolve {
-    require 5.00452;
-    my ($o) = @_;
-    my $class = ref $o;
-    my $fields = FETCH_TRANSIENT_LAYOUT($class);
-    my $pfields = $o->[0];
+sub _avhv_relayout {
+    require 5.00450;
+    my ($o, $to) = @_;
+    my $new = 'ObjStore::AVHV::Fields'->new($o->database_of, $to);
+    return if $new == $o->[0];
+    
+    my $old = $o->[0];
+    ObjStore::peek($old), croak "Found $old where ObjStore::AVHV::Fields expected"
+	if ($old && !$old->isa('ObjStore::AVHV::Fields') &&
+	    !$old->isa('ObjStore::HV'));
 
-    if (! $pfields->is_compatible($fields)) {
-	#copy interesting fields to @tmp
-	my @tmp;
-	while (my ($k,$v) = each %$pfields) {
-	    next if $pfields->is_system_field($k);
-	    push(@tmp, [$k,$o->[$v]]) if exists $fields->{$k};
-	}
-
-	#clear $o
-	for (my $x=0; $x < $o->_count; $x++) { $o->[$x] = undef }
-
-	#copy @tmp back using new schema
-	for my $z (@tmp) { $o->[$fields->{$z->[0]}] = $z->[1]; }
-
-	$o->[0] = fetch_class_fields($o->database_of, ref $o);
+    #copy interesting fields to @tmp
+    my @save;
+    while (my ($k,$v) = each %$old) {
+	next if $k =~ m'^_';
+	push(@save, [$k,$o->[$v]]) if exists $new->{$k};
     }
-    $fields->{__VERSION__} = $pfields->{__VERSION__};
+    
+    #clear $o & copy @save back using new schema
+    for (my $x=0; $x < $o->_count; $x++) { $o->[$x] = undef }
+    for my $z (@save) { $o->[ $new->{$z->[0]} ] = $z->[1]; }
+    $o->[0] = $new;
+    ();
 }
 
-#sub POSH_CD { my ($a, $f) = @_; $a->{$f}; }
+sub BLESS {
+    return shift->SUPER::BLESS(@_) if ref $_[0];
+    my ($class, $o) = @_;
+    _avhv_relayout($o, $class);
+    $class->SUPER::BLESS($o);
+}
+
+sub evolve { bless $_[0], ref($_[0]); }
+
+#sub POSH_CD { my ($a, $f) = @_; $a->{$f}; }  # now XS!
 
 # Hash style, but in square brackets
 sub POSH_PEEK {
-    require 5.00452;
+    require 5.00450;
     my ($val, $o, $name) = @_;
     my $fm = $val->[0];
-    my @F = sort grep { !$fm->is_system_field($_) } keys(%$fm);
+    my @F = sort grep(!m'^_', keys %$fm);
     $o->{coverage} += scalar @F;
     my $big = @F > $o->{width};
     my $limit = $big ? $o->{summary_width}-1 : $#F;
@@ -177,13 +180,19 @@ sub POSH_PEEK {
 
 =head1 DESCRIPTION
 
-Support for extremely efficient objects.
+Support for extremely efficient records.
 
 =head1 TODO
 
 =over 4
 
 =item * More documentation
+
+=item *
+
+This could be implemented with zero memory overhead if we stored the
+layout in the per-class globals.  Will wait for performance numbers
+and overload % before considering such techniques.
 
 =back
 

@@ -3,7 +3,8 @@
 package PTest;
 use strict;
 use ObjStore;
-use vars qw(@ISA);
+use vars qw(@ISA $VERSION);
+$VERSION = '0.00';
 @ISA = qw(ObjStore::HV);
 
 sub new {

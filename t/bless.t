@@ -2,6 +2,8 @@
 BEGIN { $| = 1; $tx=1; print "1..21\n"; }
 
 package Winner;
+use vars qw($VERSION);
+$VERSION = "1.00";
 
 package main;
 
@@ -53,18 +55,20 @@ sub isa_test {
     my $bs2 = $o->_blessto_slot;
     ok($bs1 == $bs2);
 
-    push(@{"$pkg\::ISA"}, 'Winner');
+    push(@{"$pkg\::ISA"}, 'Winner'); ++ $ObjStore::RUN_TIME;
     ok(! $o->isa('Winner'));
     ok($o->UNIVERSAL::isa('Winner'));
+    bless $o, $pkg;
     bless $o, $pkg;
     $bs2 = $o->_blessto_slot;
 #    ObjStore::peek($bs2);
     ok($bs1 != $bs2);
     ok(isa_matches($o));
 
-    pop @{"$pkg\::ISA"};
+    pop @{"$pkg\::ISA"}; ++ $ObjStore::RUN_TIME;
     ok($o->isa('Winner'));
 #    $o->UNIVERSAL::isa('Winner') ? not_ok:ok; #XXX
+    bless $o, $pkg;
     bless $o, $pkg;
     ok(isa_matches($o));
 }
@@ -83,7 +87,7 @@ begin 'update', sub {
     my $p1 = bless $phash, 'PTest';
     ok(ref $p1 eq 'PTest') or warn $p1;
     
-    $j->{obj} = $p1;
+    $j->{obj} = bless $p1, 'PTest';
     ok(ref $j->{obj} eq 'PTest') or warn $j->{obj};
 
     $j->{obj} = new PTest($db);

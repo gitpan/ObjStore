@@ -14,6 +14,7 @@ os_database_root *	O_OBJECT
 os_database_reference *	O_OBJECT
 os_notification *	O_OBJECT
 os_segment *		O_OBJECT
+os_segment_access *	O_OBJECT
 os_object_cursor *	O_OBJECT
 OSSVPV *		O_OSSVPV
 OSPV_Container *	O_OSSVPV
@@ -33,8 +34,7 @@ O_OBJECT
 	if( sv_isobject($arg) && (SvTYPE(SvRV($arg)) == SVt_PVMG) )
 		$var = ($type)SvIV((SV*)SvRV( $arg ));
 	else{
-		warn( \"${Package}::$func_name() -- $var is not a blessed SV reference\" );
-		XSRETURN_UNDEF;
+		croak( \"${Package}::$func_name() -- $var is not a blessed SV reference\" );
 	}
 
 O_OSSVPV

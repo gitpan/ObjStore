@@ -6,6 +6,8 @@ package ObjStore::Table;
 use Carp;
 use ObjStore;
 use base 'ObjStore::HV';
+use vars qw($VERSION);
+$VERSION = '0';
 
 sub new {
     my ($class, $where, $size) = @_;
@@ -103,8 +105,9 @@ sub POSH_CD {
 package ObjStore::Table::Database;
 use ObjStore;
 use base 'ObjStore::Database';
-use vars '@ISA';
+use vars qw($VERSION @ISA);
 push(@ISA, 'ObjStore::Table');
+$VERSION = '0';
 
 sub ROOT() { 'table' }
 sub default_size() { 21 }  #can override

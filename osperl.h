@@ -8,8 +8,16 @@ extern "C" {
 #endif
 
 #ifndef __GNUG__
+
 #undef __attribute__
 #define __attribute__(attr)
+
+/* This directive is used by gcc to do extra argument checking.  It
+has no affect on correctness; it is just a debugging tool.
+Re-defining it to nothing avoids warnings from the solaris sunpro
+compiler.  If you see warnings on your system, figure out how to force
+your compiler to shut-the-fuck-up, and send me a patch! */
+
 #endif
 
 #include "EXTERN.h"
@@ -29,8 +37,12 @@ extern "C" {
 #define dTHR extern int errno
 #endif
 
+#undef croak
+#define croak osp_croak
+
 #include <ostore/ostore.hh>
 
+// Merge perl and ObjectStore typedefs...
 #undef I32
 #define I32 os_int32
 #undef U32
@@ -92,21 +104,14 @@ typedef void (*XS_t)(CV*);
 #define OSvTYPE_set(sv,to) \
 	(sv)->_type = (((sv)->_type & ~OSVTYPEMASK) | (to & OSVTYPEMASK))
 
-#define OSVf_XSHARED		0x40	/*external*/
-#define OSVf_SHARED		0x80	/*direct*/
-#define OSvANYSHARE(sv)		((sv)->_type & (OSVf_SHARED | OSVf_XSHARED))
-#define OSvANYSHARE_off(sv)	((sv)->_type &= ~(OSVf_SHARED | OSVf_XSHARED))
-
-#define OSvSHARED(sv)		((sv)->_type & OSVf_SHARED)
-#define OSvSHARED_on(sv)	((sv)->_type |= OSVf_SHARED)
-#define OSvSHARED_off(sv)	((sv)->_type &= ~OSVf_SHARED)
+#define OSVf_XSHARED		0x80
 #define OSvXSHARED(sv)		((sv)->_type & OSVf_XSHARED)
 #define OSvXSHARED_on(sv)	((sv)->_type |= OSVf_XSHARED)
 #define OSvXSHARED_off(sv)	((sv)->_type &= ~OSVf_XSHARED)
 
 #define OSvTRYWRITE(sv)						\
 STMT_START {							\
-  if (OSvANYSHARE(sv))						\
+  if (OSvXSHARED(sv))						\
     croak("Attempt to modify READONLY %s", sv->type_2pv(), sv);	\
 } STMT_END
 
@@ -329,14 +334,12 @@ struct OSPV_Generic : OSPV_Container {
 
 struct osp_pathexam {
   OSPV_Generic *pcache[INDEX_MAXKEYS];
-  OSSV *shared[INDEX_MAXKEYS];
-  int sharecnt;
   OSSV *keys[INDEX_MAXKEYS];
   int keycnt;
+  OSSVPV *trail[INDEX_MAXKEYS];
+  int trailcnt;
   char mode;
-  
   osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode);
-  int our_field(OSSV *at);
   void abort();
 };
 

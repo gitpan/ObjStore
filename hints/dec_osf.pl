@@ -1,60 +1,103 @@
-# Thanks to Donald Buczek <buczek@mpimg-berlin-dahlem.mpg.de> for
-# dec_osf hints and the initial Makefile.PL!
 
 $self->{CC}="cxx -xtaso";
-$self->{LD}="ld -taso";
-
-defined $ENV{OS_ROOTDIR} or die "OS_ROOTDIR undefined\n";
 $self->{LIBS}=["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losthr"];
 
+$self->{LD}="ld -taso";
 $self->{MAP_TARGET}="perl32";
 $self->{LINKTYPE}="static";
 
-$self->{INCLUDE_EXT}=[];
+check_cxx_version();
 
+sub check_cxx_version {
+	my $out=`cxx -V`;
+	die "cant run cxx\n" if @?;
+	return if $out=~/\QV5.5-004/;
 
-sub MY::top_targets {
-        package MY;
-        my $me=shift;
-        return "all :: perl32\n\t$self->{NOECHO}\$(NOOP)\n"
-                . $me->SUPER::top_targets(@_) . << '_EOF_';
+	warn "$out\n";
 
-osperl-08-schema.cc:
-        ln -sf osperl-08-schema.c osperl-08-schema.cc
+ 	die "Your compiler Version wont work\n" if $out=~/\QT5.6-009/;
 
-osperl-08-osschema.c: osperl-08-schema.cc
-        ossg -xtaso $(INC) -I/usr/local/include $(DEFINE_VERSION) $(XS_DEFINE_VERSION) \
-                -I$(PERL_INC) $(DEFINE) \
-                -nout neutral-osperl-08 \
-                -asdb /usr/tmp/joshua/osperl-08.adb \
-                -assf osperl-08-osschema.c \
-                osperl-08-schema.cc $(OS_ROOTDIR)/lib/liboscol.ldb
-
-_EOF_
+	warn "Compiler version untested\n";
 }
 
 
-sub MY::c_o {
-        return <<'_EOF_';
-.c$(OBJ_EXT):
-        ${CCCMD} $(CCCDLFLAGS) -I$(PERL_INC) $(DEFINE) -x cxx $*.c
-_EOF_
+package MY;
+
+sub install {
+	my $out=shift->SUPER::install(@_);
+
+	# We do NOT want our ObjStore.a or our extralibs.ld to be installed
+	# in INSTALL_ARCHLIB. If we do, other modules couldn't be linked
+	# static, because they would try to include ObjStore.a and the
+	# ObjectStore libraries. And other modules wont have OS_ROOTDIR
+	# defined, dont need it and are not -xtaso anyway.
+	#
+	# To remove these from blib would need many changes to
+	# MM_Unix. So we create them in blib (where we need them to link
+	# our perl32) and skip them only during install.
+
+	$out=~s/^.*INST_ARCHLIB.*\n//gm;
+	$out;
 }
 
-sub MY::linkext {
-        "linkext :: static dynamic\n\t$self->{NOECHO}\$(NOOP)";
+sub c_o {
+	my $out=shift->SUPER::c_o;
+
+	# wish, joshua didn't call his C++ files .c. So we need to modify
+	# our .c.o rule to tell cxx, that our .c files really are C++ source
+
+	$out=~s/\$\*\.c/-x cxx \$*.c/;
+	$out;
 
 }
 
+sub cflags {
 
-#sub MY::cflags {
-#warne->{CCFLAGS}.=" -xtaso";
-#       return  $self->{CFLAGS} = qq{
-#CCFLAGS = $self->{CCFLAGS}
-#OPTIMIZE = $self->{OPTIMIZE}
-#PERLTYPE = $self->{PERLTYPE}
-#LARGE = $self->{LARGE}
-#SPLIT = $self->{SPLIT}
-#};
+	my $out=shift->SUPER::cflags(@_);
+	#
+	# DEC cxx5.5 doesn't know the -std flags, which we possibly used
+	# to compile perl with cc. cxx 5.6 does.
+	#
+	$out=~s/-std//;             # cxx5.5-004 doesnt want this.
+	$out;
+}
+
 #
-#}
+# Overlay Makefile.PLs postamble :-)
+# we want to add something to the makefile.
+#
+# create our perl executable as a default.
+#
+#
+
+# MY::postamble allready defined by Makefile.PL.
+# we are going to redefine it. Save old method.
+
+BEGIN { $HINTS::old_postamble = \&postamble; }
+
+sub postamble {
+	my $out = &$HINTS::old_postamble(@_);
+
+	#
+	# add -xtaso flag to the ossg rule
+	#
+
+	$out=~s/^(\t\s*)ossg(\s)/$1ossg -xtaso$2/gm;
+	$out;
+}
+
+sub top_targets {
+
+	my $out=shift->SUPER::top_targets(@_);
+
+	# add dependencies to automaticly make,install,clean
+	# our perl32.
+
+	<<'_EOF_'.$out;
+all :: $(MAP_TARGET)
+pure_install :: $(MAP_TARGET)
+	$(MAKE) -f $(MAKE_APERL_FILE) pure_inst_perl
+_EOF_
+}
+
+

@@ -4,8 +4,11 @@ use strict;
 
 package ObjStore::AV::Set;
 use base 'ObjStore::AV';
+use vars qw($VERSION);
 use Carp;
 use ObjStore;
+
+$VERSION = '0.01';
 
 sub new {
     my $o = shift->SUPER::new(@_);

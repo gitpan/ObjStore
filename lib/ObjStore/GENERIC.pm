@@ -9,6 +9,8 @@ bootstrap ObjStore::GENERIC $ObjStore::VERSION;
 package ObjStore::AV;
 use Carp;
 
+# move back to ObjStore.pm XXX
+
 # Probably could be faster without the hash lookup...?
 
 sub new {

@@ -184,8 +184,9 @@ package ObjStore::Table2::Database;
 use Carp;
 use ObjStore;
 use base 'ObjStore::Database';
-use vars '@ISA';
+use vars qw'$VERSION @ISA';
 push(@ISA, 'ObjStore::Table2');
+$VERSION = '0';
 
 sub ROOT() { 'table' } #DO NOT OVERRIDE!  depreciated XXX
 sub default_size() { 21 }  #can override
@@ -230,6 +231,8 @@ package ObjStore::Table::Index;
 use ObjStore ':ADV';
 use base 'ObjStore::HV';
 use Carp;
+use vars qw($VERSION);
+$VERSION = '0';
 
 # An index should be autonomous and do it's own clustering.
 sub new {
@@ -319,6 +322,8 @@ package ObjStore::Table::Index::Field;
 use Carp;
 use ObjStore;
 use base 'ObjStore::Table::Index';
+use vars qw($VERSION);
+$VERSION = '0';
 
 sub new {
     my ($class, $table, $name, $field) = @_;
@@ -415,6 +420,8 @@ package ObjStore::Table::Index::GroupBy;
 use Carp;
 use ObjStore;
 use base 'ObjStore::Table::Index';
+use vars qw($VERSION);
+$VERSION = '0';
 
 sub new {
     my ($class, $table, $name, $field) = @_;

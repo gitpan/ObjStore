@@ -8,7 +8,8 @@ use test;
 
 package noref_test;
 use test;
-use vars qw(@ISA);
+use vars qw($VERSION @ISA);
+$VERSION = '0';
 @ISA = 'ObjStore::AV';
 
 sub NOREFS {

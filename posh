@@ -42,16 +42,18 @@ sub POSH_PEEK {
 }
 
 sub enter {
-    my ($o) = @_;
+    my ($o, $path) = @_;
     $o->init;
     chdir($o->{'cwd'}) or $o->{'cwd'} = cwd;
     if ($o->{db}) {
+	warn "** If a serious error occurs when re-entering '".$path."',\n";
+	warn "** you will need to osrm it and re-run posh (known bug).\n";
 	begin sub {
 	    $o->fetch_db;
 	    $o->{cursor}->open() if $o->{cursor};
 	};
 	if ($@) {
-	    warn "** An error occured while re-entering '$o->{db}':\n";
+	    warn "** An non-serious error occured while re-entering '$o->{db}':\n";
 	    warn $@;
 	    $o->{cursor} = new ObjStore::Path::Ref($o);
 	    $o->{db} = '';
@@ -192,8 +194,12 @@ sub execute {
 		my $at = $o->fetch_db();
 		my $cs = $o->{cursor};
 		if ($at->can("POSH_ENTER")) {
-		    $at = $at->POSH_ENTER();
-		    $cs->_Push($at->new_ref($cs, 'unsafe'));
+		    my $at2 = $at->POSH_ENTER();
+		    warn "$at->POSH_ENTER() returned $at2\n"
+			if !blessed $at2;
+		    if (blessed $at and $at->can("new_ref")) {
+			$cs->_Push($at->new_ref($cs, 'unsafe'));
+		    }
 		}
 	    }
 	    return;
@@ -373,7 +379,7 @@ sub new {
 	$o->{public}{user} ||= $o->{user};
 	$o->{pref} ||= {view=>0};
 	$o->{view} ||= [new Posh::View($o->{public})];
-	$o->{prompt} = $o->view->enter;
+	$o->{prompt} = $o->view->enter($o->get_pathname);
 	$o->uncache;
     });
     die if $@;
@@ -403,6 +409,11 @@ sub run {
 	last if (!defined $input or $input =~ m/^\s*exit\s*$/);
 
 	$input =~ s/^\s*//;
+	if ($input =~ s/^\!//) {
+	    my $st = system($input);
+	    print "(status=$st)\n" if $st;
+	    next;
+	}
 
 	my $ttype;
 	if ($input =~ m/^cd/) {

@@ -1,48 +1,13 @@
 What do you get when you cross a mission-critical enterprise-class
 database with a camel?
 
-#!/usr/local/bin/perl -w
-
-# SQL Challenge
-#
-# 1. Create a new database or use the existing one.
-# 2. Populate a table with questions.
-# 3. Print them out in the general pattern: 1 1,2 1,2,3 ...
-
-use ObjStore;
-use ObjStore::Config;
-
-my $db = ObjStore::open(TMP_DBDIR . "/challenge", 'update', 0666);
-
-begin 'update', sub {
-    $db->root('questions' => sub { 
-		  my $i = new ObjStore::Index($db);
-		  $i->configure(path => 'msg', unique => 1);
-
-		  $i->add({ msg => "Do you want some orange juice?" });
-		  $i->add({ msg => "Are you hungry?" });
-		  $i->add({ msg => "How about pizza?" });
-		  $i->add({ msg => "SQL is the best language ever!" });
-		  $i;
-	      });
-};
-
-begin sub {
-    my $c = $db->root('questions')->new_cursor;
-    for (my $e=1; $e <= $c->count; $e++) {
-	$c->moveto(-1);
-	for (1..$e) { print $c->each(1)->{msg}."\n"; }
-	print "\n";
-    }
-};
-
 
 Name           DSLI  Description                                  Info
 -----------    ----  -------------------------------------------- -----
 ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
-- Requires ObjectStore OODBMS (http://www.odi.com) & perl 5.004_04.
-- Perl 5.004_54 or better recommended.
+- Requires ObjectStore OODBMS (http://www.odi.com) & perl 5.004_04
+- Perl 5.005 recommended (once available)
 
 Get it via http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
@@ -50,6 +15,25 @@ Get it via http://www.perl.com/CPAN/authors/id/JPRIT/ !
 ##################
 # RE@ENT CHAN@ES #
 ##################
+
+
+** 01-10-98 RELEASE 1.24
+
+- The index readonly locking has been tweaked again.  You'll need to
+re-create any indices.  Let me know if I got it right this time!
+
+- Re-organized the logic of blessing with significant performance
+improvement.  Greatly expanded tracking of version numbers.  Be aware
+that bless now requires all classes throughout the @ISA heirarchy to
+set their $VERSION since is_evolved compares them (and not the @ISA
+tree).
+
+- Persistent per-class globals via a new $o->GLOBS() method.
+
+- Improved the API for private root data.  Also, moved the private
+root to a separate segment (so it's easier to study memory usage).
+
+- $db->sync_INC uses unshift instead of push.
 
 
 ** 01-07-98 EMERGENCY RELEASE 1.23
@@ -67,23 +51,6 @@ to check ossize as outlined in ./INSTALL:
 keys.
 
 - Notification API.
-
-
-** 01-06-98 RELEASE 1.22
-
-- Real indices!  Queries such as /date between qw(Nov97 Jan98)/ are
-now easy!  And you can index on multiple keys: $index->configure(path
-=> "last_name, first_name").
-
-- No longer ignores -MCarp=verbose!
-
-- posh: both cd & ls now use the same path resolver.
-
-- Builds via Makefile.PL.  Ported to Digital Unix 4.0 (Alpha).
-
-- The stargate no longer destroys data as it is copied.
-
-- 'new_cursor' now defaults to transient memory.
 
 
 see ./INSTALL for hints on installation

@@ -2,14 +2,19 @@
 
 Tested Configurations:
 
-   perl 5.004_04, 5.004_53-5.004_54
+   perl 5.004_04, 5.004_53-5.004_55
+
 
    Solaris 2.5.1
-     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1+
-     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0
 
-   Digital Unix V4.0 (Alpha)
+     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1+
+     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.0.*
+
+
+   Digital Unix OSF1 V4.0 / AXP
+
      Dec C++ Compiler / ObjectStore 5.0
+
 
 -------------------------------------------------------------------------
 
@@ -29,10 +34,6 @@ Size: 1024 bytes (1 Kbytes)
        1        0        1       32         32  _Per_segment_data
        1        0        1       20         20  _Per_segment_reference_db
 
-
-- If you have a problem with objectstore::get_unassigned_address_space(), 
-just delete the code chunk and keep going.  This API is only available
-with OS 5.0 service pack #2.
 
 -------------------------------------------------------------------------
 

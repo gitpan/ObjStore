@@ -18,8 +18,8 @@ struct hkey {
   hkey *operator=(const hkey &);
   hkey *operator=(const char *);
   void s(const char *k1, os_unsigned_int32);
-  static int rank(const void *s1, const void *s2);
-  static os_unsigned_int32 hash(const void *s1);
+  static int rank(os_void_const_p s1, os_void_const_p s2);
+  static os_unsigned_int32 hash(os_void_const_p s1);
 };
 
 struct hent {

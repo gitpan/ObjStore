@@ -26,14 +26,6 @@ that there isn't always room for improvement...
 
 + IDEAS +
 
-Abort transaction without jumping up the stack!  begin('UPDATE',...)
-
-posh
-  factor more!
-  autodetect @INC modifications and print help message
-  persist command history!
-  tkposh ?
-
 ospeek
   style - raw, vanilla, etc...
   -depth switch?
@@ -41,10 +33,28 @@ Peeker
   fix comma - $o->comma, then check in $o->nl
   fix for "$at = " prefix ?
 
-optimize
-  do autoclassloading upon open
+Restart read transactions without jumping up the stack!
+  begin('update!',...)
+
+Table3
+  add_index should create a scratch cursor to speed fetch
+
+ObjStore::FatTree
+  hash based index
+
+do autoclassloading upon open; maybe not, you don't know what to load
 
 database access control API
+  segment access control...?
+  change_schema_key:
+    delete database INC, checksum %INC, light up security flag
+    open: require each %INC, verify checksums (unless some flags is set)
+
+posh
+  factor more!
+  autodetect @INC modifications and print help message
+  persist command history!
+  tkposh ?
 
 renovate thread specific stuff in ObjStore.xs
 
@@ -57,18 +67,18 @@ _Per_segment_data is not free'd when no longer needed
 
 + VAGUE POSSIBILITIES +
 
+pathexam
+  invisibly auto-traverse references?
+
+refactor XSHARED stuff
+
 get_database
   factor
   os_server::get_databases() doesn't deal with bless
 
-notifications
-  batch notify
-  notify should take the string length!
-  get_string should return the length!
-
 Split GENERIC into ODI & Splash parts!
 
-OS version as a float?
+use a hashing algorithm to speed up splash hashes!
 
 factor error messages like diagnostics.pm
 
@@ -91,11 +101,9 @@ posh
 
 cache last lookup to avoid gv_fetchmethod(NOREFS)?
 
-script to insure consistent pod grammer? (get Pod::Parser)
+script to insure consistent podding? (get Pod::Parser?)
 
-migrate everything to OSPV_Cursor2
-
-move all ospv->sv conversions back into ObjStore/ObjStore.xs
+finish migration to OSPV_Cursor2
 
 assignment to $SIG{SEGV} should not reset SEGV handler
 
@@ -103,13 +111,19 @@ transaction hooks?
 
 depreciate os_object_cursor?
 
-ObjStore::File.  Support Verity full text indexing?
+ObjStore::File!
 
-Seems like there might be memory leaks on the transient side...?  dubious.
+automatically spooge $ObjStore::RUN_TIME if @ISA changes
 
-install HTML versions of the pod files & gif picture
+install HTML versions of the pod files & gif image
+
+notifications
+  batch notify
+  notify should in/out the string length - #SE057480_O#
 
 Make XS code more efficient.  (How?)
+
+Evolve the schema to eliminate this annoyance:  The object at 0xdff30194(</elvis/export2/os/tmp/perltest | 2 | 194>)(type "OSPV_hvdict"), contains a pointer at 0xdff301a0(OSPV_hvdict::OSPV_Generic::OSPV_Container::OSSVPV.classname) with the illegal value 0xe0582d28. The declared type "char" is incompatible with the type of the object at address </elvis/export2/os/tmp/perltest | 4 | 2d28>(OSPV_avarray::OSPV_Generic::OSPV_Container::OSSVPV::os_virtual_behavior|vtbl{os_virtual_behavior*}).  The type of this object is: OSPV_avarray.
 
 
 + BIGGISH PROJECTS +

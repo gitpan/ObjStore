@@ -1,6 +1,7 @@
 # Please feel free to contribute more better tests!
 
 package test;
+#use Carp qw(verbose carp croak);
 use Carp;
 use ObjStore;
 use ObjStore::Config ':ALL';

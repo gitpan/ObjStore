@@ -101,7 +101,7 @@ void hkey::s(const char *k1, os_unsigned_int32 nlen)
   }
 }
 
-os_unsigned_int32 hkey::hash(const void *v1)
+os_unsigned_int32 hkey::hash(os_void_const_p v1)
 {
   const hkey *s1 = (hkey*)v1;
   if (s1->len > 8) {
@@ -118,7 +118,7 @@ os_unsigned_int32 hkey::hash(const void *v1)
   }
 }
 
-int hkey::rank(const void *v1, const void *v2)
+int hkey::rank(os_void_const_p v1, os_void_const_p v2)
 {
   const hkey *s1 = (hkey*)v1;
   const hkey *s2 = (hkey*)v2;
@@ -149,7 +149,7 @@ void hent::FORCEUNDEF()
 XS(XS_ObjStore__HV__new_splash_array)
 {
   dXSARGS;
-  if (items != 3) osp_croak("Usage: &$create('ObjStore::HV', $segment, $card)");
+  if (items != 3) croak("Usage: &$create('ObjStore::HV', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -158,7 +158,7 @@ XS(XS_ObjStore__HV__new_splash_array)
   PUTBACK;
   
   if (card <= 0) {
-    osp_croak("Non-positive cardinality");
+    croak("Non-positive cardinality");
   } else if (card > 1000) {
     card = 1000;
     warn("Cardinality > 1000; try a more suitable representation");
@@ -346,7 +346,7 @@ void OSPV_hvarray_cs::next()
 XS(XS_ObjStore__Set__new_splash_array)
 {
   dXSARGS;
-  if (items != 3) osp_croak("Usage: &$create('ObjStore::Set', $segment, $card)");
+  if (items != 3) croak("Usage: &$create('ObjStore::Set', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -355,7 +355,7 @@ XS(XS_ObjStore__Set__new_splash_array)
   PUTBACK;
 
   if (card <= 0) {
-    osp_croak("Non-positive cardinality");
+    croak("Non-positive cardinality");
   } else if (card > 1000) {
     card = 1000;
     warn("Cardinality > 1000; try a more suitable representation");
@@ -411,7 +411,7 @@ void OSPV_setarray::set_add(SV *nval)
   if (spot == -1) spot = cv.count();
   cv[spot] = nval;
   if (cv[spot].natural() != OSVt_RV)
-    osp_croak("OSPV_setarray::add(nval): sets can only contain objects");
+    croak("OSPV_setarray::add(nval): sets can only contain objects");
 
   //  warn("added %s", cv[spot].stringify());
   /*
@@ -427,7 +427,7 @@ int OSPV_setarray::set_contains(SV *val)
   OSSVPV *pv = 0;
   ossv_bridge *mg = osp->sv_2bridge(val, 0);
   if (mg) pv = mg->ospv();
-  if (!pv) osp_croak("OSPV_setarray::contains(SV *val): must be persistent object");
+  if (!pv) croak("OSPV_setarray::contains(SV *val): must be persistent object");
 
   for (int xx=0; xx < cv.count(); xx++) {
     if (cv[xx] == pv) return 1;
@@ -441,7 +441,7 @@ void OSPV_setarray::set_rm(SV *nval)
   OSSVPV *pv = 0;
   ossv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) pv = mg->ospv();
-  if (!pv) osp_croak("OSPV_setarray::rm(SV *val): must be persistent object");
+  if (!pv) croak("OSPV_setarray::rm(SV *val): must be persistent object");
 
   // stupid, but definitely correct
   for (int xx=0; xx < cv.count(); xx++) {
@@ -540,7 +540,7 @@ void OSPV_setarray_cs::next()
 XS(XS_ObjStore__HV__new_os_dictionary)
 {
   dXSARGS;
-  if (items != 3) osp_croak("Usage: &$create('ObjStore::HV', $segment, $card)");
+  if (items != 3) croak("Usage: &$create('ObjStore::HV', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -548,7 +548,7 @@ XS(XS_ObjStore__HV__new_os_dictionary)
   int card = (int)SvIV(ST(2));
   PUTBACK;
   
-  if (card <= 0) osp_croak("Non-positive cardinality");
+  if (card <= 0) croak("Non-positive cardinality");
   
   OSSVPV *pv = new(area, OSPV_hvdict::get_os_typespec()) OSPV_hvdict(card);
   pv->bless(ST(0));
@@ -604,7 +604,7 @@ void OSPV_hvdict::XSHARE(int on)
 OSSV *OSPV_hvdict::STOREp(char *key, SV *nval)
 {
   if (*key == 0)
-    osp_croak("ObjStore: os_dictionary cannot store a zero length hash key");
+    croak("ObjStore: os_dictionary cannot store a zero length hash key");
   OSSV *ossv = (OSSV*) hv.pick(key);
   dOSP ;
   if (ossv) {
@@ -701,7 +701,7 @@ void OSPV_hvdict_cs::at()
 {
   if (reset_2pole != -1) {
     if (reset_2pole == 0) cs.first();
-    else osp_croak("nope");
+    else croak("nope");
     reset_2pole = -1;
   }
   if (cs.null()) return;
@@ -718,7 +718,7 @@ void OSPV_hvdict_cs::next()
 XS(XS_ObjStore__Set__new_os_set)
 {
   dXSARGS;
-  if (items != 3) osp_croak("Usage: &$create('ObjStore::Set', $segment, $card)");
+  if (items != 3) croak("Usage: &$create('ObjStore::Set', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -726,7 +726,7 @@ XS(XS_ObjStore__Set__new_os_set)
   int card = (int)SvIV(ST(2));
   PUTBACK;
 
-  if (card <= 0) osp_croak("Non-positive cardinality");
+  if (card <= 0) croak("Non-positive cardinality");
 
   OSSVPV *pv = new(area, OSPV_sethash::get_os_typespec()) OSPV_sethash(card);
   pv->bless(ST(0));
@@ -755,7 +755,7 @@ void OSPV_sethash::set_add(SV *nval)
   dOSP ;
   ossv_bridge *mg = osp->sv_2bridge(nval, 1, os_segment::of(this));
   OSSVPV *ospv = mg->ospv();
-  if (!ospv) osp_croak("OSPV_sethash::add(SV*): cannot add non-object");
+  if (!ospv) croak("OSPV_sethash::add(SV*): cannot add non-object");
   ospv->REF_inc();
 
   set.insert(ospv);
@@ -767,7 +767,7 @@ int OSPV_sethash::set_contains(SV *nval)
   OSSVPV *ospv=0;
   ossv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) ospv = mg->ospv();
-  if (!ospv) osp_croak("OSPV_sethash::contains(SV *nval): cannot test non-object");
+  if (!ospv) croak("OSPV_sethash::contains(SV *nval): cannot test non-object");
   return set.contains(ospv);
 }
 
@@ -777,7 +777,7 @@ void OSPV_sethash::set_rm(SV *nval)
   OSSVPV *ospv=0;
   ossv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) ospv = mg->ospv();
-  if (!ospv) osp_croak("OSPV_sethash::rm(SV *nval): cannot remove non-object");
+  if (!ospv) croak("OSPV_sethash::rm(SV *nval): cannot remove non-object");
   if (set.remove(ospv)) ospv->REF_dec();
 }
 
@@ -829,13 +829,13 @@ void OSPV_sethash_cs::seek_pole(int end)
 { reset_2pole = end; }
 
 void OSPV_sethash_cs::at()
-{ osp_croak("OSPV_sethash_cs::at() not implemented"); }
+{ croak("OSPV_sethash_cs::at() not implemented"); }
 
 void OSPV_sethash_cs::next()
 {
   if (reset_2pole != -1) {
     if (reset_2pole == 0) cs.first();
-    else osp_croak("not supported");
+    else croak("not supported");
     reset_2pole = -1;
   }
   if (cs.null()) return;
@@ -908,7 +908,7 @@ int hvent2::rank(const char *v2)
 XS(XS_ObjStore__AV__new_splash_array)
 {
   dXSARGS;
-  if (items != 3) osp_croak("Usage: &$create($class, $segment, $card)");
+  if (items != 3) croak("Usage: &$create($class, $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -917,7 +917,7 @@ XS(XS_ObjStore__AV__new_splash_array)
   PUTBACK;
 
   if (card <= 0) {
-    osp_croak("Non-positive cardinality");
+    croak("Non-positive cardinality");
   } else if (card > 100000) {
     card = 100000;
     warn("Cardinality > 100000; try a more suitable representation");
@@ -1075,7 +1075,7 @@ void OSPV_avarray_cs::next()
 XS(XS_ObjStore__HV__new_splash_array2)
 {
   dXSARGS;
-  if (items != 3) osp_croak("Usage: &$create('ObjStore::HV', $segment, $card)");
+  if (items != 3) croak("Usage: &$create('ObjStore::HV', $segment, $card)");
   SP -= items;
 
   dOSP ;
@@ -1084,7 +1084,7 @@ XS(XS_ObjStore__HV__new_splash_array2)
   PUTBACK;
   
   if (card <= 0) {
-    osp_croak("Non-positive cardinality");
+    croak("Non-positive cardinality");
   } else if (card > 1000) {
     card = 1000;
     warn("Cardinality > 1000; try a more suitable representation");

@@ -2,6 +2,8 @@ use strict;
 package ObjStore::HV::Database; # document more XXX
 use ObjStore;
 use base 'ObjStore::Database';
+use vars qw($VERSION);
+$VERSION = '1.00';
 
 sub ROOT() { 'hv' }  #DEPRECIATED XXX
 sub hash { $_[0]->root(&ROOT, sub {new ObjStore::HV($_[0], 25)} ); }

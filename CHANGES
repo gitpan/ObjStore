@@ -1,3 +1,20 @@
+** 01-06-98 RELEASE 1.22
+
+- Real indices!  Queries such as /date between qw(Nov97 Jan98)/ are
+now easy!  And you can index on multiple keys: $index->configure(path
+=> "last_name, first_name").
+
+- No longer ignores -MCarp=verbose!
+
+- posh: both cd & ls now use the same path resolver.
+
+- Builds via Makefile.PL.  Ported to Digital Unix 4.0 / AXP.
+
+- The stargate no longer destroys data as it is copied.
+
+- 'new_cursor' now defaults to transient memory.
+
+
 ** 12-13-97 RELEASE 1.21
 
 - THE TUTORIAL IS DONE!  See ObjStore::Tutorial!

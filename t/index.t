@@ -10,9 +10,13 @@ ObjStore::fatal_exceptions(0);
 
 package Toy;
 use base 'ObjStore::HV';
+use vars qw($VERSION);
+$VERSION = '0.0000';
 
 package Toy::AgeGrp;
 use base 'ObjStore::AV';
+use vars qw($VERSION);
+$VERSION = '0.0000';
 
 package main;
 
@@ -84,6 +88,7 @@ begin 'update', sub {
     $c->moveto($c->pos);
     ok($c->at == $at);
 
+    # readonly flags again
     $ax->CLEAR();
     $nx->[0]{age}[0] = 3;
 
@@ -91,6 +96,6 @@ begin 'update', sub {
     ok(1);
 
     begin sub {$nx->add(bless {name=>'Goldilocks'}, 'Toy'); };
-    ok($@ =~ m'duplicate') or ObjStore::peek($nx);
+    ok($@ =~ m'duplicate') or warn $@;
 };
 die if $@;

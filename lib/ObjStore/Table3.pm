@@ -5,7 +5,6 @@ use Carp;
 use ObjStore ':ADV';
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-
 $VERSION = '1.00';
 
 sub new {
@@ -21,6 +20,7 @@ sub fetch {
     my $t=shift;
     my $iname = shift;
     my $i = $t->{ $iname };
+    croak "Can't find index '$iname'" if !$i;
     my $c = $i->new_cursor;
     if ($c->seek(@_)) {
 	$c->at;
@@ -104,8 +104,9 @@ package ObjStore::Table3::Database;
 use Carp;
 use ObjStore;
 use base 'ObjStore::Database';
-use vars '@ISA';
+use vars qw'$VERSION @ISA';
 push(@ISA, 'ObjStore::Table3');
+$VERSION = '1.00';
 
 sub new {
     my $class = shift;

@@ -6,6 +6,18 @@ modify it under the same terms as Perl itself.
 
 #include "osperl.h"
 
+/* This is a new API that isn't widely supported yet.  We'll leave it
+out by default until it is.  Conditional #ifdefs might work too.
+
+double
+get_unassigned_address_space()
+	CODE:
+	RETVAL = objectstore::get_unassigned_address_space(); //64bit? XXX
+	OUTPUT:
+	RETVAL
+
+*/
+
 // A few bits of the ObjectStore API are callable outside a
 // transaction.  We need to wrap each of these in TIX_HANDLE
 // and convert TIX exceptions into perl exceptions using:
@@ -29,7 +41,7 @@ static os_fetch_policy str_2fetch(char *str)
   if (strEQ(str, "segment")) return os_fetch_segment;
   if (strEQ(str, "page")) return os_fetch_page;
   if (strEQ(str, "stream")) return os_fetch_stream;
-  croak("str_2fetch: %s unrecognized", str);
+  croak("str_2fetch: '%s' unrecognized", str);
 }
 
 static objectstore_lock_option str_2lock_option(char *str)
@@ -37,7 +49,7 @@ static objectstore_lock_option str_2lock_option(char *str)
   if (strEQ(str, "as_used")) return objectstore::lock_as_used;
   if (strEQ(str, "read")) return objectstore::lock_segment_read;
   if (strEQ(str, "write")) return objectstore::lock_segment_write;
-  croak("str_2lock_option: %s unrecognized", str);
+  croak("str_2lock_option: '%s' unrecognized", str);
 }
 
 XS(XS_ObjStore_translate)
@@ -144,6 +156,7 @@ release_name()
 int
 release_major()
 	CODE:
+	warn("release_major() is depreciated; try os_version instead");
 	RETVAL = objectstore::release_major();
 	OUTPUT:
 	RETVAL
@@ -151,6 +164,7 @@ release_major()
 int
 release_minor()
 	CODE:
+	warn("release_minor() is depreciated; try os_version instead");
 	RETVAL = objectstore::release_minor();
 	OUTPUT:
 	RETVAL
@@ -158,7 +172,16 @@ release_minor()
 int
 release_maintenance()
 	CODE:
+	warn("release_maintenance() is depreciated; try os_version instead");
 	RETVAL = objectstore::release_maintenance();
+	OUTPUT:
+	RETVAL
+
+double
+os_version()
+	CODE:
+	// rad perl style version number...
+	RETVAL = objectstore::release_major() + objectstore::release_minor()/100 + objectstore::release_maintenance()/10000;
 	OUTPUT:
 	RETVAL
 
@@ -194,13 +217,6 @@ _lookup(path, mode)
 	OUTPUT:
 	RETVAL
 
-double
-get_unassigned_address_space()
-	CODE:
-	RETVAL = objectstore::get_unassigned_address_space(); //64bit? XXX
-	OUTPUT:
-	RETVAL
-
 int
 return_all_pages()
 	CODE:
@@ -214,7 +230,7 @@ get_all_servers()
 	char *CLASS = "ObjStore::Server";
 	os_int32 num = objectstore::get_n_servers();
 	if (num == 0) XSRETURN_EMPTY;
-	os_server **svrs = new os_server*[num];
+	os_server_p *svrs = new os_server_p[num];
 	objectstore::get_all_servers(num, svrs, num);
 	EXTEND(sp, num);
 	int xx;
@@ -414,7 +430,7 @@ char *
 SEGV_reason()
 	CODE:
 	dOSP ; dTXN ;
-	if (!(txn && txn->report)) XSRETURN_UNDEF;
+	if (!txn || !txn->report) XSRETURN_UNDEF;
 	RETVAL = txn->report;
 	OUTPUT:
 	RETVAL
@@ -528,7 +544,7 @@ os_server::get_databases()
 	char *CLASS = ObjStore_Database;
 	os_int32 num = THIS->get_n_databases();
 	if (num == 0) XSRETURN_EMPTY;
-	os_database **dbs = new os_database*[num];
+	os_database_p *dbs = new os_database_p[num];
 	THIS->get_databases(num, dbs, num);
 	EXTEND(sp, num);
 	int xx;
@@ -687,7 +703,7 @@ os_database::get_all_segments()
 	char *CLASS = ObjStore_Segment;
 	os_int32 num = THIS->get_n_segments();
 	if (num == 0) XSRETURN_EMPTY;
-	os_segment **segs = new os_segment*[num];
+	os_segment_p *segs = new os_segment_p[num];
 	THIS->get_all_segments(num, segs, num);
 	EXTEND(sp, num);
 	int xx;
@@ -714,7 +730,7 @@ os_database::get_all_roots()
 	char *CLASS = "ObjStore::Root";
 	os_int32 num = THIS->get_n_roots();
 	if (num == 0) XSRETURN_EMPTY;
-	os_database_root **roots = new os_database_root*[num];
+	os_database_root_p *roots = new os_database_root_p[num];
 	THIS->get_all_roots(num, roots, num);
 	for (int xx=0; xx < num; xx++) {
 	  assert(roots[xx]);

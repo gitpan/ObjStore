@@ -76,7 +76,7 @@ void OSPV_fatindex::add(OSSVPV *obj)
     dextc_fetch(&gl->tc, &here);
     if (here == obj) return;
     exam.abort();
-    osp_croak("%p->add(): attempt to insert duplicate record into a unique index",this);
+    croak("%p->add(): attempt to insert duplicate record into a unique index",this);
   }
   obj->REF_inc();
   dextc_insert(&gl->tc, &obj);
@@ -99,7 +99,7 @@ void OSPV_fatindex::remove(OSSVPV *target)
     // Might step through a large number of records; no choice.
     dextc_step(&gl->tc, 1);
   }
-  osp_croak("%p->remove(%p): record not found", this, target);
+  croak("%p->remove(%p): record not found", this, target);
 }
 
 OSSVPV *OSPV_fatindex::FETCHx(int xx)
@@ -230,7 +230,7 @@ OSPV_fatindex::_conf_slot(...)
 	SV *ret = 0;
 	if (items == 2) {
 	  if (dexTvFILL(&THIS->fi_tv)) {
-	    osp_croak("Cannot change the configuration of an active index");
+	    croak("Cannot change the configuration of an active index");
 	  }
 	  ossv_bridge *br = osp->sv_2bridge(ST(1), 1, os_segment::of(THIS));
 	  OSSVPV *nconf = br->ospv();
@@ -240,7 +240,7 @@ OSPV_fatindex::_conf_slot(...)
 	} else if (items == 1) {
 	  ret = osp->ospv_2sv(THIS->conf_slot);
 	} else {
-	  osp_croak("OSPV_fatindex(%p)->_conf_slot: bad args", THIS);
+	  croak("OSPV_fatindex(%p)->_conf_slot: bad args", THIS);
 	}
 	SPAGAIN;
 	if (ret) XPUSHs(ret);

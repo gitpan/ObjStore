@@ -378,19 +378,14 @@ struct osp_pathexam : osp_pathref {
 
 struct ospv_bridge : osp_bridge {
   OSSVPV *pv;
-  int is_transient;
-  int can_delete;  //is perl done with us?
 
   ospv_bridge(OSSVPV *_pv);
-  virtual ~ospv_bridge();
-  virtual void release();
-  virtual void invalidate();
-  virtual int ready();
-  virtual int invalid();
-  void unref();
+  virtual void unref();
+  virtual void hold();
+  virtual int is_weak();
   OSSVPV *ospv();
 
-  // Add transient cursors here in sub-classes
+  // Probably should avoid sub-classing XXX
 };
 
 #endif

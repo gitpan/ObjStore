@@ -20,6 +20,9 @@
 os_segment *osp_thr::sv_2segment(SV *sv)
 {
   if (sv_isa(sv, "ObjStore::Segment")) return (os_segment*) SvIV((SV*)SvRV(sv));
+  if (SvPOK(sv) && strEQ(SvPV(sv, na), "transient"))
+    return os_segment::get_transient_segment();
+  mysv_dump(sv);
   croak("sv_2segment only accepts ObjStore::Segment");
 }
 
@@ -69,6 +72,11 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
     if (br->invalid()) {
       croak("sv_2bridge: persistent data out of scope");
     }
+#ifdef OSP_SAFE_BRIDGE
+    if (br->holding && !br->manual_hold && br->is_weak()) {
+      warn("sv_2bridge: HOLD needed; a transient variable has the only reference to a persistent object");
+    }
+#endif
     return br;
   }
   if (!force) return 0;
@@ -96,11 +104,11 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
   return br;
 }
 
-static SV *ospv_2bridge(OSSVPV *pv)
+static SV *ospv_2bridge(OSSVPV *pv, int hold=0)
 {
-  SV *rv = sv_setref_pv(newSViv(0),
-			"ObjStore::Bridge", 
-			(void*)pv->new_bridge());
+  ospv_bridge *br = pv->new_bridge();
+  if (hold) br->hold();
+  SV *rv = sv_setref_pv(newSViv(0), "ObjStore::Bridge", (void*)br);
   return rv;
 }
 
@@ -142,10 +150,10 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
   return 0;
 }
 
-SV *osp_thr::ospv_2sv(OSSVPV *pv)
+SV *osp_thr::ospv_2sv(OSSVPV *pv, int hold)
 {
   OR_RETURN_UNDEF(pv);
-  return wrap(pv, ospv_2bridge(pv));
+  return wrap(pv, ospv_2bridge(pv, hold));
 }
 
 //    if (GIMME_V == G_VOID) return 0;  // fold into ossv_2sv? XXX
@@ -174,7 +182,7 @@ SV *osp_thr::ossv_2sv(OSSV *ossv)
       //    to invalidate them.
       // 3. There is significant bookkeeping overhead to invalidate
       //    at the end of the transaction.  Maybe for long strings
-      //    only after the regex engine can support it?
+      //    only after the regex engine can handle streams?
       ret = sv_2mortal(newSVpv((char*) ossv->vptr, ossv->xiv));
     }
     break;
@@ -709,7 +717,7 @@ void OSSVPV::bless(SV *stash)
 {
   DEBUG_bless(warn("0x%x->bless('%s')", this, SvPV(stash, na)));
   dOSP;
-  SV *me = osp->ospv_2sv(this);
+  SV *me = osp->ospv_2sv(this, 1);
   dSP;
   // We must avoid the user-level bless if possible since the our
   // bless glue creates persistent objects.
@@ -854,7 +862,7 @@ void OSSVPV::REF_dec() {
     if (meth) {
       OSPvINUSE_on(this); //protect from race condition
       DEBUG_norefs(warn("%x->enter NOREFS", this));
-      SV *br = ospv_2bridge(this);
+      SV *br = ospv_2bridge(this, 1);
       SV *me = osp->wrap(this, br);
       dSP;
       ENTER;
@@ -862,7 +870,7 @@ void OSSVPV::REF_dec() {
       XPUSHs(me);
       PUTBACK;
       perl_call_sv((SV*)GvCV(meth), G_DISCARD|G_EVAL|G_KEEPERR);
-      ((osp_bridge*) SvIV(SvRV(br)))->invalidate(); //must avoid extra ref!
+      ((osp_bridge*) SvIV(SvRV(br)))->leave_txn(); //must avoid extra ref!
       LEAVE;
       DEBUG_norefs(warn("%x->exit NOREFS", this));
       OSPvINUSE_off(this);
@@ -943,40 +951,48 @@ ospv_bridge::ospv_bridge(OSSVPV *_pv)
   : pv(_pv)
 {
   // optimize XXX
-  // if transient, we shouldn't need a bridge! XXX
-  is_transient = os_segment::of(pv) == os_segment::of(0);
-  can_delete = 0;
+  assert(pv);
   BrDEBUG_set(this, 0);
 
-  osp_txn *txn = (osp_txn*) SvIV(txsv);
-  assert(pv);
   STRLEN junk;
-  DEBUG_bridge(this,warn("ospv_bridge 0x%x->new(%s=0x%x) is_transient=%d",
-		    this, _pv->os_class(&junk), pv, is_transient));
-  if (txn->can_update(pv) || is_transient) pv->REF_inc();
+  DEBUG_bridge(this,warn("ospv_bridge 0x%x->new(%s=0x%x)",
+		    this, pv->os_class(&junk), pv));
+  if (os_segment::of(pv) == os_segment::of(0)) {
+    pv->REF_inc();
+    holding = 1;
+    manual_hold = 1;
+    return;
+  }
+
+#ifdef OSP_SAFE_BRIDGE
+  osp_txn *txn = get_transaction();
+  holding = txn->can_update(pv);
+  if (holding) {
+    enter_txn(txn);
+    if (pv->_refs == 0) croak("attempt to read a deleted object");
+    pv->REF_inc();
+  }
+#endif
 }
 
-ospv_bridge::~ospv_bridge()
-{
-  //  assert(ready());
-  if (!ready()) 
-    croak("persistent data being used outside of it's transaction");
-}
 OSSVPV *ospv_bridge::ospv()
 { return pv; }
-int ospv_bridge::ready()
-{ return can_delete && !pv; }
-void ospv_bridge::release()
-{ unref(); can_delete = 1; }
-int ospv_bridge::invalid()
-{ return pv==0; }
-void ospv_bridge::invalidate()
+
+void ospv_bridge::hold()
 {
-  // If transient, has lifetime outside of a transaction.  Let perl
-  // decide when to delete it.
-  if (is_transient) return;
-  unref();
+  if (detached) croak("attempt to hold invalid object");
+  if (pv->_refs == 0) croak("attempt to read a deleted object");
+  if (manual_hold) return;
+  manual_hold=1;
+  if (!holding) {
+    enter_txn(get_transaction());
+    pv->REF_inc();  //will blow up if read-only OK
+    holding = 1;
+  }
 }
+
+int ospv_bridge::is_weak()
+{ return pv->_refs == 1; }
 
 void ospv_bridge::unref()
 {
@@ -984,18 +1000,19 @@ void ospv_bridge::unref()
 
   // avoid single thread race condition
   OSSVPV *copy = pv; pv=0;
+  DEBUG_bridge(this, warn("ospv_bridge 0x%x->unref(pv=0x%x)", this, copy));
+  if (!holding) return;
 
   // going out of scope might happen after the next transaction has started
-  osp_txn *txn = (osp_txn*) SvIV(txsv);
-  mysv_lock(osp_thr::TXGV);      // any means to avoid it?
-  int can_update = txn->can_update(copy);
-  SvREFCNT_dec(txsv);
+  int can_update = 1;
+  if (txsv) {
+    osp_txn *txn = (osp_txn*) SvIV(txsv);
+    int can_update = txn->can_update(copy);
+  }
 
-  DEBUG_bridge(this, warn("ospv_bridge 0x%x->unref(pv=0x%x)", this, copy));
-
-  // a read transaction that skipped pre-commit invalidation
   if (!can_update) return;
   copy->REF_dec();
+  DEBUG_bridge(this, warn("ospv_bridge 0x%x->REF_dec(pv=0x%x)", this, copy));
 }
 
 /*--------------------------------------------- INTERFACES */

@@ -60,6 +60,30 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 =head1 R!CENT CHANGES
 
 
+** 05-10-98 RELEASE 1.39
+
+- Fixed a long standing problem with transaction memory usage.  Memory
+associated with keeping track of persistent objects is now released as
+soon as possible (instead of at the end of the transaction).  A true
+checkpoint is now possible (but insufficiently tested).
+
+- Optionally, during update transactions reference counts are no
+longer affected by reads (this was not the case in prior versions!).
+Efficiency of certain types of updates should be improved.  You will
+need to manually invoke the HOLD method in the rare circumstance that
+a transient variable is the only reference to a persistent object (or
+otherwise risk a SEGV/BUS error).  Due to the gravity of this change,
+the optimization is turned off for 1.39 by default.  In anticipation
+of enabling it, a warning is generated to help pinpoint any problems
+in existing code.  Please test your code against 1.39 before upgrading
+to the next release!!
+
+- Lots of tweaks.  Reorganized transaction code and osperlserver.  All
+allocators should now accept 'transient' as a valid segment.
+ObjStore::Serve supercedes the jumble logic initially prototyped in
+ObjStore::Process.
+
+
 ** 04-23-98 RELEASE 1.38
 
 - Support for multiple threads.  Changed ObjStore::Transaction->new()
@@ -74,11 +98,6 @@ testing is still needed.
 than '0.001' once you add an explicit version.
 
 
-** 04-14-98 RELEASE 1.37
-
-- Updated documentation.
-
-
 see ./INSTALL for hints on installation
 see ./UPGRADE to evolve databases from prior releases
 see ./TODO for a list of stuff in the queue
@@ -89,8 +108,11 @@ Perl-ObjectStore mailing list:
 
 majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
 
-(If you think you've run into a bug, try running your script with
-"perl -MObjStore=PANIC" and mail the output to the mailing list.)
+1. If you think you've run into a bug, try running your script with
+"perl -MObjStore=PANIC" and mail the output to the mailing list.
+
+2. The mailing list is also available for job offers (as long as they
+relate to this extension :-).  FYI, I am not myself currently looking.
 
 -------------------------------------------------------------------------
 Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.

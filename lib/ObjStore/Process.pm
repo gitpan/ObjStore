@@ -1,8 +1,8 @@
 use strict;
 
+# DEPRECIATED !!!
 package ObjStore::Process;
 use Carp;
-Carp->import('verbose');
 use Exporter ();
 use ObjStore;
 use Event; #0.02 or better recommended
@@ -14,14 +14,8 @@ use vars (qw($VERSION @ISA @EXPORT_OK),
 	  qw($Status $LoopLevel $ExitLevel),  #loop
 	 );
 $VERSION = '0.05';
-@ISA = qw(ObjStore::HV Event Exporter);
+@ISA = qw(ObjStore::HV Exporter);
 @EXPORT_OK = qw(txqueue txretry meter checkpoint);  #Loop Exit ?XXX
-#
-# We actually sub-class Event so other processes could theortically
-# send messages that tweaked remote event loops (without additional
-# glue code).  Whether this is actually useful remains to be seen.
-#
-# Perhaps the real benefit is that it sort-of makes sense conceptually.
 
 $EXE = $0;
 $EXE =~ s{^ .* / }{}x;
@@ -47,6 +41,7 @@ for (qw(read write)) { ObjStore::lock_timeout($_,15); }
 #++$ObjStore::SAFE_EXCEPTIONS;
 
 # Extra debugging.
+#Carp->import('verbose');
 #++$ObjStore::REGRESS;
 
 sub new {
@@ -59,7 +54,7 @@ sub new {
     $$o{host} = $HOST;
     $$o{pid} = $$;
     $$o{uid} = getpwuid($>);
-    $$o{chkpt_timer} = 2;
+    $$o{chkpt_timer} = 2;  #conf
     $$o{mtime} = time;
     $PROCESS = $o->new_ref('transient','safe');
     $o;
@@ -110,7 +105,7 @@ sub autonotify {
 		my $m = $f->can($mname);
 		if (!$m) {
 		    no strict 'refs';
-		    if ($ { ref $f . "::UNLOADED" }) {
+		    if ($ { ref($f) . "::UNLOADED" }) {
 			warn "autonotify: attempt to invoke method '$mname' on unloaded class ".ref $f."\n";
 		    } else {
 			warn "autonotify: don't know how to $f->$mname(".join(', ',@args).") (ignored)\n";
@@ -159,6 +154,7 @@ sub set_mode {
 sub checkpoint { ++$Checkpoint }
 
 use vars qw($ABORT); # DEPRECIATED
+use vars qw($TXOpen @TXtodo @TXready);
 
 # WARNING: please do not call this directly!
 sub _checkpoint {
@@ -167,9 +163,12 @@ sub _checkpoint {
     if ($TXN) {
 	my $ok=0;
 	# record stats about aborts!
+	$TXOpen = 0;
 	if (!$ABORT) {
 	    $ok = eval {
 		if ($PROCESS) {
+		    # turn into a method!! XXX
+		    # also track server down-time (on restart)
 		    if ($PROCESS->deleted()) {
 			ObjStore::Process->Exit(0);
 			die "another server started up, exiting...";
@@ -212,13 +211,12 @@ sub _checkpoint {
 		if @ObjStore::TXStack;
 	    $TXN = ObjStore::Transaction->new($TType);
 	}
+	$TXOpen = 1;
 	$TxnTime = [gettimeofday];
 	Event->timer(-after => $chkpt_timer, -callback => sub { ++$Checkpoint; });
 	# don't acquire any unnecessary locks!
     }
 }
-
-use vars qw($TXOpen @TXtodo @TXready);
 
 sub txretry {
     use attrs 'locked';
@@ -256,14 +254,17 @@ sub async_checkpoint {
     }
 }
 
-sub ondie { push @ONDIE, $_[1]; }
+sub ondie {
+    warn "depreciated";
+    push @ONDIE, $_[1];
+}
 
 sub meter { ++ $METERS{ $_[$#_] }; }
 
 use vars qw($Init);
 
 sub init_signals {
-    $SIG{HUP} = sub {};
+    $SIG{HUP} = 'IGNORE';
     for my $sig (qw(INT TERM)) {
 	$SIG{$sig} = sub { 
 	    my $why = "SIG$sig\n";
@@ -315,7 +316,15 @@ sub Loop_single {
 
     $o->_checkpoint(1) if !$TXN;
     while ($ExitLevel >= $LoopLevel) {
+	push @TXready, @TXtodo;
 	eval {
+	    my @c = @TXready;
+	    @TXready = ();
+	    for my $j (@c) {
+		my $c = $$j{code};
+		if ($$j{retry}) { push @TXtodo if !$c->(); }
+		else { $c->(); }
+	    }
 	    if ($waiter and $waiter->()) {
 		$o->Exit()
 	    } else {
@@ -363,7 +372,7 @@ sub Exit {
 
 # ExitTop ?XXX
 
-# CORE::GLOBAL::exit XXX
+# CORE::GLOBAL::exit ?XXX
 sub exit {
     carp "please use 'Exit' to avoid confusion";
     shift->Exit;
@@ -378,46 +387,3 @@ $SIG{__DIE__} = sub { die '['.localtime()."] $EXE($$): $_[0]" };
 
 1;
 
-=head1 NAME
-
-    ObjStore::Process - ObjStore event loop integration
-
-=head1 SYNOPSIS
-
-    ObjStore::Process->autonotify();
-
-    # store our process info
-    $$app{process} = ObjStore::Process->new($app);
-
-    # mainloop
-    ObjStore::Process->Loop();
-
-=head1 DESCRIPTION
-
-Experimental package to integrate ObjStore transactions with Event.
-Implements dynamic transactions.
-
-Read the source, Luke!  You should probably cut-and-paste this code
-into your own application since it may continue to evolve.  Think of
-it as a cookbook...!
-
-=head1 AUTONOTIFY
-
-Provides a remote method invokation service for persistent objects.
-(I'm still trying to come up with an appropriate buzz phrase.  "Active
-Database" will probably have to do, but it would really warm my heart
-to hear people discuss the possibilities of an "Open Objects
-DataBus". :-)
-
-=head1 DEADLOCK AVOIDANCE STRATEGIES
-
-=head1 TODO
-
-Research unix-style daemonization code
-  default stderr/stdout redirect (or Tee) to /usr/tmp
-
-=head1 SEE ALSO
-
-C<Event>, C<ObjStore>
-
-=cut

@@ -21,6 +21,7 @@ for my $rep (10, 100) {
 
 	my (@k,@v,@set);
 	for (my $o = $set->first; $o; $o = $set->next) {
+	    $o->HOLD;
 	    push(@set, $o);
 	    push(@k, keys %$o);
 	    for (values %$o) { push(@v, $_); }

@@ -5,23 +5,23 @@ void osp_croak(const char* pat, ...);
 
   - Each bridge has a refcnt to the SV that holds it's transaction.
 
-  - Each transaction has a linked list of bridges.
+  - Each transaction has a linked ring of bridges.
 
   - Each bridge has a refcnt to the persistent object, but only
     during updates (and in writable databases).
  */
 
 struct osp_txn;
-struct osp_bridge {
-  osp_bridge *next;
-  osp_bridge();
-  virtual ~osp_bridge();
-  virtual void release();		// if perl REFCNT == 0
-  virtual void invalidate();		// when transaction ends
-  virtual int ready();			// can delete bridge now?
-  virtual int invalid();		// error to dereference?
-
+struct osp_bridge_link {
+  osp_bridge_link *next, *prev;
+};
+struct osp_bridge : osp_bridge_link {
+  int refs;
+  int detached;
+  int manual_hold;
+  int holding;  //true if changed REFCNT
   SV *txsv;				// my transaction scope
+
 #ifdef OSP_DEBUG  
   int br_debug;
 #define BrDEBUG(b) b->br_debug
@@ -32,6 +32,17 @@ struct osp_bridge {
 #define BrDEBUG_set(b,to)
 #define DEBUG_bridge(br,a)
 #endif
+
+  osp_bridge();
+  osp_txn *get_transaction();
+  void leave_perl();
+  void enter_txn(osp_txn *txn);
+  void leave_txn();
+  int invalid();
+  virtual ~osp_bridge();
+  virtual void unref();
+  virtual void hold();
+  virtual int is_weak();
 };
 
 struct dytix_handler {
@@ -51,7 +62,6 @@ struct osp_thr {
   static HV *CLASSLOAD;
   static SV *TXGV;
   static AV *TXStack;
-  static osp_bridge *bridge_top;
 
   //methods
   static void burn_bridge();
@@ -67,7 +77,7 @@ struct osp_thr {
   static os_segment *sv_2segment(SV *);
   static ospv_bridge *sv_2bridge(SV *, int force, os_segment *seg=0);
   static SV *ossv_2sv(OSSV *);
-  static SV *ospv_2sv(OSSVPV *);
+  static SV *ospv_2sv(OSSVPV *, int hold=0);
   static SV *wrap(OSSVPV *ospv, SV *br);
 
   OSSV *plant_sv(os_segment *, SV *);
@@ -78,6 +88,7 @@ struct osp_thr {
 struct osp_txn {
   osp_txn(os_transaction::transaction_type_enum,
 	  os_transaction::transaction_scope_enum);
+  int is_aborted();
   void abort();
   void commit();
   void pop();
@@ -92,9 +103,9 @@ struct osp_txn {
 
   os_transaction::transaction_type_enum tt;
   os_transaction::transaction_scope_enum ts;
-  U32 owner;   //for local transactions
-  osp_bridge *bridge_top;
   os_transaction *os;
+  U32 owner;   //for local transactions; not yet XXX
+  osp_bridge_link ring;
 };
 
 #define dOSP osp_thr *osp = osp_thr::fetch()

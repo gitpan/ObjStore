@@ -442,6 +442,9 @@ osp_txn::top_level()
 	PPCODE:
 	XSRETURN_IV(AvFILL(osp_thr::TXStack) == -1);
 
+int
+osp_txn::is_aborted()
+
 void
 osp_txn::abort()
 
@@ -972,8 +975,7 @@ MODULE = ObjStore	PACKAGE = ObjStore::Bridge
 void
 osp_bridge::DESTROY()
 	CODE:
-	DEBUG_bridge(THIS, warn("osp_bridge(%p)->release", THIS));
-	THIS->release();
+	THIS->leave_perl();
 
 #-----------------------------# UNIVERSAL
 
@@ -1119,6 +1121,12 @@ OSSVPV::get_pointer_numbers()
 	XPUSHs(sv_2mortal(newSVpvf("%08p%08p", n1, n3)));
 
 void
+OSSVPV::HOLD()
+	PPCODE:
+	THIS_bridge->hold();
+	if (GIMME_V != G_VOID) XPUSHs(sv_mortalcopy(ST(0)));
+
+void
 OSSVPV::const()
 	PPCODE:
 	OSPvROCNT(THIS) = ~0;
@@ -1158,10 +1166,10 @@ OSSVPV::_new_ref(type, sv1)
 	SV *ret;
 	if (type == 0) {
 	  ret = osp->ospv_2sv(new (seg, OSPV_Ref2_protect::get_os_typespec())
-		OSPV_Ref2_protect(THIS));
+		OSPV_Ref2_protect(THIS), 1);
 	} else if (type == 1) {
 	  ret = osp->ospv_2sv(new (seg, OSPV_Ref2_hard::get_os_typespec())
-		OSPV_Ref2_hard(THIS));
+		OSPV_Ref2_hard(THIS), 1);
 	} else { croak("OSSVPV->new_ref(): unknown type"); }
 	SPAGAIN;
 	XPUSHs(ret);
@@ -1186,7 +1194,7 @@ OSPV_Container::_new_cursor(sv1)
 	PUTBACK;
 	dOSP;
 	os_segment *seg = osp_thr::sv_2segment(sv1);
-	SV *ret = osp->ospv_2sv(THIS->new_cursor(seg));
+	SV *ret = osp->ospv_2sv(THIS->new_cursor(seg), 1);
 	SPAGAIN;
 	XPUSHs(ret);
 

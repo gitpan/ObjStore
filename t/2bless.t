@@ -51,7 +51,7 @@ sub isa_test {
     my ($o) = @_;
     my $pkg = blessed($o);
 
-    my $bs1 = $o->_blessto_slot;
+    my $bs1 = $o->_blessto_slot->HOLD;
     bless $o, blessed($o);
     my $bs2 = $o->_blessto_slot;
     ok($bs1 == $bs2);
@@ -75,7 +75,7 @@ sub isa_test {
 }
 
 begin 'update', sub {
-    $db->get_INC->[0] = "./t";
+    $db->get_INC->[0] = "./t"; #XXX nuke
     $db->sync_INC;
 
     isa_test($db);

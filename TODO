@@ -10,26 +10,10 @@ following in the body of your message:
 
 + IDEAS +
 
-bridges must be per-thread & per-txn!
-  lists per thread:
-    active bridges for per-transaction
-    free list (& waiting for leave-scope)
-  txn completes: must invalidate all txn scoped bridges
-    lock txn-mutex
-    iterate through each thread
-  perl: bridge goes out of scope, must move to free list ASAP
-  optional transaction-level mutex to debug data accesses
-bridges
-  use a doubly-linked ring
-  pool allocation (x64?)
-bridge must be optional!
-  transient data
-&
-  Perl variables do not need to increment database refcnts as long as
-  deleted data is not referenced.  Envision two modes:
-  1. Don't increment, but enable extra code to check for improper use.
-  2. Don't increment.  Performance should be better but crashes are
-     possible.
+bridges per-thread?
+  optional transaction-level mutex to debug data accesses?
+pool allocation (x64?)
+  move cursor stuff to separate struct
 
 study the perl compiler (ExCxx)
 
@@ -44,6 +28,11 @@ Support for multiple application schemas
   REFCNT
   Bit::Vector
 
+Mike Guy writes: How about "die if in a void context"?  That would get
+the best of both worlds.  I'd like to see that style used much more in
+Perl.  Or the variant of "warn if in a void context".  Unchecked
+results of open comes particularly to mind.
+
 
 + VAGUE POSSIBILITIES +
 
@@ -54,6 +43,9 @@ transactions
   begin('update!',...): force switch to update?
 
 qtposh
+  AVHV looks different depending whether it goes through resolve
+  resolve failures seem not to get reported
+&
   optionally distinguish between return and enter keys
   word wrap, but it doesn't seem to be supported
 

@@ -16,7 +16,7 @@ use test;
 
 #$ObjStore::REGRESS = 1;
 #ObjStore::debug 'PANIC';
-#ObjStore::debug 'txn';
+#ObjStore::debug qw/txn bridge/;
 
 $db = ObjStore::open(&test_db, 0, 0666);
 ok($db);

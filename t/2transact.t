@@ -40,8 +40,8 @@ begin 'update', sub {
     ok(! txn->is_prepare_to_commit_invoked);
 
     my $john = $db->root('John');
-    ok(ObjStore::get_lock_status($john), 'write');
     $john->{right} = 69;
+    ok ObjStore::get_lock_status($john), 'write';
     
     ok(! ObjStore::is_lock_contention);
 

@@ -263,8 +263,8 @@ sub refresh {
 	}
 	# check every time through XXX
 	my $top = $$o{db}->hash;
-	my $server = $top->{'ObjStore::Process'};
-	my $d = time - $$server{mtime};
+	my $server = $top->{'ObjStore::Server'};
+	my $d = time - ($$server{mtime} or 0);
 	if (!$server or $d > 30) {
 	    my $str = do {
 		use integer;

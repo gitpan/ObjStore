@@ -3,9 +3,10 @@ package ObjStore::ServerDB;
 use Carp;
 use ObjStore ':ADV';
 require ObjStore::Process;
+use Carp;
 use base 'ObjStore::HV::Database';
-use vars qw($VERSION $AUTOFORK);
-$VERSION = '0.03';
+use vars qw($VERSION);
+$VERSION = '0.04';
 
 sub fork_server {
     warn "EXPERIMENTAL";
@@ -28,39 +29,19 @@ sub fork_server {
     system $cmd;
 }
 
-sub autofork {
-    warn "EXPERIMENTAL";
-    $AUTOFORK = 1;
-}
-
 sub new {
     my ($class,$path,$mode,$mask) = @_;
     $mode ||= 'mvcc';
     $mask = $mode eq 'update'? 0666 : 0 unless defined $mask;
 
-    # catch not found errors? XXX
-#    if ($mode eq 'mvcc' and !-e $path) {
-#	while (!-e $path) {
-#	    warn "please start a server for $path\n";
-#	    sleep 1;
-#	}
-#    }
-    my $DB = ObjStore::open($path, $mode, $mask);
-
-    if (!defined %Posh:: and $mode ne 'update') { ### CLIENT
-	begin sub {
-	    my $top = $DB->hash;
-	    if ($AUTOFORK and
-		(!$top->{server} or time - $$top{server}{mtime} > 60)) {
-		$DB->fork_server();
-	    }
-	};
-	die if $@;
-    }
-    $DB;
+    # trap not_found errors? XXX
+    ObjStore::open($path, $mode, $mask);
 }
 
-sub wait_for_commit { shift->hash->{'ObjStore::Process'}->wait_for_commit(); }
+sub wait_for_commit { 
+    carp "depreciated";
+    shift->hash->{'ObjStore::Process'}->wait_for_commit(); 
+}
 
 package ObjStore::ServerDB::Top;  #move to a separate file?
 use Carp;
@@ -71,6 +52,7 @@ $VERSION = '0.04';
 
 sub DELETE {
     my ($h,$k) = @_;
+    warn "$h->DELETE($k)" if $osperlserver::Debug{b};
     if (ref $k) {
 	for (keys %$h) { $h->SUPER::DELETE($_) if $h->{$_} == $k; }
     } else {
@@ -81,6 +63,7 @@ sub DELETE {
 sub _install {
     my ($o, $i, $pk) = @_;
     $pk ||= ref $i;
+    warn "$o->_install($pk,$i)" if $osperlserver::Debug{b};
     $$o{ $pk } = $i; #overwrite!
     no strict 'refs';
     for my $u (@{"$pk\::ISA"}) {
@@ -90,13 +73,20 @@ sub _install {
 
 use ObjStore::notify qw(boot_class);
 sub do_boot_class {
+    no strict 'refs';
     # flag to override?
     my ($o,$class) = @_;
+    warn "$o->boot_class($class)" if $osperlserver::Debug{b};
+    unless (defined %{"$class\::"}) {
+	my $file = $class;
+	$file =~ s,::,/,g;
+	require $file.".pm";  #it must be loaded!
+    }
     return if $o->SUPER::FETCH($class);
-    ObjStore::require_isa_tree($class);
     my $i = $class->new($o->create_segment($class));
     die "$class->new(...) returned '$i'" if !ref $i;
     $o->_install($i);
+    $i
 }
 
 sub boot {

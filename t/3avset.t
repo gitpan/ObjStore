@@ -34,7 +34,7 @@ begin 'update', sub {
     $s->add($b[1]);
     ok($s->FETCHSIZE, 3);
 
-    $s->remove($b[1]);
+    $s->remove($b[1]->HOLD);
     ok($s->FETCHSIZE, 2);
     ok($s->exists($b[0]), 1);
     ok(!$s->exists($b[1]), 1);

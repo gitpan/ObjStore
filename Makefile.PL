@@ -104,10 +104,10 @@ WriteMakefile
 		       # Proc::Daemon
 		     },
      VERSION_FROM => 'lib/ObjStore.pm',
-     OPTIMIZE     => '-g',
+     OPTIMIZE     => '-g -O2',
      EXE_FILES  => [qw/ospeek posh qtposh osperlserver osp_hack/],
      'LIBS'     => ["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losths"],
-     'DEFINE'   => "-DOSP_DEBUG -DSCHEMADIR=$sdir",
+     'DEFINE'   => "-DOSP_DEBUG -DOSP_SAFE_BRIDGE -DSCHEMADIR=$sdir",
      INC      => "-I. -I$OS_ROOTDIR/include",
      'OBJECT'	=> join(' ',reverse
 			"osperl-$schema_version-osschema.o", @CCOV,

@@ -18,7 +18,7 @@ use vars
     qw($DEFAULT_OPEN_MODE $MAX_RETRIES),                       # simulated
     qw($EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.38';
+$VERSION = '1.39';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -994,7 +994,6 @@ sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
 
 package ObjStore::Notification;
 use Carp;
-use vars qw($DEBUG_RECEIVE); #experimental XXX
 
 # Should work exactly like ObjStore::lookup
 sub get_database {
@@ -1005,25 +1004,6 @@ sub get_database {
 	die if $@;
     }
     $db;
-}
-
-sub Receive {
-    carp "Receive: this API is experimental";
-    #debugging? XXX
-    my ($class, $max) = @_;
-    while (my $note = ObjStore::Notification->receive(0) and $max--) {
-	my $why = $note->why();
-	warn "Receive: $why\n" if $DEBUG_RECEIVE;
-	# open the database first?  probably too slow
-	my $f = $note->focus();
-	if ($why =~ s/^([a-zA-Z]\w*)\s*//) {
-	    # method call, but with care...
-	    my $m = $f->can($1);
-	    warn "$class->Receive: don't know how to $f->$1\n", next
-		if !$m;  #maybe bounce to a fallback/nomethod method? XXX
-	    $m->($f,$why);
-	}
-    }
 }
 
 package ObjStore::UNIVERSAL;
@@ -1042,7 +1022,6 @@ sub database_of { $_[0]->_database_of->import_blessing; }
 
 *create_segment = \&ObjStore::Database::create_segment;
 
-sub HOLD { carp "reserved method"; }
 sub BLESS {
     return $_[0]->SUPER::BLESS($_[1])
 	if ref $_[0];
@@ -1067,13 +1046,14 @@ sub clone_to { croak($_[0]."->clone_to() unimplemented") }
 # very intentional endevor.
 sub new_ref {
     my ($o, $seg, $safe) = @_;
+    $seg = $seg->segment_of if ref $seg;
     $seg = ObjStore::Segment::get_transient_segment()
-	if !defined $seg || (!ref $seg and $seg eq 'transient');
+	if !defined $seg;
     my $type;
     if (!defined $safe or $safe eq 'safe') { $type=0; }
     elsif ($safe eq 'unsafe' or $safe eq 'hard') { $type=1; }
     else { croak("$o->new_ref($safe,...): unknown type"); }
-    $o->_new_ref($type, $seg->segment_of);
+    $o->_new_ref($type, $seg);
 }
 
 sub help {

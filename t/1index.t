@@ -93,6 +93,7 @@ begin 'update', sub {
 	begin sub { $numsdup->add($nums->[0]); };
 	ok $@, '/twice/';
 
+	$n->HOLD;
 	$nums->CLEAR();
 	ok !$n->readonly('num'), 1;
 	$n->{num} = 0;  #should work

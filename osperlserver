@@ -3,8 +3,8 @@
 use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
-use vars qw($VERSION @DB $DAEMON);
-$VERSION = '0.51';
+use vars qw($VERSION @DB $DAEMON $Loop %Debug);
+$VERSION = '0.53';
 $DAEMON = 1;
 my $default_server = 'ObjStore::ServerDB';
 
@@ -12,19 +12,24 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
     my $o = $ARGV[$arg];
     if ($o =~ m/^ -d(ebug)? $/x) {
 	# different flavors?
-	++$ObjStore::Notification::DEBUG_RECEIVE;
+	++$Debug{'n'};
+	warn "use '-dn'\n";
     } elsif ($o =~ m/^ -F (ore(ground)?)? $/x) {
 	$DAEMON = 0;
+	warn "use '-dF'\n";
     } elsif ($o =~ m/^-d(\w+)$/) {
 	# this style is preferred
 	for my $d (split / */, $1) {
 	    if ($d eq 'F') {
 		$DAEMON = 0;
 	    } elsif ($d eq 'n') {
-		++$ObjStore::Notification::DEBUG_RECEIVE;
+		#ok
+	    } elsif ($d eq 'b') {
+		#ok
 	    } else {
 		warn "unrecognized debug option '$d' (ignored)\n";
 	    }
+	    ++$Debug{$d};
 	}
     } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
 	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
@@ -40,7 +45,7 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	$dir = $ARGV[++$arg]
 	    if !$dir;
 	if ($dir =~ m{^ \/ }x) {
-	    unshift(@INC, $dir);
+	    unshift @INC, $dir;
 	} else {
 	    require FindBin;
 	    die "osperlserver: can't find myself" if !$FindBin::Bin;
@@ -73,7 +78,7 @@ for (@DB) {
     if (m/^(.*) \= (.*) \+ (.*)$/x) {
 	$_ = [$1,$2,$3];
     } elsif (m/^(.*) \+\= (.*)$/x) {
-	$_ = [$1,$default_server,$3];
+	$_ = [$1,$default_server,$2];
     } elsif (m/^(.*) \= (.*)$/x) {
 	$_ = [$1,$2,''];
     } else {
@@ -81,11 +86,12 @@ for (@DB) {
     }
 }
 
+ObjStore::fatal_exceptions(0);
 $ObjStore::CLIENT_NAME = 
     "osperl[".join(',',map { $_->[0] =~ m,/([^/]+)$, ? $1:$_->[0] } @DB)."]";
 
 ObjStore::initialize();
-require ObjStore::Process;
+require ObjStore::Server;
 for (@DB) {
     no strict 'refs';
     my $class = $_->[1];
@@ -100,9 +106,9 @@ for (@DB) {
     bless $DB, $class if
 	$class ne $default_server || blessed $DB eq 'ObjStore::Database';
 
-    begin 'update', sub {  #hostile takeover
-	$DB->hash->{'ObjStore::Process'} =
-	    ObjStore::Process->new($DB);  #inheritance? XXX
+    begin 'update', sub {
+	# hostile takeover
+	$DB->hash->{'ObjStore::Server'} = ObjStore::Server->new($DB);
     };
     die if $@;
 
@@ -110,30 +116,49 @@ for (@DB) {
 	my $top = $DB->hash;
 	bless $top, $class.'::Top' if
 	    $class ne $default_server || blessed $top eq 'ObjStore::HV';
-	$top->boot(split /,/, $_->[2]);
+	my @boot = split /,/, $_->[2];
+	$top->boot(@boot);
+
 	my %objs;
 	for (values %$top) { $objs{$_} = $_ if blessed $_ }
+
 	$top->restart() if $top->can('restart');
+#	$Loop = ref $top if !$Loop && $top->isa('osperlserver'); #?XXX
 	for (values %objs) {
 	    $_->restart() if $_->can('restart');
+	    $Loop = ref $_ if !$Loop && $_->isa('osperlserver');
+	}
+
+	# default to our built-in service
+	if (!$Loop) {
+	    $Loop = 'ObjStore::Serve';
+	    $top->do_boot_class($Loop)->restart;
 	}
     };
     die if $@;
 }
 
-ObjStore::Process->set_mode('update');
-ObjStore::Process->autonotify();
+# checkpoint timer should be a command line option?
 
-eval q{ END{ warn "exiting...\n"; } }; #otherwise confusing
+eval q[ END{ warn "exiting...\n"; } ];
 warn "Started!!\n";
-ObjStore::Process->Loop();
+if (!$Loop->can('Loop')) {
+    my $m = 'defaultLoop';
+    if ($Loop->can($m)) {
+	$Loop->$m()
+    } else {
+	die "fatal: $Loop can't Loop or $m";
+    }
+}
+$Loop->Loop();
 
 sub usage {
     print "
-Usage: osperlserver [switches] database[=Class[+Class[,Class]]] [databases...]
+Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
   -d\\w+
+     b             enable boot diagnostics
+     n             print notifications to STDERR
      F             do not fork
-     n             copy notifications to stderr
   -Idirectory      specify \@INC directory (may be used more than once)
   -[mM]module..    executes `use/no module...' (just like perl)
   -v               print version number (and exit)

@@ -807,22 +807,6 @@ ten! :-)
 
 =over 4
 
-=item * A BRIEF HISTORY OF TRANSACTIONAL MEMORY USAGE
-
-Each time you access a persistent object, a small amount of transient
-memory is reserved until the transaction completes (to cope with perl
-scoping rules).  For this reason, and for speed, you should avoid
-repeating long access paths.
-
-  ++ $at->{bob}{house}{fridge}{beer};  #go to the minimart
-  -- $at->{bob}{house}{fridge}{beer};  #big gulp
-
-Instead, use a lexical variable to keep the fridge door open:
-
-  my $fridge = $at->{bob}{house}{fridge};
-  ++ $fridge->{beer};
-  -- $fridge->{beer};
-
 =item * NESTING
 
 Nested transactions are supported but transaction modes must match.
@@ -838,13 +822,6 @@ you can leave the mode unspecified.
       ...
     };
   }
-
-=item * MIXING WITH EVAL
-
-It is possible to use C<eval> within transactions, but B<you
-absolutely must not> use the C<ObjectStore> API or access any
-persistent memory.  In general, you should use C<begin> instead of
-C<eval>.
 
 =item * RELAXING EXCEPTION SEVERITY
 

@@ -272,15 +272,6 @@ knows the sender's client# and could pass this information
 transparently to subscribers.  The additional overhead be just 2 bytes
 per received notification.
 
-=item * MIXING WITH EVAL
-
-It is possible to use C<eval> within transactions, but B<you must not>
-use the C<ObjectStore> API or access persistent memory.  This is due
-to the excellent but imperfect integration of C<ObjectStore>
-exceptions and perl exceptions.  In general, you should just use
-C<begin> instead of C<eval>.  (Also see C<ObjStore::Process> and
-C<ObjStore::Posh::Cursor>.)
-
 =item * CROSS DATABASE POINTERS
 
 This feature is highly depreciated and will likely be discontinued,
@@ -305,6 +296,7 @@ deleted objects or removed databases.  (Imagine the freedom. :-)
 The problem is thoroughly understood.  Work-arounds or a real fix have
 been discussed on the perl-porters mailing list.  Well designed
 mechanisms are being developed to solve this problem correctly.
+[Fixed?]
 
 =item * C<ObjStore::AVHV> EVOLUTION
 
@@ -325,13 +317,6 @@ Threads will not work until perl has a well-tested API for an
 externally created thread to call into the perl interpreter.  (The
 beginnings of this are there in the form of new_struct_thread(), but
 it still needs a bit work.)
-
-=item * TRANSACTIONS
-
-Transaction hold onto transient memory longer than necessary.  The
-solution is to use doubly-linked lists.  This was proven to work in an
-eariler version, but unfortunately I took the code out because I
-thought it was too complicated.
 
 =item * C<MOP>
 
@@ -361,9 +346,9 @@ a software professional.  It might seem obvious in hindsight (doesn't
 it always?!), but it is my conviction that it was something in
 particular (not just luck!) that allowed me imagine and implement this
 cutting-edge technology years before it would be recognized and
-adopted.  Therefore, I would like to express a poignant "thank you" to
-all the wonderful teachers with whom I've had the opportunity of
-studying.  My ideas are truly theirs!  While I predict that this
+adopted.  Therefore, I would like to express a poignant "thank you!"
+to all the wonderful teachers with whom I've had the opportunity of
+studying.  My ideas are truly theirs.  While I predict that this
 software will be considered a world-class inter-disciplinary
 achievement, I do not see it as such.  Rather, I see it as a simple
 mechanical exercise employed to bring me to a basic level of clear
@@ -375,9 +360,10 @@ module, you might feel a hint of it...who knows?  You might even be
 interested in understanding more (even beyond the boundary of all
 thought and limitations).  "With our thoughts we make the world."
 Perhaps it's not common knowledge, but some things don't require
-belief to be true.  In short, if you have never studied with a master,
-I highly recommend it!  (It is a priceless opportunity!)  If you look
-sincerely, you will be able to find one.  They are waiting for you...!
-:-)
+belief to be true.  For example, try seriously considering the
+questions: "Who am I?" and "How shall I live?"  In short, if you have
+never studied with a master, I highly recommend it!  (It is a
+priceless opportunity.)  I guarantee that if you look sincerely you
+will find one.  They are waiting for you...!  :-)
 
 =cut

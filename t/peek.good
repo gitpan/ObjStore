@@ -19,6 +19,7 @@ TestDB {
       32761,
       32762,
       ...
+      32850, (at 90)
     ],
     h => ObjStore::HV (1) {
     },
@@ -60,4 +61,4 @@ TestDB {
   tripwire => ObjStore::HV (1) {
   },
 },
-count = 164
+count = 165

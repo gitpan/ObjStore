@@ -7,7 +7,7 @@ modify it under the same terms as Perl itself.
 #include "osperl.h"
 
 /* This is a new API that isn't widely supported yet.  We'll leave it
-out by default until it is.  Conditional #ifdefs might work too.
+out by default for now.  Conditional #ifdefs might work too.
 
 double
 get_unassigned_address_space()
@@ -28,14 +28,8 @@ readonly(sv)
 */
 
 // A few bits of the ObjectStore API are callable outside a
-// transaction.  We need to wrap each of these in TIX_HANDLE
-// and convert TIX exceptions into perl exceptions using:
-
-#define CAPTURE_TIX_REPORT \
-	  sv_setpv(osp->errsv, tix_local_handler.get_report()); \
-	  STRLEN len; \
-	  char *str = SvPV(osp->errsv, len); \
-	  if (str && len) str[len-1] = 0;
+// transaction.  We need to wrap each of these in OSP_START0
+// & OSP_END0
 
 static char *private_root_name = "_osperl_private";
 
@@ -175,14 +169,10 @@ _lookup(path, mode)
 	CODE:
 	dOSP;
 	char *CLASS = ObjStore_Database;
-	int ok=0;
-	TIX_HANDLE(all_exceptions)
-	  RETVAL = os_database::lookup(path, mode); ok=1;
-	TIX_EXCEPTION
-	  CAPTURE_TIX_REPORT
-	TIX_END_HANDLE
-	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
-	RETVAL->set_check_illegal_pointers(1);
+	OSP_START0
+	  RETVAL = os_database::lookup(path, mode);
+	  RETVAL->set_check_illegal_pointers(1);
+	OSP_ALWAYSEND0
 	OUTPUT:
 	RETVAL
 
@@ -223,15 +213,11 @@ subscribe(...)
 	  ossv_bridge *br = osp->sv_2bridge(ST(xa), 1);
 	  subs[xa].assign(br->ospv());
 	}
-	int ok=0;
-	TIX_HANDLE(all_exceptions)
+	OSP_START0
 	  os_notification::subscribe(subs, items);
-	  ok=1;
-	TIX_EXCEPTION
-	  CAPTURE_TIX_REPORT
-	TIX_END_HANDLE
-	delete [] subs;
-	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
+	OSP_ALWAYS0
+	  delete [] subs;
+	OSP_END0
 	return;
 
 void
@@ -245,15 +231,11 @@ unsubscribe(...)
 	  ossv_bridge *br = osp->sv_2bridge(ST(xa), 1);
 	  subs[xa].assign(br->ospv());
 	}
-	int ok=0;
-	TIX_HANDLE(all_exceptions)
+	OSP_START0
 	  os_notification::unsubscribe(subs, items);
-	  ok=1;
-	TIX_EXCEPTION
-	  CAPTURE_TIX_REPORT
-	TIX_END_HANDLE
-	delete [] subs;
-	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
+	OSP_ALWAYS0
+	  delete [] subs;
+	OSP_END0
 	return;
 
 MODULE = ObjStore	PACKAGE = ObjStore::Notification
@@ -282,11 +264,13 @@ os_notification::receive(...)
 	os_int32 timeout = -1;
 	if (items > 1) timeout = SvNV(ST(1)) * 1000;
 	os_notification *note;
-	if (os_notification::receive(note, timeout)) {
-	  XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Notification", note));
-	} else {
-	  XPUSHs(&sv_undef);
-	}
+	OSP_START
+	  if (os_notification::receive(note, timeout)) {
+	    XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Notification", note));
+	  } else {
+	    XPUSHs(&sv_undef);
+	  }
+	OSP_ALWAYSEND
 
 void
 os_notification::_get_database()
@@ -299,7 +283,10 @@ os_notification::focus()
 	PPCODE:
 	PUTBACK;
 	dOSP;
-	SV *ret = osp->ospv_2sv((OSSVPV *) THIS->get_reference().resolve());
+	SV *ret;
+	OSP_START
+	  ret = osp->ospv_2sv((OSSVPV *) THIS->get_reference().resolve());
+	OSP_ALWAYSEND
 	SPAGAIN;
 	XPUSHs(ret);
 
@@ -338,15 +325,10 @@ OSSVPV::notify(why, ...)
 	} else {
 	  note.assign(THIS, 0, SvPV(why, na));
 	}
-	int ok=0;
-	TIX_HANDLE(all_exceptions)
+	OSP_START0
 	  if (now) os_notification::notify_immediate(&note, 1);
 	  else     os_notification::notify_on_commit(&note, 1);
-	  ok=1;
-	TIX_EXCEPTION
-	  CAPTURE_TIX_REPORT
-	TIX_END_HANDLE
-	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
+	OSP_ALWAYSEND0
 
 #-----------------------------# Transaction
 
@@ -366,14 +348,18 @@ new(how)
 	else if (strEQ(how, "abort_only") ||
 	         strEQ(how, "abort")) tt = os_transaction::abort_only;
 	else croak("ObjStore::begin(%s): unknown transaction type", how);
-	RETVAL = new osp_txn(tt, os_transaction::local);
+	OSP_START
+	  RETVAL = new osp_txn(tt, os_transaction::local);
+	OSP_ALWAYSEND
 	OUTPUT:
 	RETVAL
 
 void
 osp_txn::destroy()
 	PPCODE:
-	delete THIS;
+	OSP_START
+	  delete THIS;
+	OSP_ALWAYSEND
 
 void
 osp_txn::deadlocked()
@@ -387,9 +373,17 @@ osp_txn::top_level()
 
 void
 osp_txn::abort()
+	CODE:
+	OSP_START
+	  THIS->abort();
+	OSP_ALWAYSEND
 
 void
 osp_txn::commit()
+	CODE:
+	OSP_START
+	  THIS->commit();
+	OSP_ALWAYSEND
 
 char *
 SEGV_reason()
@@ -400,6 +394,10 @@ SEGV_reason()
 
 void
 osp_txn::post_transaction()
+	CODE:
+	OSP_START
+	  THIS->post_transaction();
+	OSP_ALWAYSEND
 
 osp_txn *
 get_current()
@@ -451,7 +449,10 @@ char *
 get_lock_status(ospv)
 	OSSVPV *ospv
 	CODE:
-	int st = objectstore::get_lock_status(ospv);
+	int st;
+	OSP_START
+	  st = objectstore::get_lock_status(ospv);
+	OSP_ALWAYSEND
 	switch (st) {
 	case os_read_lock: RETVAL = "read"; break;
 	case os_write_lock: RETVAL = "write"; break;
@@ -535,30 +536,24 @@ os_database::_open(read_only)
 	int read_only
 	PPCODE:
 	dOSP;
-	int ok=0;
-	TIX_HANDLE(all_exceptions)
-	  THIS->open(read_only); ok=1;
-	TIX_EXCEPTION
-	  CAPTURE_TIX_REPORT
-	TIX_END_HANDLE
-	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
+	OSP_START0
+	  THIS->open(read_only);
+	OSP_ALWAYSEND0
 	XSRETURN_YES;
 
 void
 os_database::_open_mvcc()
 	PPCODE:
 	dOSP;
-	int ok=0;
-	TIX_HANDLE(all_exceptions)
-	  THIS->open_mvcc(); ok=1;
-	TIX_EXCEPTION
-	  CAPTURE_TIX_REPORT
-	TIX_END_HANDLE
-	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
+	OSP_START0
+	  THIS->open_mvcc();
+	OSP_ALWAYSEND0
 	XSRETURN_YES;
 
 void
 os_database::close()
+	CODE:
+	THIS->close();
 
 void
 os_database::_destroy()
@@ -715,7 +710,9 @@ os_database::create_root(name)
 	char *CLASS = "ObjStore::Root";
 	CODE:
 	DEBUG_root(warn("%p->create_root(%s)", THIS, name));
-	RETVAL = THIS->create_root(name);
+	OSP_START
+	  RETVAL = THIS->create_root(name);
+	OSP_ALWAYSEND
 	assert(RETVAL);
 	RETVAL->set_value(0, OSSV::get_os_typespec());
 	OUTPUT:
@@ -739,10 +736,12 @@ MODULE = ObjStore	PACKAGE = ObjStore::Root
 void
 os_database_root::destroy()
 	CODE:
-	DEBUG_root(warn("%p->destroy_root()", THIS));
-	OSSV *old = (OSSV*) THIS->get_value();
-	if (old) delete old;
-	delete THIS;
+	OSP_START
+	  DEBUG_root(warn("%p->destroy_root()", THIS));
+	  OSSV *old = (OSSV*) THIS->get_value();
+	  if (old) delete old;
+	  delete THIS;
+	OSP_ALWAYSEND
 
 char *
 os_database_root::get_name()
@@ -754,7 +753,10 @@ os_database_root::get_value()
 	OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
 	DEBUG_root(warn("%p->get_value() = OSSV=%p", THIS, ossv));
 	dOSP ;
-	SV *ret = osp->ossv_2sv(ossv);
+	SV *ret;
+	OSP_START
+	  ret = osp->ossv_2sv(ossv);
+	OSP_ALWAYSEND
 	SPAGAIN ;
 	XPUSHs(ret);
 
@@ -764,20 +766,22 @@ os_database_root::set_value(sv)
 	PPCODE:
 	PUTBACK ;
 	dOSP ;
-	os_segment *WHERE = os_database::of(THIS)->get_default_segment();
-	OSSVPV *pv=0;
-	ossv_bridge *br = osp->sv_2bridge(sv, 1, WHERE);
-	pv = br->ospv();
-	// Disallow scalars in roots because it is fairly useless and messy.
-	OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
-	if (ossv) {
-	  DEBUG_root(warn("%p->set_value(): OSSV(%p)=%p", THIS, ossv, pv));
-	  ossv->s(pv);
-	} else {
-	  DEBUG_root(warn("%p->set_value(): planting %p", THIS, pv));
-	  ossv = osp->plant_ospv(WHERE, pv);
-	  THIS->set_value(ossv, OSSV::get_os_typespec());
-	}
+	OSP_START
+	  os_segment *WHERE = os_database::of(THIS)->get_default_segment();
+	  OSSVPV *pv=0;
+	  ossv_bridge *br = osp->sv_2bridge(sv, 1, WHERE);
+	  pv = br->ospv();
+	  // Disallow scalars in roots because it is fairly useless and messy.
+	  OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
+	  if (ossv) {
+	    DEBUG_root(warn("%p->set_value(): OSSV(%p)=%p", THIS, ossv, pv));
+	    ossv->s(pv);
+	  } else {
+	    DEBUG_root(warn("%p->set_value(): planting %p", THIS, pv));
+	    ossv = osp->plant_ospv(WHERE, pv);
+	    THIS->set_value(ossv, OSSV::get_os_typespec());
+	  }
+	OSP_ALWAYSEND
 	return;
 
 #-----------------------------# Segment
@@ -881,8 +885,10 @@ MODULE = ObjStore	PACKAGE = ObjStore::Bridge
 void
 osp_bridge::DESTROY()
 	CODE:
-	DEBUG_bridge(warn("osp_bridge(%p)->release", THIS));
-	THIS->release();
+	OSP_START
+	  DEBUG_bridge(warn("osp_bridge(%p)->release", THIS));
+	  THIS->release();
+	OSP_ALWAYSEND
 
 #-----------------------------# UNIVERSAL
 
@@ -917,9 +923,11 @@ _pstringify(THIS, ...)
 	} else {
 	  char *rtype = sv_reftype(THIS, 0);
 	  //just read the stash? XXX
-	  STRLEN CLEN;
-	  char *CLASS = br->ospv()->blessed_to(&CLEN);
-	  ret = newSVpvf("%s=%s(0x%p)",CLASS,rtype,br->ospv());
+	  OSP_START
+	    STRLEN CLEN;
+	    char *CLASS = br->ospv()->blessed_to(&CLEN);
+	    ret = newSVpvf("%s=%s(0x%p)",CLASS,rtype,br->ospv());
+	  OSP_ALWAYSEND
 	}
 	XPUSHs(sv_2mortal(ret));
 
@@ -930,9 +938,11 @@ _peq(a1, a2, ign)
 	SV *ign
 	CODE:
 	dOSP;
-	ossv_bridge *b1 = osp->sv_2bridge(a1, 0);
-	ossv_bridge *b2 = osp->sv_2bridge(a2, 0);
-	RETVAL = b1 && b2 && b1->ospv() == b2->ospv();
+	OSP_START
+	  ossv_bridge *b1 = osp->sv_2bridge(a1, 0);
+	  ossv_bridge *b2 = osp->sv_2bridge(a2, 0);
+	  RETVAL = b1 && b2 && b1->ospv() == b2->ospv();
+	OSP_ALWAYSEND
 	OUTPUT:
 	RETVAL
 
@@ -943,35 +953,44 @@ _pneq(a1, a2, ign)
 	SV *ign
 	CODE:
 	dOSP;
-	ossv_bridge *b1 = osp->sv_2bridge(a1, 0);
-	ossv_bridge *b2 = osp->sv_2bridge(a2, 0);
-	RETVAL = !b1 || !b2 || b1->ospv() != b2->ospv();
+	OSP_START
+	  ossv_bridge *b1 = osp->sv_2bridge(a1, 0);
+	  ossv_bridge *b2 = osp->sv_2bridge(a2, 0);
+	  RETVAL = !b1 || !b2 || b1->ospv() != b2->ospv();
+	OSP_ALWAYSEND
 	OUTPUT:
 	RETVAL
 
 void
 OSSVPV::_refcnt()
 	PPCODE:
-	XPUSHs(sv_2mortal(newSViv(THIS->_refs)));
+	OSP_START
+	  XPUSHs(sv_2mortal(newSViv(THIS->_refs)));
+	OSP_ALWAYSEND
 
 void
 OSSVPV::_blessto_slot(...)
 	PROTOTYPE: ;$
 	PPCODE:
 	PUTBACK;
-	if (items == 2) {
-	  ossv_bridge *br = osp->sv_2bridge(ST(1), 1);
-	  OSSVPV *nval = (OSSVPV*) br->ospv();
-	  nval->REF_inc();
-	  if (OSPvBLESS2(THIS) && THIS->classname)
-	    ((OSSVPV*)THIS->classname)->REF_dec();
-	  OSPvBLESS2_on(THIS);
-	  THIS->classname = (char*)nval;
-	}
-	if (!OSPvBLESS2(THIS) || GIMME_V == G_VOID) return;
-	SV *ret = osp->ospv_2sv((OSSVPV*)THIS->classname);
-	SPAGAIN;
-	XPUSHs(ret);
+	OSP_START
+	  if (items == 2) {
+	    ossv_bridge *br = osp->sv_2bridge(ST(1), 1);
+	    OSSVPV *nval = (OSSVPV*) br->ospv();
+	    nval->REF_inc();
+	    if (OSPvBLESS2(THIS) && THIS->classname)
+	      ((OSSVPV*)THIS->classname)->REF_dec();
+	    OSPvBLESS2_on(THIS);
+	    THIS->classname = (char*)nval;
+	  }
+	  if (!(!OSPvBLESS2(THIS) || GIMME_V == G_VOID)) {
+	    SV *ret = osp->ospv_2sv((OSSVPV*)THIS->classname);
+	    SPAGAIN;
+	    XPUSHs(ret);
+	    PUTBACK;
+	  }
+	OSP_ALWAYSEND
+	return;
 
 os_database *
 OSSVPV::_database_of()
@@ -1013,19 +1032,23 @@ OSSVPV::get_pointer_numbers()
 void
 OSSVPV::const()
 	PPCODE:
-	OSPvROCNT(THIS) = ~0;
-	THIS->XSHARE(1);
+	OSP_START
+	  OSPvROCNT(THIS) = ~0;
+	  THIS->XSHARE(1);
+	OSP_ALWAYSEND
 
 void
 OSSVPV::POSH_CD(keyish)
 	char *keyish
 	PPCODE:
 	PUTBACK;
-	OSSV *sv = THIS->traverse(keyish);
-	if (!sv) croak("OSSVPV(%p)->traverse(%s) failed", THIS, keyish);
-	SV *ret = osp->ossv_2sv(sv);
-	SPAGAIN;
-	XPUSHs(ret);
+	OSP_START
+	  OSSV *sv = THIS->traverse(keyish);
+	  if (!sv) croak("OSSVPV(%p)->traverse(%s) failed", THIS, keyish);
+	  SV *ret = osp->ossv_2sv(sv);
+	  SPAGAIN;
+	  XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSSVPV::_new_ref(type, sv1)
@@ -1033,17 +1056,19 @@ OSSVPV::_new_ref(type, sv1)
 	SV *sv1;
 	PPCODE:
 	PUTBACK;
-	os_segment *seg = osp->sv_2segment(sv1);
-	SV *ret;
-	if (type == 0) {
-	  ret = osp->ospv_2sv(new (seg, OSPV_Ref2_protect::get_os_typespec())
+	OSP_START
+	  os_segment *seg = osp->sv_2segment(sv1);
+	  SV *ret;
+	  if (type == 0) {
+	    ret = osp->ospv_2sv(new (seg, OSPV_Ref2_protect::get_os_typespec())
 		OSPV_Ref2_protect(THIS));
-	} else if (type == 1) {
-	  ret = osp->ospv_2sv(new (seg, OSPV_Ref2_hard::get_os_typespec())
+	  } else if (type == 1) {
+	    ret = osp->ospv_2sv(new (seg, OSPV_Ref2_hard::get_os_typespec())
 		OSPV_Ref2_hard(THIS));
-	} else { croak("OSSVPV->new_ref(): unknown type"); }
-	SPAGAIN;
-	XPUSHs(ret);
+	  } else { croak("OSSVPV->new_ref(): unknown type"); }
+	  SPAGAIN;
+	  XPUSHs(ret);
+	OSP_ALWAYSEND
 
 #-----------------------------# Container
 
@@ -1053,23 +1078,33 @@ double
 OSPV_Container::_percent_filled()
 	CODE:
 	warn("_percent_filled is experimental");
-	RETVAL = THIS->_percent_filled();
+	OSP_START
+	  RETVAL = THIS->_percent_filled();
+	OSP_ALWAYSEND
 	if (RETVAL < 0 || RETVAL > 1) XSRETURN_UNDEF;
 	OUTPUT:
 	RETVAL
 
 int
 OSPV_Generic::_count()
+	CODE:
+	OSP_START
+	  RETVAL = THIS->_count();
+	OSP_ALWAYSEND
+	OUTPUT:
+	RETVAL
 
 void
 OSPV_Container::_new_cursor(sv1)
 	SV *sv1;
 	PPCODE:
-	PUTBACK ;
-	os_segment *seg = osp->sv_2segment(sv1);
-	SV *ret = osp->ospv_2sv(THIS->new_cursor(seg));
-	SPAGAIN ;
-	XPUSHs(ret);
+	PUTBACK;
+	OSP_START
+	  os_segment *seg = osp->sv_2segment(sv1);
+	  SV *ret = osp->ospv_2sv(THIS->new_cursor(seg));
+	  SPAGAIN;
+	  XPUSHs(ret);
+	OSP_ALWAYSEND
 
 #-----------------------------# AV
 
@@ -1079,43 +1114,53 @@ void
 OSPV_Generic::FETCH(xx)
 	SV *xx;
 	PPCODE:
-	SV **savesp = SP;
-	PUTBACK ;
-	SV *ret = osp->ossv_2sv(THIS->FETCH(xx));
-	SPAGAIN ;
-	assert(SP == savesp);
-	XPUSHs(ret);
+	OSP_START
+	  SV **savesp = SP;
+	  PUTBACK;
+	  SV *ret = osp->ossv_2sv(THIS->FETCH(xx));
+	  SPAGAIN;
+	  assert(SP == savesp);
+	  XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::STORE(xx, nval)
 	SV *xx;
 	SV *nval;
 	PPCODE:
-	SV **savesp = SP;
-	PUTBACK;
-	SV *ret = osp->ossv_2sv(THIS->STORE(xx, nval));
-	SPAGAIN ;
-	assert(SP == savesp);
-	if (ret) XPUSHs(ret);
+	OSP_START
+	  SV **savesp = SP;
+	  PUTBACK;
+	  SV *ret = osp->ossv_2sv(THIS->STORE(xx, nval));
+	  SPAGAIN;
+	  assert(SP == savesp);
+	  if (ret) XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::CLEAR()
 	CODE:
-	THIS->CLEAR();
+	OSP_START
+	  THIS->CLEAR();
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::_Pop()
 	PPCODE:
-	PUTBACK ;
-	SV *ret = THIS->Pop();
-	SPAGAIN ;
-	if (ret) XPUSHs(ret);
+	OSP_START
+	  PUTBACK;
+	  SV *ret = THIS->Pop();
+	  SPAGAIN;
+	  if (ret) XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::_Push(nval)
 	SV *nval;
 	CODE:
-	THIS->Push(nval);
+	OSP_START
+	  THIS->Push(nval);
+	OSP_ALWAYSEND
 
 #-----------------------------# HV
 
@@ -1125,56 +1170,74 @@ void
 OSPV_Generic::FETCH(key)
 	SV *key;
 	PPCODE:
-	SV **savesp = SP;
-	PUTBACK ;
-	SV *ret = osp->ossv_2sv(THIS->FETCH(key));
-	SPAGAIN ;
-	assert(SP == savesp);
-	if (ret) XPUSHs(ret);
+	OSP_START
+	  SV **savesp = SP;
+	  PUTBACK;
+	  SV *ret = osp->ossv_2sv(THIS->FETCH(key));
+	  SPAGAIN;
+	  assert(SP == savesp);
+	  if (ret) XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::STORE(key, nval)
 	SV *key;
 	SV *nval;
 	PPCODE:
-	SV **savesp = SP;
-	PUTBACK ;
-	SV *ret = osp->ossv_2sv(THIS->STORE(key, nval));
-	SPAGAIN ;
-	assert(SP == savesp);
-	if (ret) XPUSHs(ret);
+	OSP_START
+	  SV **savesp = SP;
+	  PUTBACK;
+	  SV *ret = osp->ossv_2sv(THIS->STORE(key, nval));
+	  SPAGAIN;
+	  assert(SP == savesp);
+	  if (ret) XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::DELETE(key)
 	char *key
 	CODE:
-	THIS->DELETE(key);
+	OSP_START
+	  THIS->DELETE(key);
+	OSP_ALWAYSEND
 
 int
 OSPV_Generic::EXISTS(key)
 	char *key
+	CODE:
+	OSP_START
+	  RETVAL = THIS->EXISTS(key);
+	OSP_ALWAYSEND
+	OUTPUT:
+	RETVAL
 
 void
 OSPV_Generic::FIRSTKEY()
 	PPCODE:
-	PUTBACK ;
-	SV *ret = THIS->FIRST( THIS_bridge );
-	SPAGAIN ;
-	XPUSHs(ret);
+	PUTBACK;
+	OSP_START
+	  SV *ret = THIS->FIRST( THIS_bridge );
+	  SPAGAIN;
+	  XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::NEXTKEY(...)
 	PPCODE:
 	if (items > 2) croak("NEXTKEY: too many arguments");
-	PUTBACK ;
-	SV *ret = THIS->NEXT( THIS_bridge );
-	SPAGAIN ;
-	XPUSHs(ret);
+	OSP_START
+	  PUTBACK;
+	  SV *ret = THIS->NEXT( THIS_bridge );
+	  SPAGAIN;
+	  XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::CLEAR()
 	CODE:
-	THIS->CLEAR();
+	OSP_START
+	  THIS->CLEAR();
+	OSP_ALWAYSEND
 
 #-----------------------------# Index
 
@@ -1184,19 +1247,23 @@ void
 OSPV_Generic::add(sv)
 	SV *sv;
 	PPCODE:
-	PUTBACK;
-	ossv_bridge *br = osp->sv_2bridge(sv, 1, os_segment::of(THIS));
-	THIS->add(br->ospv());
-	SPAGAIN;
-	if (GIMME_V != G_VOID) PUSHs(sv);
+	OSP_START
+	  PUTBACK;
+	  ossv_bridge *br = osp->sv_2bridge(sv, 1, os_segment::of(THIS));
+	  THIS->add(br->ospv());
+	  SPAGAIN;
+	  if (GIMME_V != G_VOID) PUSHs(sv);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::remove(sv)
 	SV *sv
 	PPCODE:
-	PUTBACK;
-	ossv_bridge *br = osp->sv_2bridge(sv, 1);
-	THIS->remove(br->ospv());
+	OSP_START
+	  PUTBACK;
+	  ossv_bridge *br = osp->sv_2bridge(sv, 1);
+	  THIS->remove(br->ospv());
+	OSP_ALWAYSEND
 	return;
 
 void
@@ -1204,22 +1271,28 @@ OSPV_Generic::configure(...)
 	PPCODE:
 	SV **top = &ST(0);
 	PUTBACK;
-	THIS->configure(top, items);
+	OSP_START
+	  THIS->configure(top, items);
+	OSP_ALWAYSEND
 	return;
 
 void
 OSPV_Generic::FETCH(keyish)
 	SV *keyish
 	PPCODE:
-	PUTBACK ;
-	SV *ret = osp->ospv_2sv(THIS->FETCHx(keyish));
-	SPAGAIN ;
-	XPUSHs(ret);
+	PUTBACK;
+	OSP_START
+	  SV *ret = osp->ospv_2sv(THIS->FETCHx(keyish));
+	  SPAGAIN;
+	  XPUSHs(ret);
+	OSP_ALWAYSEND
 
 void
 OSPV_Generic::CLEAR()
 	CODE:
-	THIS->CLEAR();
+	OSP_START
+	  THIS->CLEAR();
+	OSP_ALWAYSEND
 
 #-----------------------------# Ref
 
@@ -1230,14 +1303,10 @@ OSPV_Ref2::_get_database()
 	PREINIT:
 	char *CLASS = ObjStore_Database;
 	CODE:				//should be just like lookup
-	int ok=0;
-	TIX_HANDLE(all_exceptions)
-	  RETVAL = THIS->get_database(); ok=1;
-	TIX_EXCEPTION
-	  CAPTURE_TIX_REPORT
-	TIX_END_HANDLE
-	if (!ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));
-	RETVAL->set_check_illegal_pointers(1);
+	OSP_START0
+	  RETVAL = THIS->get_database();
+	  RETVAL->set_check_illegal_pointers(1);
+	OSP_ALWAYSEND0
 	OUTPUT:
 	RETVAL
 
@@ -1250,14 +1319,22 @@ OSPV_Ref2::dump()
 
 int
 OSPV_Ref2::deleted()
+	CODE:
+	OSP_START
+	  RETVAL = THIS->deleted();
+	OSP_ALWAYSEND
+	OUTPUT:
+	RETVAL
 
 void
 OSPV_Ref2::focus()
 	PPCODE:
-	PUTBACK ;
-	SV *sv = osp->ospv_2sv(THIS->focus());
-	SPAGAIN ;
-	XPUSHs(sv);
+	PUTBACK;
+	OSP_START
+	  SV *sv = osp->ospv_2sv(THIS->focus());
+	  SPAGAIN;
+	  XPUSHs(sv);
+	OSP_ALWAYSEND
 
 void
 _load(CLASS, sv1, type, dump, db)
@@ -1269,16 +1346,18 @@ _load(CLASS, sv1, type, dump, db)
 	PPCODE:
 	PUTBACK;
 	dOSP;
-	os_segment *seg = osp->sv_2segment(sv1);
-	OSPV_Ref2 *ref;
-	if (type == 0) {
-	  ref = new (seg, OSPV_Ref2_protect::get_os_typespec())
+	OSP_START
+	  os_segment *seg = osp->sv_2segment(sv1);
+	  OSPV_Ref2 *ref;
+	  if (type == 0) {
+	    ref = new (seg, OSPV_Ref2_protect::get_os_typespec())
 			OSPV_Ref2_protect(dump, db);
-	} else if (type == 1) {
-	  ref = new (seg, OSPV_Ref2_hard::get_os_typespec())
+	  } else if (type == 1) {
+	    ref = new (seg, OSPV_Ref2_hard::get_os_typespec())
 			OSPV_Ref2_hard(dump, db);
-	} else { croak("OSSVPV->_load(): unknown type"); }
-	ref->bless(CLASS);
+	  } else { croak("OSSVPV->_load(): unknown type"); }
+	  ref->bless(CLASS);
+	OSP_ALWAYSEND
 	return;
 
 #-----------------------------# Cursor
@@ -1289,22 +1368,28 @@ void
 OSPV_Cursor2::focus()
 	PPCODE:
 	PUTBACK;
-	SV *sv = osp->ospv_2sv(THIS->focus());
-	SPAGAIN;
-	XPUSHs(sv);
+	OSP_START
+	  SV *sv = osp->ospv_2sv(THIS->focus());
+	  SPAGAIN;
+	  XPUSHs(sv);
+	OSP_ALWAYSEND
 
 void
 OSPV_Cursor2::moveto(where)
 	int where
 	CODE:
-	THIS->moveto(where);
+	OSP_START
+	  THIS->moveto(where);
+	OSP_ALWAYSEND
 
 void
 OSPV_Cursor2::step(delta)
 	int delta
 	PPCODE:
 	PUTBACK;
-	THIS->step(delta);
+	OSP_START
+	  THIS->step(delta);
+	OSP_ALWAYSEND
 	return;
 
 void
@@ -1317,15 +1402,19 @@ OSPV_Cursor2::each(...)
 	  delta = SvIV(ST(1));
 	}
 	PUTBACK;
-	THIS->step(delta);
-	THIS->at();
+	OSP_START
+	  THIS->step(delta);
+	  THIS->at();
+	OSP_ALWAYSEND
 	return;
 
 void
 OSPV_Cursor2::at()
 	PPCODE:
 	PUTBACK;
-	THIS->at();
+	OSP_START
+	  THIS->at();
+	OSP_ALWAYSEND
 	return;
 
 void
@@ -1333,7 +1422,9 @@ OSPV_Cursor2::store(nval)
 	SV *nval
 	PPCODE:
 	PUTBACK;
-	THIS->store(nval);
+	OSP_START
+	  THIS->store(nval);
+	OSP_ALWAYSEND
 	return;
 
 void
@@ -1341,14 +1432,18 @@ OSPV_Cursor2::seek(...)
 	PPCODE:
 	SV **top = &ST(0);
 	PUTBACK;
-	int ret = THIS->seek(top, items);
-	SPAGAIN;
-	XPUSHs(sv_2mortal(newSViv(ret)));
+	OSP_START
+	  int ret = THIS->seek(top, items);
+	  SPAGAIN;
+	  XPUSHs(sv_2mortal(newSViv(ret)));
+	OSP_ALWAYSEND
 
 int
 OSPV_Cursor2::pos()
 	CODE:
-	RETVAL = THIS->pos();
+	OSP_START
+	  RETVAL = THIS->pos();
+	OSP_ALWAYSEND
 	OUTPUT:
 	RETVAL
 
@@ -1356,7 +1451,9 @@ void
 OSPV_Cursor2::keys()
 	PPCODE:
 	PUTBACK;
-	THIS->keys();
+	OSP_START
+	  THIS->keys();
+	OSP_ALWAYSEND
 	return;
 
 #-----------------------------# Set - DEPRECIATED!!

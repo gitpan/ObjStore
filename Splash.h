@@ -23,7 +23,6 @@ struct OSPV_avarray : OSPV_Generic {
   SPList < OSSV > av;
   OSPV_avarray(int);
   virtual ~OSPV_avarray();
-  static void _boot(HV *);
   virtual OSSVPV *new_cursor(os_segment *seg);
   virtual char *os_class(STRLEN *);
   virtual char *rep_class(STRLEN *);
@@ -55,7 +54,6 @@ struct OSPV_hvarray2 : OSPV_Generic {
   SPList < hvent2 > hv;
   OSPV_hvarray2(int);
   virtual ~OSPV_hvarray2();
-  static void _boot(HV *);
   virtual OSSVPV *new_cursor(os_segment *seg);
   virtual ossv_bridge *new_bridge();
   virtual char *os_class(STRLEN *);

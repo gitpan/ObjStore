@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { todo tests => 10 }
+BEGIN { todo tests => 23, failok => [11] }
 
 use ObjStore;
 use lib './t';
@@ -9,7 +9,7 @@ use test;
 ObjStore::fatal_exceptions(0);
 
 #use Devel::Peek qw(Dump SvREFCNT);
-#ObjStore::debug qw(PANIC);
+#ObjStore::debug qw(refcnt bridge);
 
 &open_db;
 
@@ -18,15 +18,17 @@ sub testify {
     my ($j, $rep) = @_;
 
     my $a = &{"$rep\::new"}('ObjStore::AV', $j->segment_of, 7);
+
     ok($a->os_class eq 'ObjStore::AV');
     ok($a->rep_class eq $rep) or warn "$rep ne ".$a->rep_class;
 
     for (1..2) {
 	$a->CLEAR;
-	for (-1..20) {
+	ok($a->count == 0);
+	for (-1..50) {
 	    $a->[$_] = [$_];
 	}
-	ok($a->count == 21);
+	ok($a->count == 51);
     }
     ok($a->POSH_CD(2)->[0] == 2);
     ok(!defined $a->[-2]);
@@ -42,13 +44,19 @@ sub testify {
     undef $@;
 
     my @k;
-    my $c = $a->new_cursor;
-    $c->moveto(-1);
-    while (my ($k,$v) = $c->at) {
-	push(@k, $k);
-	$c->next;
+    my $c;
+    begin sub { $c = $a->new_cursor; };
+    undef $@;
+    if ($c) {
+	$c->moveto(-1);
+	while (my ($k,$v) = $c->at) {
+	    push(@k, $k);
+	    $c->next;
+	}
+	ok(join('', sort @k) eq '01101112131415161718192202122232425262728293303132333435363738394404142434445464748495506789');
+    } else {
+	ok(0);
     }
-    ok(join('', sort @k) eq '01101112131415161718192203456789');
 };
 
 begin 'update', sub {

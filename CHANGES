@@ -1,3 +1,22 @@
+** 01-10-98 RELEASE 1.24
+
+- The index readonly locking has been tweaked again.  You'll need to
+re-create any indices.  Let me know if I got it right this time!
+
+- Re-organized the logic of blessing with a significant performance
+improvement.  Greatly expanded tracking of version numbers.  Be aware
+that bless now requires all classes throughout the @ISA heirarchy to
+set their $VERSION since is_evolved compares them (and no longer
+compares the @ISA tree).
+
+- Persistent per-class globals via a new $o->stash() method.
+
+- Improved the API for private root data.  Also, moved the private
+root to a separate segment (so it's easier to study memory usage).
+
+- $db->sync_INC uses unshift instead of push.
+
+
 ** 01-07-98 EMERGENCY RELEASE 1.23
 
 - Fixed refcnt problems in bless & indices.  From now on, make sure

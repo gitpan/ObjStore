@@ -69,3 +69,45 @@ struct osp_txn {
 
 #define dOSP osp_thr *osp = osp_thr::fetch()
 #define dTXN osp_txn *txn = osp->txn
+
+#define OSP_START0				\
+STMT_START {					\
+int odi_cxx_ok=0;				\
+TIX_HANDLE(all_exceptions)
+
+#define OSP_ALWAYS0 \
+odi_cxx_ok=1;							\
+TIX_EXCEPTION							\
+  sv_setpv(osp->errsv, tix_local_handler.get_report());		\
+TIX_END_HANDLE							\
+
+#define OSP_END0						\
+if (!odi_cxx_ok) croak("ObjectStore: %s", SvPV(osp->errsv, na));\
+} STMT_END;
+
+
+#ifdef _OS_CPP_EXCEPTIONS
+
+// real (hopefully fast) ANSI C++ exceptions
+#define OSP_START  OSP_START0
+#define OSP_ALWAYS OSP_ALWAYS0
+#define OSP_END    OSP_END0
+
+// Still to do:
+//   1. Redirect all perl longjmps through C++ throw.
+//   2. Sort out what happened.
+//
+// This will probably require patching the perl core (or
+// we could start compiling perl with C++ :-).
+
+#else
+
+// setjmp/longjmp
+#define OSP_START STMT_START{
+#define OSP_ALWAYS
+#define OSP_END   }STMT_END;
+
+#endif
+
+#define OSP_ALWAYSEND0 OSP_ALWAYS0 OSP_END0
+#define OSP_ALWAYSEND  OSP_ALWAYS  OSP_END

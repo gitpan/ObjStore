@@ -18,7 +18,8 @@ Splash.xs
 TODO
 UPGRADE
 XSthr.h
-dextv.tmpl
+avtv.tmpl
+dex2tv.tmpl
 edit.c
 hints/dec_osf.pl
 hints/solaris_2.pl
@@ -59,10 +60,10 @@ osp_hack
 osp_hkey.c
 osp_hkey.h
 ospeek
-osperl-10-schema.cc
+osperl-11-schema.cc
 osperl.c
 osperl.h
-patches/base.pm
+patches/base.pm.copy
 posh
 splash.h
 t/0illuminate.t
@@ -93,6 +94,7 @@ t/peek.good
 t/test.pm
 t/zpeek.t
 tv.os.h
+tvcommon0.h
 txn.c
 txn.h
 typemap

@@ -14,7 +14,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $RUN_TIME $TRANSACTION_PRIORITY
 	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof);
 
-$VERSION = '1.25';
+$VERSION = '1.26';
 
 require Exporter;
 require DynaLoader;
@@ -101,7 +101,7 @@ sub PoweredByOS {
     "$Config{sitelib}/ObjStore/PoweredByOS.gif";
 }
 
-$FATAL_EXCEPTIONS = 1;   #happy default for newbies... or my co-workers!
+$FATAL_EXCEPTIONS = 1;   #happy default for newbies... (or my co-workers :-)
 sub fatal_exceptions {
     my ($yes) = @_;
     $FATAL_EXCEPTIONS = $yes;
@@ -1092,7 +1092,11 @@ sub new {
     } else {
 	$sz = $how || 7;
     }
-    $av = ObjStore::REP::Splash::AV::new($class, $loc, $sz);
+    if ($sz < 45) {
+	$av = ObjStore::REP::Splash::AV::new($class, $loc, $sz);
+    } else {
+	$av = ObjStore::REP::FatTree::AV::new($class, $loc, $sz);
+    }
     if ($init) {
 	for (my $x=0; $x < @$init; $x++) { $av->STORE($x, $init->[$x]); }
     }
@@ -1313,10 +1317,8 @@ package ObjStore;
 $RUN_TIME = time;
 die "RUN_TIME must be positive" if $RUN_TIME <= 0;
 
-package UNIVERSAL;
-
 if (!defined &{"UNIVERSAL::BLESS"}) {
-    eval 'sub BLESS { ref($_[0])? () : CORE::bless($_[1],$_[0]) }';
+    eval 'sub UNIVERSAL::BLESS { ref($_[0])? () : CORE::bless($_[1],$_[0]) }';
     die if $@;
 }
 

@@ -8,16 +8,11 @@ The new C<SQL> and the sunset of relational databases.
 
 =head1 DESCRIPTION
 
-C<ObjectStore> is the leading object-oriented database.  It is engineered
-by Object Design, Inc. ( http://www.odi.com ) (NASDAQ: ODIS).  The
-database uses the virtual memory mechanism to make persistent data
-available in the most efficient manner possible.
-
-In case you didn't know, Object Design's Persistent Storage Engine has
-been licensed by Sun, Microsoft, Netscape, and Symantic for inclusion
-in their C<Java> development environments.  While this (presumably)
-gains ODI credibility, the real strength of C<ObjectStore> is its
-integration with perl.
+C<ObjectStore> is the leading object-oriented database.  It is
+engineered by Object Design, Inc. ( http://www.odi.com ) (NASDAQ:
+ODIS).  The database uses the virtual memory mechanism (also known as
+Forward Caching) to make persistent data available in the most
+efficient manner possible.
 
 Prior to this joining of forces,
 
@@ -33,13 +28,42 @@ Perl5 did not have a simple way of storing complex data persistently.
 
 =back
 
-I<Now there is an easy way to build databases, especially if you care about
-preserving your ideals of data encapsulation.  (See below!)>
+I<Now there is an easy way to build database applications, especially
+if you are concerned about preserving your ideals of data
+encapsulation.  (See below!)>
 
 =head1 TUTORIAL
 
-The best way to get started is to win the tutorial!  See
-C<ObjStore::Tutorial>!
+The best way to get started is to win the tutorial.  See
+C<ObjStore::Tutorial> or, if you just can't wait, run the following
+code and start molding it right now:
+
+=head2 Quick Start!
+
+  #!/usr/local/bin/perl -w
+ 
+  use ObjStore;
+  use ObjStore::Config;   #for TMP_DBDIR
+ 
+  my $db = ObjStore::open(TMP_DBDIR."/myjunk", 'update', 0666);
+ 
+  begin 'update', sub {
+
+    # $junk can be any arbitrary non-circular structure up to 2GB in size
+    my $junk = { 
+                  pork => [1,2,3],
+                  chicken => [1,2,3],
+                  wheat => [1,2,3],
+                  trials => 0,
+               };
+
+    $db->root("junk", sub { $junk });  #store it, if it's not there already
+    
+    my $pjunk = $db->root("junk");     #fetch it
+    $pjunk->{trials} ++;               #update something
+
+    ObjStore::peek($db);               #dump to stdout
+  };
 
 =head1 WHAT IS PERSISTENT PERL?
 
@@ -85,7 +109,7 @@ Or the equally effective, but unbearibly tedious:
     $h2->{snorf}=3;
     $h1->{b}='ouph';
 
-Perl saves us again!  Relief.
+Perl saves us again!  (Relief.)
 
 =head2 Arrays
 
@@ -169,7 +193,7 @@ through it, something could break, so don't.
 =head2 Indices
 
 SQL has this great facility called indices.  C<ObjStore> does too and
-they work in almost same!
+they work in almost same manner!
 
   my $nx = ObjStore::Index->new($near);
   $nx->configure(unique => 1, path=>"name");
@@ -181,7 +205,7 @@ they work in almost same!
   $c->step(1);
   warn $c->at()->{name}; # Triangular
 
-Index cursors are a lot more powerful than hash or array cursors.
+Index cursors are a B<lot> more powerful than hash or array cursors.
 Here are the available methods:
 
   $c->focus();
@@ -202,8 +226,8 @@ To eliminate the possibility of indices becoming out-of-sync with
 actual data, keys are marked read-only as they are indexed.  (Another
 scheme for keeping indices up-to-date is to use os_backptr.  This
 scheme is not supported because it has considerable memory overhead
-and provides little benefit beyond our read-only scheme.)  For
-example,
+(12-bytes per record!) and provides little benefit beyond our
+read-only scheme.)  For example,
 
   my $category = { name => 'Bath Toy' };
   my $row = { name => 'Rubber Ducky', category => $category };
@@ -211,9 +235,12 @@ example,
   $index->configure(path => 'category/name, name');
   $index->add($row);
 
+  $row->{category}{name} = 'Beach Toy';  #READONLY exception
+  $row->{name} = "Rubber Doggie";        #READONLY exception
+  $row->{owner} = $bob;                  #ok
+
 The first key is the category's name.  The second key is the row's
-name.  You cannot index direct keys more than once.  There is no such
-restriction on indirect keys.
+name.
 
 =head2 And Access Paths (Oh My!)
 
@@ -222,7 +249,7 @@ as an access path.  Two simple implementations are provided for
 manipulating access paths:
 
   ObjStore::Path::Ref            # access path composed of refs
-  ObjStore::Path::Cursor         # cursor based access path
+  ObjStore::Path::Cursor         # cursor based access path (EXPERIMENTAL)
 
 See the source code for details.
 
@@ -241,7 +268,8 @@ You can also get the same thing from within perl:
 
   ObjStore::peek($whatever);
 
-=head2 Wait!  No Schema?!  How Can This Scale?
+=head2 Wait!  No Schema?!  How Can This Scale?  Wont I get lost in a
+morass of disorganization?
 
 How can a relational database scale?!  B<When you write down a central
 schema, you are violating the principle of encapsulation.>  This is
@@ -251,14 +279,31 @@ classes when you can avoid it?
 
 =head2 The Theory of Lazy Evolution
 
-A database can be so large, it might be impossible to evolve it all at
-once!  As databases grow, lazy evolution is really the only way to
-scale up.  Fortunately, it's not as complicated as it sounds since all
-changes can be sorted into three categories.  The following examples
-will involve a hypothetical C<Spoon> class and it's associated
-instances.
+Data-sets are growing so large, it can be impossible to evolve the
+data all at once!  Lazy evolution is really the only way to scale up.
+
+The first thing to remember is that it isn't necessary to store all
+data for an application in a single database.  Various databases
+interoperate (relatively seemlessly) and be used simultaniously.  Not
+only can you have multiple schemas in the same database, but you can
+divide your data into multiple databases (perhaps according to your
+object-oriented analysis).  Just this basic flexibility gives you
+plenty of levers with which to manage your data.
+
+Within a database, all changes can be sorted into three categories.
+The following examples will involve a hypothetical C<Spoon> class and
+it's associated instances.
 
 =over 4
+
+=item * IMPLEMENTATION
+
+Changing the implementation is easiest.  By using version numbers or
+careful coding, you should be able to add a new representations while
+at the same time maintaining backward compatibility (C<bless>
+automatically stores version numbers).  C<is_evolved> and C<evolve>
+methods should be used to upgrade the representation whenever it is
+deemed necessary.
 
 =item * INTERFACE
 
@@ -267,15 +312,6 @@ bit of planning.  All the C<Spoon>s in the database probably rely on
 themselves working as they have in the past.  Therefore, you need to
 copy the class and rename it to C<Spoon2>.  The evolution process can
 be triggered by C<bless> (see the section on customizing C<bless>).
-
-=item * IMPLEMENTATION
-
-Changing the implementation is easier.  By using version numbers or
-careful coding, you should be able to add a new representations while
-at the same time maintaining backward compatibility.  Both soup-spoons
-and tea-spoons are great for ice cream.  C<is_evolved> and C<evolve>
-methods should be used to upgrade the representation whenever it is
-deemed necessary.
 
 =item * EVERYTHING ELSE
 
@@ -288,7 +324,7 @@ stick at a time.
 
 =back
 
-Also see the C<is_corrupted> method for integrity verification.
+Also see the C<iscorrupt> method for integrity verification.
 
 =head2 RDBMS Emulation
 
@@ -305,36 +341,9 @@ exhibited here mainly to make it seem like this extension has a
 difficult and steep learning curve.  In general, the API mostly
 mirrors the C<C++> API.  Refer to the C<ObjectStore> documentation for
 exact symantics.  The API for C<::UNIVERSAL> is probably of most
-interest to ex-C<C++> developers.  If you need a function that isn't
-available in perl, send mail to the OS/Perl mailing list (see the
+interest to ex-C<C++> developers.  If you need an API that isn't
+available in OS/Perl, send your request to the mailing list (see the
 README).
-
-=head2 Quick Start!
-
-  #!/usr/local/bin/perl -w
- 
-  use ObjStore;
-  use ObjStore::Config;
- 
-  my $db = ObjStore::open(TMP_DBDIR."/myjunk", 'update', 0666);
- 
-  begin 'update', sub {
-
-    # $junk might be any arbitrary non-circular structure up to 2GB
-    my $junk = { 
-                  pork => [1,2,3],
-                  chicken => [1,2,3],
-                  wheat => [1,2,3],
-                  tests => 0,
-               };
-
-    $db->root("junk", sub { $junk });
-    
-    my $pjunk = $db->root("junk");
-    $pjunk->{tests} ++;
-
-    ObjStore::peek($db);
-  };
 
 =head2 C<ObjStore>
 
@@ -576,45 +585,65 @@ All persistent objects inherit from C<ObjStore::UNIVERSAL>.
 
 =over 4
 
-=item * C<overload>
+=item * I<overload>
 
 Stringify, boolean coersion, and equality tests.
 
+=item * C<os_class>
+
+Reports the natural persistent class of the object.  All persistent
+objects must have this class in their C<@ISA> tree.
+
+=item * C<rep_class>
+
+Reports the representation's class.
+
 =item * C<bless>
 
-C<bless> and C<isa> work according to the moment of the C<bless>ing,
-rather than searching the current C<@ISA> tree.  (C<UNIVERSAL::can>
-remains un-modified.)  The method C<os_class> reports the natural
-persistent class of an object.
+C<bless> stores the current C<@ISA> tree and the version of every
+member of the C<@ISA> tree.  (In addition to the usual meaning of
+bless.)
+
+=item * C<$o->isa($baseclass)>
+
+Whether the $baseclass was part of the C<@ISA> tree (at the moment of
+blessing).  (C<UNIVERSAL::can> remains un-modified.)
+
+=item * C<$o->versionof($baseclass)>
+
+Returns the version of the $baseclass (at the moment of blessing).
 
 =item * C<$o->notify($why, ['now'])>
 
-Without the 'now' parameter, notification will take place after
-commit.
+Sends a notification to subscribers.  Without the 'now' parameter,
+notification will take place after commit.
 
-=item * C<$errs = $o-E<gt>is_corrupted($verbosity_level)>
+=item * C<$errs = $o-E<gt>iscorrupt($verbosity_level)>
 
 Application specific integrity checking can be achieved by providing
-an C<_is_corrupted> method.
+an C<_iscorrupt> method.
 
-=item * Lazy Evolution
+=item * C<$o->is_evolved>
 
-Use C<is_evolved()> to know if evolution is needed.  C<$o-E<gt>evolve()>
-should bring stuff up-to-date.
+By default, checks version numbers of every class in the old C<@ISA>
+tree.  Your C<$o-E<gt>evolve()> method should bring stuff up-to-date.
+You may be able to simply re-C<bless> the object to accomplish the
+evolve.
+
+=item * Of
+
+C<database_of> and C<segment_of> are always available as methods.
 
 =item * C<posh>
 
 C<posh> behavior can be customized by adding special methods.
 See the section on C<posh>.
 
-=item * Of
-
-C<database_of> and C<segment_of> are always available as methods.
-
 =back
 
 To make everything seem apparently consistent, C<ObjStore::Database>
-is completely special-cased to support most of the features above.
+(while not really being a storable object) is lavishly special-cased
+to support most of the above features.
 
 =head1 THE ADVANCED CHAPTER
 
@@ -694,30 +723,32 @@ Instead, use a lexical variable to keep the fridge door open:
 
 =item * NESTING
 
-Nested transactions are supported, but transaction modes must match.
+Nested transactions are supported but transaction modes must match.
 You can nest reads within reads or updates within updates, but not
-reads within updates nor updates within reads.  If you need to do a
+reads within updates (nor updates within reads).  If you need to do a
 read but you don't care if the parent transaction is an update or not,
 you can leave the mode unspecified.
 
   sub do_extra_push_ups_in_a_transaction {
     begin sub {
       ...
-      # Unspecified assumes a read or the same mode as the parent.
+      # Unspecified mode assumes a read or the same mode as the parent.
       ...
     };
   }
 
 =item * RELAXING EXCEPTION SEVERITY
 
-Transactions are always executed within an implicit C<eval>.  If you
-do not want your program to become suicidal when an C<ObjectStore>
-exception occurs, you should indicate that you want to have control
-over your own reflexive behavior:
+Transactions are always executed within an implicit C<eval>.  By
+default, ObjectStore exceptions are fatal (by demand of my
+co-workers).  If you do not want your program to become suicidal when
+an C<ObjectStore> exception occurs, you should indicate that you want
+to have control over your own reflexive behavior:
 
   ObjStore::fatal_exceptions(0);
 
-This is global to the whole process.  After a transaction, you
+This is global to the whole process.  If you want control, however,
+then you have to accept responsibility: after a transaction you
 absolutely must remember to check the value of C<$@> to see if
 anything went wrong.
 
@@ -739,10 +770,10 @@ persistent memory.
   });
 
 In the above code, the update in a read transaction will cause an
-exception that jumps B<I<through>> the C<eval> and out of the C<begin>.
-This is due to the excellent but imperfect integration of C<ObjectStore>
-exceptions and perl exceptions.  In general, it's much safer to
-replace C<eval>s with C<begin>s.
+exception that jumps B<I<through>> the C<eval> and out of the
+C<begin>.  This is due to the excellent but imperfect integration of
+C<ObjectStore> exceptions and perl exceptions.  In general, it's safer
+to global replace C<eval>s with C<begin>s.
 
 =item * DEADLOCK
 
@@ -751,7 +782,7 @@ deadlock.  You can increase the number of retries with
 C<ObjStore::set_max_retries($retries)>.  Or if you need to handle
 deadlocks yourself, you can set the number of retries to zero.  (There
 is not much point to retrying I<non->top-level transactions because
-locks are released only at the top-level [OS 4-5.0].)
+locks are released only at the top-level [OS 4-5.0.*].)
 
 =back
 
@@ -763,15 +794,12 @@ slots:
   new ObjStore::HV($near, { key => 'value' });  # 1 slot
   new ObjStore::AV($near, [1..3]);              # 3 slots
 
-(Be aware that any transient structures you pass through the stargate
-are I<no longer> dismembered as they are copied.)
-
-You can use the stargate directly:
+Or you can address the stargate directly:
 
   my $persistent_junk = ObjStore::translate($near, [1,2,3,{fat=>'dog'}]);
 
 If you want to design your own stargate, you may inspect the default
-stargate in C<ObjStore.pm> for inspiration.
+stargate in C<ObjStore.pm> for inspiration.  (Not recommended.)
 
 =head2 How Can I Rescue Persistent Objects From Oblivion?
 
@@ -779,16 +807,16 @@ All data stored in C<ObjectStore> is reference counted.  This is a
 fantastically efficient way to manage memory (for most applications).
 It has very good locality and low overhead.  However, as soon as an
 object's refcnt reaches zero, it is permenantly deleted from the
-database.  You get only one chance to save the object: the C<NOREFS>
+database.  You only get one chance to save the object: the C<NOREFS>
 method is invoked just prior to deletion.  You must create a new
-persistent reference to it, or kiss the object goodbye.
+persistent reference to it or kiss the object goodbye.
 
 Note that the C<DESTROY> method is still invoked every time an object
 becomes unreachable from the current scope.  However, contrary to
-transient objects, this method does not preview object destruction.
-[Hacking C<DESTROY> such that it can be used as C<NOREFS> is
-desirable, but would require changes to the core perl code-base.  This
-change is under consideration...]
+transient objects, this method does not truly preview object
+destruction.  (Hacking C<DESTROY> such that it can be used as
+C<NOREFS> is desirable, but would require changes to the core perl
+code-base.  This change is under consideration...)
 
 =head2 C<posh>
 
@@ -812,8 +840,10 @@ libraries.
 
 =head2 Arrays-as-Hashes
 
+Fantastically efficient records:
+
   use base 'ObjStore::AVHV';
-  use Class::Fields qw(f1 f2 f3);
+  use fields qw(f1 f2 f3);
 
 $ObjStore::COMPILE_TIME XXX
 
@@ -851,7 +881,7 @@ Instead, you can use references or cursors to refer to data in other
 databases.  References may use the C<os_reference_protected> class
 which is designed precisely to address this problem.  Refcnts will not
 be updated remotely, but you'll still be protected from accessing
-deleted objects or removed databases.  Imagine the freedom.
+deleted objects or removed databases.  (Imagine the freedom. :-)
 
 =head1 IMPLEMENTATION
 
@@ -867,7 +897,7 @@ over-engineered.
 
 =item *
 
-The perl interface is optimized to be fun and easy.  And since
+The perl interface is optimized to be fun and easy.  Since
 C<ObjectStore> is also blindingly fast, you can happily leave
 relational databases on the bookshelf where they belong.
 
@@ -905,7 +935,7 @@ memory.  When databases can be as large or larger than ten million
 megabytes, a few percent difference in compactness be noticable.
 
 All values take a minimum of 8 bytes (OSSV).  These 8 bytes are used
-to store a 16-bit value type, a pointer, and a general purpose 16-bit
+to store a 16-bit type, a pointer, and a general purpose 16-bit
 integer.
 
   value stored                   extra allocation (in addition to OSSV)
@@ -919,8 +949,7 @@ integer.
   object (ref or container)      sizeof object (see subclasses of OSSVPV)
   bless                          .5-1k bytes per class (zero per object)
 
-  splash collections XXX
-  ObjectStore collections XXX
+  %ObjStore::sizeof XXX
 
 The ODI FAQ also states: I<In addition, there is an associated entry
 in the info segment for the segment in question for each allocation of
@@ -935,11 +964,11 @@ by alignment constraints.>
 
 If this seems like a lot of overhead, consider that it is not really
 possible to directly compare these numbers to RDBMS statistics.  (Part
-of the problem is that no RDBMS vendor can even give you these
-numbers.)  At least, note that relational data can be stored with much
-less duplication in C<ObjectStore>.  (Definitely true if you write C++
-extensions.)  Of course, the real test must always be to code up your
-problem and make experimental measurements.
+of the problem is that RDBMS vendors can't even give you these
+statistics.)  At least, note that relational data can be stored with
+much less duplication in C<ObjectStore>.  (Definitely true if you
+write C++ extensions.)  Of course, the real test must always be to
+code up your problem and make experimental measurements.
 
 =head2 Hard-Coded Limits
 
@@ -947,25 +976,35 @@ problem and make experimental measurements.
 
 =item *
 
-Reference counts are only 32 bits unsigned.
+Reference counts are only 32 bits unsigned.  (Let me know if you hit
+this limit!)
 
 =item *
 
-Strings are limited to a length of 32767 bytes.  (This limit will be relaxed.)
+Readonly counts are only 16 bits.  Once the counter reachs 2^16-10,
+the object becomes permenantly readonly.  This should not be a problem
+in practice (actually, not even in theory).
+
+=item *
+
+Strings are limited to a length of 32767 bytes.  (This limit will be
+relaxed when there is enough demand.)
 
 =back
 
 =head2 Bless
 
-If you are a suspicious person like my mom, you might have suspected
+If you are a suspicious person (like my mom) you might have suspected
 that the ObjStore module installs its own version of C<bless>.
-Natually, it does.  The augmented C<bless> implements extra quality
-assurance to insure that blessings are stored persistently.  For
-example:
+Natually it does.  The augmented C<bless> implements extra quality
+assurance to insure that blessings are correctly stored persistently.
+For example:
 
     package Scottie;
     use ObjStore;
     use base 'ObjStore::HV';
+    $VERSION = '2.00';
+
     sub new {
         my ($class, $store) = @_;
         my $o = $class->SUPER::new($store, { fur => 'buffy' });
@@ -977,9 +1016,19 @@ example:
     my Scottie $dog = new Scottie($db);
     # once a Scottie, always a Scottie
 
+Persistent C<bless> also does some extra work to make evolution easier.
+It stores the current C<@ISA> tree along with the C<$VERSION> of every
+class in the C<@ISA> tree.  The C<isa> method is tweaked such that it
+reports according to the moment of the C<bless> and the C<versionof>
+method lets you query the saved C<$VERSION>s.  This is helpful when
+doing evolution, as you can compare the old C<@ISA> and C<$VERSION>s
+to figure out what to change (and how). (C<UNIVERSAL::can> is
+unmodified.)
+
 Technically speaking, C<bless> is re-implemented such that it can be
-extended by the I<bless from> and the I<bless to> classes.  (This is
-intrinsically confusing, so take a deep breath and prepare yourself.)
+extended by the I<bless from> and the I<bless to> classes via the
+C<BLESS> method.  (This is intrinsically confusing, so take a deep
+breath and prepare yourself.)
 
   sub BLESS {
       my ($r1,$r2);
@@ -988,12 +1037,6 @@ intrinsically confusing, so take a deep breath and prepare yourself.)
       $r1->SUPER::BLESS($r2);
   }
 
-The C<isa> method is also tweaked such that it reports according to
-the moment of the C<bless> as opposed to the current @ISA setup.
-(Note that C<UNIVERSAL::can> is unmodified.  If you train a puppy to
-growl threateningly upon command, the adult dog will not immediately
-forget the training it had as a puppy.)
-
 =head2 UNLOADED
 
 Generic tools such as C<posh> or C<ospeek> must C<bless> objects when
@@ -1001,32 +1044,32 @@ reading from an arbitrary database.  Prior to trying to locate the
 implementations of arbitrary objects, C<get_INC> is used to fetch the
 stored C<@INC> and syncronize it with the transient C<@INC>.  Then,
 each class found in the database is C<require>'d.  However, if the
-C<require> fails, a package must be faked-up.  The C<UNLOADED> package
-is added to the @ISA.  This signals that the @ISA tree should not be
-assumed authoritative.
+C<require> fails, a package must be faked-up:
+C<${"${package}::UNLOADED"}> is set to true.  This signals that the
+@ISA tree should not be considered authoritative.
 
 =head2 Go Extension Crazy
 
 You cannot directly access persistent scalars from perl. They are
-always immediately copied into transient scalars.
+always immediately copied into transient scalars.  This is actually
+faster than the alternatives in most cases.
 
 While all persistent objects are blessed, they are not considered
 I<blessed> in the database unless they are members of some non-default
-class.  C<NOREFS> is not invoked on non-blessed database objects.
+class (not os_class).  C<NOREFS> is not invoked on I<non-blessed>
+database objects.
 
 $ObjStore::COMPILE_TIME XXX
 
 C<ObjStore::File> will be the base class for large binary data.
 
 Each subclass of C<ObjStore::UNIVERSAL::Container> has a C<%REP> hash.
-Persistent object implementations add their create functions to the
-hash.  The C<new> method decides on the best representation, calls the
-best creation function from the C<%REP> hash, returning the newly
-minted persistent object.
+The C<new> method decides on the best representation, calls the best
+creation function from the C<%REP> hash, returning the newly minted
+persistent object.
 
 You can add your own C<C++> representation.  If you want to know the
-specifics, look at the code for the built-in representations
-(C<GENERIC.*>).
+specifics, look at the code for the built-in representations.
 
 You can add new families of objects that inherit from
 C<ObjStore::UNIVERSAL>.  Suppose you want highly optimized, persistent
@@ -1038,8 +1081,51 @@ tonal facility will be available in the next release.
 =head2 ObjStore::Index
 
 Indices are extremely efficient because they do not copy their keys.
-It is critical that the copy is avoided, since keys can be relocated
-when arrays need to grow.  OSSVPV pointers are never relocated.
+It is critical that the copy is avoided, since C<OSSV>s can be
+relocated when arrays need to grow.  C<OSSVPV>s are never relocated.
+
+=head2 Integrating ODI Exceptions With Perl
+
+There are two reasonable ways to do exceptions in C<C++>:
+
+=over 4
+
+=item * C<setjmp>/C<longjmp>
+
+=item * ANSI C<C++> exceptions
+
+=back
+
+When accessing persistent data, exceptions can be through anywhere at
+any time.  You have to trap exceptions throughout the extent of a
+transaction.  Of course, C<longjmp> is compatible with both C<C> &
+C<C++> while C<C++> exceptions are not.
+
+If ODI continued to implement exceptions with C<setjmp>/C<longjmp>,
+then persistent objects will effortlessly interoperate with existing
+C<C> code.  The only changes needed to outfit an existing library for
+persistence is to replace the allocation/deallocate routines.  In
+perl, this is easily accomplished by manipulating the symbol table at
+compile time.  Various perl extensions, such as C<Bit::Vector> and
+C<PDL>, would require virtually no code changes to manipulate
+persistent data.
+
+However, ODI appears to be committed to moving to ANSI C<C++>
+exceptions.  While there might be insignificant performance advantages
+for pure C++ code, this style necessitates significant code changes to
+plain C<C> perl extensions.  To be precise, every operation that
+accesses persistant data must be wrapped in a C<C++> exception handler
+to avoid propagating C<C++> exceptions through perl.  This will
+certainly be done eventually, but it makes compatibility a big job
+instead of a trival one.
+
+While I feel that C<C++> exceptions are the wrong design decision (in
+general), apparently most of ODI's customers disagree with me (C<C++>
+junkies!  Don't they realize that coding in C++ is the leading cause
+of brain damage in technology professionals?).  Alas, the decision has
+already been made.  The ObjStore extension must achieve compatibility
+with both types of exception handling, with an emphasis on the C<C++>
+style.
 
 =head1 DIRECTION
 
@@ -1059,8 +1145,8 @@ C<ObjectStore> APIs.
 
 =item * MORE BUILT-IN DATA TYPES
 
-File objects compatible with C<IO::Handle>.  Support for a Text Object
-Manager?  Support for bit vectors and matrics (PDL) ?
+File objects compatible with C<IO::Handle>.  Support for bit vectors
+and matrices (PDL) ?
 
 =back
 
@@ -1076,9 +1162,9 @@ When you write a structure declaration in C<C++> or C<Java> you are
 declaring field-names, field-types, and field-order.  Programs almost
 always require a re-compile to change such specific declarations.
 This is fine for small applications but becomes cumbersome quickly.
-It is too hard to change.  An C<SQL>-style language is needed.  When
-you create a table in C<SQL> you are declaring only field-names and
-field-types.
+It is too hard to change (brittle).  An C<SQL>-style language is
+needed.  When you create a table in C<SQL> you are declaring only
+field-names and field-types.
 
   create table SQL_style
   (name varchar(80),
@@ -1090,8 +1176,10 @@ than C<C++> or C<Java>.  Applications end up being written in C<C++>
 or C<Java>, while their data is stored with C<SQL>.  Managing the
 syncronization between the two languages creates enormous extra
 complexity.  So much so that there are lots of software companies that
-exist solely to address this headache.  Perl is better because it
-transparently spans all the requirements in a single language.
+exist solely to address this headache.  (You'd think they'd try to
+cure the problem instead of addressing the symptom!)  Perl is better,
+because it transparently spans all the requirements in a single
+language.
 
   my $h1 = { name => undef, title => undef, size => 'perl' };
 
@@ -1114,6 +1202,9 @@ For example:
   my $arr = [$schema_hashref, 'fwaz', 'snorf'];
   print "$arr->{field1} : $arr->{field2}\n";      # "fwaz : snorf"
 
+So perl will soon compile to optimized C<C> (with C<C>-like data access
+times!).  It's almost too good to be true.
+
 =head2 Why Is Perl Easier Than Other Programming Languages?
 
 I have no idea!
@@ -1127,16 +1218,16 @@ I have no idea!
 All perl databases use the same flexible schema that can be examined
 and updated with generic tools.  This is the I<key> advantage of
 C<SQL>, now available in perl.  In addition, Perl / C<ObjectStore> is
-blatantly faster than C<SQL> / C<C++>.  Not to mention that perl is a
-general purpose programming language and C<SQL> is at best a I<query
-language>.
+blatantly faster than C<SQL> / C<C++>.  (Not to mention that perl is a
+fun programming language while C<SQL> is at best a I<query language>
+and C<C++> is at best an I<engineering language>.)
 
 =item * C<C++>
 
-Special purpose data types can be coded in C<C++> and dynamically linked
-into perl.  Since C<C++> will always be faster than C<Java>, this gives perl
-an edge in the long run.  Perl is to C<C/C++> as C<C/C++> is to assembly
-language.
+Special purpose data types can be coded in C<C++> and dynamically
+linked into perl.  Since C<C++> will always be at least as fast as
+C<Java>, this gives perl an edge in the long run.  Perl is to C<C/C++>
+as C<C/C++> is to assembly language.
 
 =item * JAVA
 
@@ -1148,7 +1239,8 @@ C<Java> has the buzz, but:
 
 Just like C<C++>, the lack of a universal generic schema limits use to
 single applications.  Without some sort of C<tie> mechanism, I can't
-imagine how this could be remedied.
+imagine how this could be remedied.  (Even with C<tie>, it might
+already be too late.)
 
 =item *
 
@@ -1183,27 +1275,17 @@ in transient memory and persistent memory
 without violating the principle of encapsulation or obstructing
 general ease of use.
 
-=head2 ETA
+=head2 ETA: 3 Months
 
-=over 4
-
-=item * NOW TO 3 MONTHS
-
-Dynamically loaded application schemas;
-perl kernel-level threads;
-perl compiler
-
-=item * 1-6 MONTHS
-
-Proper tied arrays & repaired tie interface
-
-=back
+  dynamically loaded application schemas
+  perl kernel-level threads
+  perl compiler
+  proper tied arrays & repaired tie interface
 
 =head1 EXPORTS
 
-C<bless>, C<begin>, C<try_read>, C<try_update>, C<try_abort_only> by
-default.  Most other static methods can also be exported.
-C<try_*> functions are depreciated.
+C<bless> and C<begin> by default.  Most other static methods can also
+be exported.  C<try_*> functions are depreciated.
 
 =head1 BUGS
 
@@ -1212,7 +1294,8 @@ C<try_*> functions are depreciated.
 =item * LEAKS TRANSIENT C<XPVRV>s
 
 The problem is thoroughly understood.  Work-arounds or a real fix have
-been discussed on the perl-porters mailing list.
+been discussed on the perl-porters mailing list.  Well designed
+mechanisms are being developed to solve the problem correctly.
 
 =item * C<os_protected_reference>
 
@@ -1225,7 +1308,7 @@ request C<#SE055496_O#>.
 
 Transaction hold onto transient memory longer than necessary.  The
 solution is to use doubly-linked lists.  This was proven to work in an
-eariler version but unfortunately I took the code out because I
+eariler version, but unfortunately I took the code out because I
 thought it was too complicated.
 
 =item * C<MOP>
@@ -1266,6 +1349,6 @@ highly recommend it!
 =head1 SEE ALSO
 
 C<ObjStore::Tutorial>, C<ObjStore::Table3>, examples in the t/
-directory, I<and C<SQL> (never again!)>
+directory, and C<SQL> (B<never again!>)
 
 =cut

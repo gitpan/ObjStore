@@ -434,6 +434,7 @@ OSPV_avarray::new(seg, sz)
 	int sz;
 	PPCODE:
 	dOSP;
+	SV *CSV = ST(0);
 	os_segment *area = osp->sv_2segment(ST(1));
 	PUTBACK;
 	if (sz <= 0) {
@@ -443,7 +444,7 @@ OSPV_avarray::new(seg, sz)
 	  SERIOUS("Cardinality > 100000; try a more suitable representation");
 	}
 	OSSVPV *pv = new(area, OSPV_avarray::get_os_typespec()) OSPV_avarray(sz);
-	pv->bless(ST(0));
+	pv->bless(CSV);
 	return;
 
 MODULE = ObjStore::REP::Splash	PACKAGE = ObjStore::REP::Splash::HV
@@ -454,6 +455,7 @@ OSPV_hvarray2::new(seg, sz)
 	int sz;
 	PPCODE:
 	dOSP;
+	SV *CSV = ST(0);
 	os_segment *area = osp->sv_2segment(ST(1));
 	PUTBACK;
 	if (sz <= 0) {
@@ -463,5 +465,5 @@ OSPV_hvarray2::new(seg, sz)
 	  SERIOUS("Cardinality > 1000; try a more suitable representation");
 	}
 	OSSVPV *pv = new(area,OSPV_hvarray2::get_os_typespec()) OSPV_hvarray2(sz);
-	pv->bless(ST(0));
+	pv->bless(CSV);
 	return;

@@ -203,6 +203,9 @@ sub peek_array {
 	if ($big) {
 	    $o->o("...");
 	    $o->nl;
+	    $o->peek_any($val->[$len-1]);
+	    $o->o(" (at ".($len-1).")");
+	    $o->nl;
 	}
     });
     $o->o("],");

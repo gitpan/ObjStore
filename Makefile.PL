@@ -15,17 +15,18 @@ print "\nPlease edit lib/ObjStore/Config.pm to change the following parameters:\
 print "  SCHEMA_DBDIR = ".&SCHEMA_DBDIR."\n";
 print "  TMP_DBDIR    = ".&TMP_DBDIR."\n";
 print "\n";
+print "\nIf the build doesn't finish, try GNU make 3.76.\n";
 
 # Also see the ./hints directory!
 
-my $OS_ROOTDIR = $ENV{OS_ROOTDIR} or
+my $OS_ROOTDIR = $ENV{OS_ROOTDIR} ||
     die "Please set OS_ROOTDIR to the top of the ObjectStore distribution!\n";
 
-my $OS_LIBDIR = $ENV{OS_LIBDIR} or "$ENV{OS_ROOTDIR}/lib";
+my $OS_LIBDIR = $ENV{OS_LIBDIR} || "$ENV{OS_ROOTDIR}/lib";
 
 my $sdir = &SCHEMA_DBDIR;
 
-my $schema_version = '10';
+my $schema_version = '11';
 
 sub MY::postamble {
     my $sver = $schema_version;
@@ -38,16 +39,19 @@ osperl-'.$sver.'-osschema.c :: osperl-'.$sver.'-schema.cc $(H_FILES)
 	  osperl-'.$sver.'-schema.cc $(OS_LIBDIR)/liboscol.ldb
 
 clean ::
-	-rm -f osperl-'.$sver.'-osschema.c neutral-osperl dextv*[ch]
+	-rm -f osperl-'.$sver.'-osschema.c neutral-osperl avtv*[ch] dex2tv*[ch] tvcommon.*
 	-rm -f CCov/* ccov_registry.* .ccov-timestamp
 
 #all :: pm_to_blib
 #	cp ./PoweredByOS.gif $(INST_LIB)/ObjStore/PoweredByOS.gif
 
-dextv.c dextv.h dextvpriv.h dextvpub.h :: dextv.tmpl
-	tvgen.pl -p dex
+dex2tv.c dex2tv.h dex2tvpriv.h dex2tvpub.h :: dex2tv.tmpl
+	tvgen.pl -p dex2
 
-osperl.h :: dextv.h
+avtv.c avtv.h avtvpriv.h avtvpub.h :: avtv.tmpl
+	tvgen.pl -p av
+
+osperl.h :: dex2tv.h avtv.h
 
 ';
 }
@@ -85,17 +89,17 @@ ccov_registry$(OBJ_EXT): .ccov-timestamp
 WriteMakefile
     (
      NAME         => 'ObjStore',
-     PREREQ_PM	  => { 'Tree::Fat' => 0.04, Test => 0.02, @PREREQ },
+     PREREQ_PM	  => { 'Tree::Fat' => 0.07, Test => 0.02, @PREREQ },
      VERSION_FROM => 'lib/ObjStore.pm',
-#     OPTIMIZE     => '-g',
+     OPTIMIZE     => '-O2',
      EXE_FILES  => [qw/ospeek posh osp_hack/],
      'LIBS'     => ["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losths"],
      'DEFINE'   => "-DOSP_DEBUG -DDEBUGGING -DSCHEMADIR=$sdir -DHIDEMYMALLOC",
      INC      => "-I. -I$OS_ROOTDIR/include",
      'OBJECT'	=> join(' ',reverse
 			"osperl-$schema_version-osschema.o", @CCOV,
-			qw[txn.o ObjStore.o osperl.o GENERIC.o dextv.o
-			   FatTree.o osp_hkey.o ODI.o Splash.o]),
+			qw[txn.o ObjStore.o osperl.o GENERIC.o dex2tv.o avtv.o
+			   tvcommon.o osp_hkey.o ODI.o Splash.o FatTree.o]),
      'XSPROTOARG' => '-prototypes -nolinenumbers',
      dist	=> {COMPRESS=>'gzip -9f', SUFFIX => 'gz'},
     );

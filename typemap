@@ -19,7 +19,7 @@ os_object_cursor *	O_OBJECT
 OSSVPV *		O_OSSVPV
 OSPV_Container *	O_OSSVPV
 OSPV_Generic *		O_OSSVPV
-OSPV_fatindex *		O_OSSVPV
+OSPV_fatindex2 *	O_OSSVPV
 OSPV_odi_dictindex *	O_OSSVPV
 OSPV_avarray *		O_OSSVPV
 OSPV_hvarray2 *		O_OSSVPV

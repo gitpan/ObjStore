@@ -1,0 +1,53 @@
+/* Be careful to only edit the *.tmpl file. [-*-C-*- source] */
+
+#ifndef _tv_setup_
+#define _tv_setup_
+
+#include "osperl.h"
+
+/*
+  Why 23?
+  - Trade-off between array operations and tree operations.
+  - 23 slots gives 1 byte per element average overhead & 23 is a prime number
+  - Benchmarks showed 17..30 were pretty good.
+*/
+#define TnWIDTH		23
+
+
+#define NEW_TN(near)\
+	new(os_segment::of(near), TN::get_os_typespec()) TN
+
+#define TnDATA_T		OSSVPV*
+#define TV_PLANT_DAT(d)
+#define TV_UPROOT_DAT(d)
+#define TnSTOREDATA_T OSSVPV*
+#define TnDAT_ASSIGN(lval,rval) lval = rval
+#define TnFETCHDATA_T OSSVPV**
+#define TnDAT_FETCH(lval,rval) *lval = rval
+
+// The magic involved here is rather thick and spongie.
+
+#define DEXTV_MAXKEYS 8
+
+#define TV_ESEEK_FDECL \
+int dex2tc_seek(XPVTC *tc, int unique, int keycnt, OSPV_Generic **pcache, OSSV **keys)
+
+#define TV_ESEEK_LDECL \
+  int kx;
+
+#define TV_ESEEK_SETUP \
+  DEBUG_index(warn("seek [%d]", keycnt)); \
+  for (kx=0; kx < keycnt; kx++) { \
+    DEBUG_index(warn("key = %s", keys[kx]->stringify())); \
+  }
+
+#define TV_ESEEK_CMP(cmp,k,d)						\
+  for (kx=0; kx < keycnt; kx++) {					\
+    OSSV *zk = OSPV_Generic::path_2key((OSSVPV*)d, pcache[kx]);		\
+    cmp = keys[kx]->compare(zk);					\
+    if (cmp) break;							\
+  }
+
+#include "tv.public"
+
+#endif

@@ -8,22 +8,6 @@ following in the body of your message:
   "subscribe perl-objectstore you@your.company.com"
 
 
-Optimize for flexibility, then memory performance, then speed.
-
-1. Flexibility
-Flexibility is the most important because ObjectStore should be easy
-to use and everyone complains that it can't do SQL.  We'll show 'em!
-
-2. Memory Performance
-Memory performance is also very important due to the potential size of
-databases.  Small memory efficiency improvements in a 5TB database
-have an impact.
-
-3. Speed
-Speed is pretty good already, compared to a relational database!  Not
-that there isn't always room for improvement...
-
-
 + IDEAS +
 
 testing
@@ -34,46 +18,43 @@ ospeek
   style - raw, vanilla, etc...
   -depth switch?
 
-Restart read transactions without jumping up the stack!
-  begin('update!',...)
-
-Table3
-  add_index should create a scratch cursor to speed fetch?
-
-ObjStore::FatTree
-  array
-
 posh
   factor more!
   autodetect @INC modifications and print help message
   persist command history!
   tkposh ?
 
-renovate thread specific stuff in ObjStore.xs
+generate 'new' methods at compile time!
 
-Threads!
+CLEAR & GIMME_V optimizations seem broken with tied hashes; verify and
+submit bug reports (or fix the code!)
 
-use Error
+SV set magic?
 
-_Per_segment_data is not free'd when no longer needed
+Restart read transactions without jumping up the stack!
+  begin('update!',...)
+
+factor error messages like diagnostics.pm
 
 
 + VAGUE POSSIBILITIES +
 
-generate 'new' methods at compile time!
+Table3
+  add_index should create a scratch cursor to speed fetch?
+
+Threads!
+  renovate thread specific stuff in ObjStore.xs
+
+use Error
 
 Autoclassloading upon open?  Maybe not, you don't know what to load
-
-CLEAR & GIMME_V optimizations are broken with tied hashes
 
 pathexam
   invisibly auto-traverse references?
 
 get_database
   factor
-  os_server::get_databases() doesn't deal with bless
-
-factor error messages like diagnostics.pm
+  os_server::get_databases() ignores bless
 
 prune debugging stuff
 
@@ -82,8 +63,6 @@ lists to destroy the bridge at soonest point.
 
 iterating over AVHV keys is broken - cursor is stored in the ossv_bridge
   unmagic the keys hash - make non-lazy?
-
-propagate READONLY to the perl side?
 
 posh
   improve pre/post eval logic
@@ -129,8 +108,6 @@ Evolve the schema to eliminate this harmless annoyance:  The object at 0xdff3019
 + BIGGISH PROJECTS +
 
 Support for multiple application schemas (expected 1Q98)
-
-Add support for parts of the TimeSeries Object Manager?
 
 Needed is a more flexible hash table that can serve to replace
 os_Dictionary and also be used as an ObjStore::Index.  Also, splash

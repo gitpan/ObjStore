@@ -36,6 +36,8 @@ hkey *hkey::operator=(const hkey &k1)
     pv = new(os_segment::of(this), os_typespec::get_char(), len) char[len];
     memcpy(pv, k1.pv, len);
   }
+  DEBUG_hash(warn("hkey(0x%x)->operator=(%s=0x%x,%d)",
+		  this, pv?pv:"(null)", pv, len));
   return this;
 }
 
@@ -53,6 +55,8 @@ void hkey::s(const char *k1, os_unsigned_int32 nlen)
     pv = new(os_segment::of(this), os_typespec::get_char(), len) char[len];
     memcpy(pv, k1, len);
   }
+  DEBUG_hash(warn("hkey(0x%x)->s(%s=0x%x,%d)",
+		  this, pv?pv:"(null)", pv, len));
 }
 
 os_unsigned_int32 hkey::hash(os_void_const_p v1)

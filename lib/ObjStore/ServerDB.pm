@@ -82,8 +82,16 @@ sub do_boot_class {
 	$file =~ s,::,/,g;
 	require $file.".pm";  #it must be loaded!
     }
-    return if $o->SUPER::FETCH($class);
-    my $i = $class->new($o->create_segment($class));
+    my $i = $o->SUPER::FETCH($class);
+    return $i if $i;
+    if (!$class->can('new')) {
+	eval {
+	    require Devel::Symdump;
+	    warn Devel::Symdump->isa_tree;
+	};
+	die "$class->new: Can't locate object method 'new' (\%INC=\n\t".join("\n\t", sort keys %INC).")";
+    }
+    $i = $class->new($o->create_segment($class));
     die "$class->new(...) returned '$i'" if !ref $i;
     $o->_install($i);
     $i

@@ -215,6 +215,7 @@ sub pwd {
 }
 
 package input;
+use Carp qw(carp cluck croak confess);
 use ObjStore ':ADV';
 use vars qw($at $db $cursor);
 

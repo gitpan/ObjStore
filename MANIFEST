@@ -121,3 +121,4 @@ tvcommon0.h
 txn.c
 txn.h
 typemap
+.psrc

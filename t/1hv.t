@@ -8,6 +8,7 @@ use lib './t';
 use test;
 
 ObjStore::fatal_exceptions(0);
+#ObjStore::debug('hash');
 
 &open_db;
 sub testify {

@@ -35,7 +35,7 @@ sub new {
 sub touch {
     my ($class, $time) = @_;
     $time ||= time;
-    if ($SELF->deleted()) {
+    if ($SELF and $SELF->deleted()) {
 	return if defined wantarray;
 	warn "another server started up";
 	exit;

@@ -37,7 +37,7 @@ struct OSPV_fatindex2 : OSPV_Generic {
   virtual char *rep_class(STRLEN *len);
   virtual int get_perl_type();
   virtual void CLEAR();
-  virtual void add(OSSVPV*);
+  virtual int add(OSSVPV*);
   virtual void remove(OSSVPV*);
   virtual OSSVPV *FETCHx(SV *xx);
   virtual double _percent_filled();

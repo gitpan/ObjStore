@@ -16,8 +16,9 @@ sub new {
     # $id is a string!
     if ($id) { $$o{id} = "$id"; }
     else {     $$o{id} = "$$t{nextid}"; ++$$t{nextid}; }
-    $$o{priority} = defined $priority? $priority : 10;
+    $$o{priority} = int(defined $priority? $priority : 10);
     $$o{job_table} = $$t{SELF};
+    $$o{cpu} = 0;
     $$o{state} = 'R';
     $$o{why} = '';   #why killed
     $t->add($o);
@@ -45,6 +46,7 @@ sub do_work {
 sub do_set_priority {
     my ($o, $pri) = @_;
     my $t = $$o{job_table}->focus;
+    $o->HOLD;
     $t->remove($o);
     $$o{priority} = $pri;
     $t->add($o);

@@ -1,6 +1,15 @@
 # -*-perl-*-
+
+use ObjStore;
+package MyHV;
+use base 'ObjStore::HV';
+
+package MyAV;
+use base 'ObjStore::AV';
+
+package main;
 use Test;
-BEGIN { plan test => 7 }
+BEGIN { plan test => 9 }
 
 use ObjStore ':ALL';
 use lib './t';
@@ -13,7 +22,27 @@ my $junk = {
     'strs' => { qw(a b  c d  e f  g h), i => [ 'a', 1 ] },
 };
 
+# see if transient works..
+eval {
+    for (qw(ObjStore::AV ObjStore::HV)) {
+	my $x = $_->new('transient');
+	s/^ObjStore::/My/;
+	bless $x, $_;
+    }
+};
+ok $@||'', '', 'transient failed';
+
 begin 'update', sub {
+    # see if transient works..
+    eval {
+	for (qw(ObjStore::AV ObjStore::HV)) {
+	    my $x = $_->new('transient');
+	    s/^ObjStore::/My/;
+	    bless $x, $_;
+	}
+    };
+    ok $@||'', '', 'transient failed';
+
     my $john = $db->root('John');
     die "no db" if !$john;
     

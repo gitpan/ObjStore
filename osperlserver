@@ -149,8 +149,9 @@ if (!$Loop->can('Loop')) {
     } else {
 	die "fatal: $Loop can't Loop or $m";
     }
+} else {
+    $Loop->Loop();
 }
-$Loop->Loop();
 
 sub usage {
     print "

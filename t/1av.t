@@ -12,6 +12,7 @@ ObjStore::fatal_exceptions(0);
 #ObjStore::debug qw(refcnt bridge splash);
 
 &open_db;
+#    ObjStore::debug('PANIC');
 
 sub testify {
     no strict 'refs';

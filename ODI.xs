@@ -65,13 +65,14 @@ OSSV *OSPV_hvdict::STORE(SV *sv, SV *nval)
   char *key = SvPV(sv,keylen);
   if (keylen == 0)
     croak("ObjStore: os_dictionary cannot store a zero length hash key");
-  OSSV *ossv = (OSSV*) hv.pick(key);
+  hkey tmpkey(key);
+  OSSV *ossv = (OSSV*) hv.pick(&tmpkey);
   dOSP;
   if (ossv) {
     *ossv = nval;
   } else {
     ossv = osp->plant_sv(os_segment::of(this), nval);
-    hv.insert(key, ossv);
+    hv.insert(&tmpkey, ossv);
   }
   DEBUG_hash(warn("OSPV_hvdict::INSERT(%s=%s)", key, ossv->stringify()));
   //  dTHR;
@@ -81,9 +82,10 @@ OSSV *OSPV_hvdict::STORE(SV *sv, SV *nval)
 
 void OSPV_hvdict::DELETE(char *key)
 {
-  OSSV *val = hv.pick(key);
+  hkey tmpkey(key);
+  OSSV *val = hv.pick(&tmpkey);
   if (!val) return;
-  hv.remove_value(key);
+  hv.remove_value(&tmpkey);
   DEBUG_hash(warn("OSPV_hvdict::DELETE(%s) deleting hash value 0x%x", key, val));
   val->set_undef();
   delete val;

@@ -336,34 +336,45 @@ I didn't get a Ph.D in English.  Sorry!
 
 =head1 SOURCE CODE AVAILABILITY
 
+This section is not a legal contract.  This section is not a legal
+statement in any way, shape, or form.
+
+
 While there have been gains in software quality in the form of GNU,
 Perl, Apache, Linux, Qt, and recently the Netscape browser, we are
 still in the dark ages with respect to database technology.  After
 avoiding relational databases for years, I sensed a combination of
 persistance and perl could offer the same level of quality and
 simplicity that I find invaluable in addressing the hurdles I face as
-a software professional.  It might seem obvious in hindsight (doesn't
-it always?!), but it is my conviction that it was something in
-particular (not just luck!) that allowed me imagine and implement this
-cutting-edge technology years before it would be recognized and
-adopted.  Therefore, I would like to express a poignant "thank you!"
-to all the wonderful teachers with whom I've had the opportunity of
-studying.  My ideas are truly theirs.  While I predict that this
-software will be considered a world-class inter-disciplinary
-achievement, I do not see it as such.  Rather, I see it as a simple
-mechanical exercise employed to bring me to a basic level of clear
-understanding.  And what are my real aspirations?  I should keep quiet
-about that, but I can say this much: One of my friends had an email
-signature: "Life would be so much easier if we could just look at the
-source code."  (Imagine, computational metaphysics! :-) In using this
-module, you might feel a hint of it...who knows?  You might even be
-interested in understanding more (even beyond the boundary of all
+a software professional.
+
+It might seem obvious in hindsight (doesn't it always?!), but it is my
+conviction that it was something in particular (not just luck!) that
+allowed me imagine and implement this cutting-edge technology years
+before it would be recognized and adopted.  Therefore, I would like to
+express a poignant "thank you!" to all the wonderful teachers with
+whom I've had the opportunity of studying.  My ideas are truly theirs.
+While I predict that this software will be considered a world-class
+inter-disciplinary achievement, I do not see it as such.  Rather, I
+see it as a simple mechanical exercise employed to bring me to a basic
+level of clear understanding.  My subsequent hope was that people who
+use the software will also be able to learn from its clarity.  But
+what are my real aspirations?
+
+I should keep quiet about that but I can say this much: One of my
+friends had an email signature: "Life would be so much easier if we
+could just look at the source code."  (Imagine, "computational
+metaphysics" :-) In using this module, you might feel a hint of it?
+That's my real interest.  You might be interested also.  Perhaps even
+interested in understanding more (even beyond the bounds of all
 thought and limitations).  "With our thoughts we make the world."
 Perhaps it's not common knowledge, but some things don't require
-belief to be true.  For example, try seriously considering the
-questions: "Who am I?" and "How shall I live?"  In short, if you have
-never studied with a master, I highly recommend it!  (It is a
-priceless opportunity.)  I guarantee that if you look sincerely you
-will find one.  They are waiting for you...!  :-)
+belief to be true.  If you want to find out for yourself (first hand),
+I would encourage such an inquiry.  You must seriously consider the
+hard, imporant questions in concert with a well regarded teacher.  If
+you have never studied in this way, I highly recommend it!  (It is a
+priceless opportunity.)  And I guarantee that if you look sincerely
+you will find what you seek.  (Or I'll give you double your money
+back. :-) Trust me, it's worth it.
 
 =cut

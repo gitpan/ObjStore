@@ -10,6 +10,13 @@ following in the body of your message:
 
 + IDEAS +
 
+?? $FAKE=1 -- don't include in stored @ISA tree
+
+RE-THINK:
+  sub isa { _isa(@_, 1); }
+  sub versionof { _versionof(@_, 1); }
+  sub is_evolved { _is_evolved(@_, 1); }
+
 bridges per-thread?
   optional transaction-level mutex to debug data accesses?
 pool allocation (x64?)
@@ -43,8 +50,9 @@ transactions
   begin('update!',...): force switch to update?
 
 qtposh
-  AVHV looks different depending whether it goes through resolve
+  AVHV looks different depending whether it goes through resolve??!
   resolve failures seem not to get reported
+  try to share more code between posh & qtposh
 &
   optionally distinguish between return and enter keys
   word wrap, but it doesn't seem to be supported

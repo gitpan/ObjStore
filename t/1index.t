@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test 1.03;
-BEGIN { plan tests=>29 }
+BEGIN { plan tests=>31 }
 
 use strict;
 use ObjStore ':ADV';
@@ -87,7 +87,7 @@ begin 'update', sub {
 	ok $@, '/(?x)(not\s+ | un) supported/';
 	undef $@;
 
-	$nums->add($nums->[0]); #ok
+	ok !$nums->add($nums->[0]), 1;
 
 	my $numsdup = ObjStore::Index->new($j, path => 'num', unique => 0);
 	begin sub { $numsdup->add($nums->[0]); };
@@ -167,7 +167,9 @@ begin 'update', sub {
     ok($c->at == $at);
 
     # readonly flags again
-    $ax->add(new Toy($j, {name => 'Decoy', age => bless [1,3], 'Toy::AgeGrp'}));
+    my $decoy = $ax->add(new Toy($j, {name => 'Decoy',
+				      age => bless [1,3], 'Toy::AgeGrp'}));
+    ok $decoy->{name}, 'Decoy';
     $ax->remove($ax->[1]); #will seek to [0] first
     $ax->CLEAR();
     ok(!defined $ax->[0]);

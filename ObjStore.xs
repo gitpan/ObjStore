@@ -481,6 +481,7 @@ osp_txn::post_transaction()
 void
 get_current()
 	PPCODE:
+	if (AvFILL(osp_thr::TXStack) == -1) XSRETURN_UNDEF;
 	SV **tsv = av_fetch(osp_thr::TXStack, AvFILL(osp_thr::TXStack), 0);
 	assert(tsv);
 	XPUSHs(sv_mortalcopy(*tsv));
@@ -986,7 +987,7 @@ _is_persistent(sv)
 	SV *sv;
 	CODE:
 	ospv_bridge *br = osp_thr::sv_2bridge(sv, 0);
-	RETVAL = br != 0;
+	RETVAL = br && os_segment::of(br->ospv()) != os_segment::of(0);
 	OUTPUT:
 	RETVAL
 
@@ -1209,12 +1210,10 @@ void
 OSPV_Generic::FETCH(xx)
 	SV *xx;
 	PPCODE:
-	SV **savesp = SP;
 	PUTBACK;
 	dOSP;
 	SV *ret = osp->ossv_2sv(THIS->FETCH(xx));
 	SPAGAIN;
-	assert(SP == savesp);
 	XPUSHs(ret);
 
 void
@@ -1230,12 +1229,10 @@ OSPV_Generic::STORE(xx, nval)
 	SV *xx;
 	SV *nval;
 	PPCODE:
-	SV **savesp = SP;
 	PUTBACK;
 	dOSP;
 	SV *ret = osp->ossv_2sv(THIS->STORE(xx, nval));
 	SPAGAIN;
-	assert(SP == savesp);
 	if (ret) XPUSHs(ret);
 
 void
@@ -1348,12 +1345,10 @@ OSPV_Generic::STORE(key, nval)
 	SV *key;
 	SV *nval;
 	PPCODE:
-	SV **savesp = SP;
 	PUTBACK;
 	dOSP;
 	SV *ret = osp->ossv_2sv(THIS->STORE(key, nval));
 	SPAGAIN;
-	assert(SP == savesp);
 	if (ret) XPUSHs(ret);
 
 void
@@ -1397,9 +1392,9 @@ OSPV_Generic::add(sv)
 	PPCODE:
 	PUTBACK;
 	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1, os_segment::of(THIS));
-	THIS->add(br->ospv());
+	int added = THIS->add(br->ospv());
 	SPAGAIN;
-	if (GIMME_V != G_VOID) PUSHs(sv);
+	if (added && GIMME_V != G_VOID) PUSHs(sv);
 
 void
 OSPV_Generic::remove(sv)

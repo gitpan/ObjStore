@@ -60,6 +60,24 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 =head1 R!CENT CHANGES
 
 
+** 05-30-98 RELEASE 1.40
+
+- Scrubbed code with Insure++ (Parasoft).  Insure++ is a product
+similar to Purify, except better.  Fixed a bug in the os_Dictionary
+hash representation.
+
+- A better effort is made to vivify the @ISA tree when it is
+(partially) unloadable.  This change is aimed towards allowing the
+creation of databases without any .pm file support (discardible
+scaffolding).
+
+- Relaxed restrictions on comparing index keys of differing type.
+
+- & the usual suite of minor bug fixes...
+
+- Edit the Makefile.PL to add -DOSP_SAFE_BRIDGE if you still need it!!
+
+
 ** 05-10-98 RELEASE 1.39
 
 - Fixed a long standing problem with transaction memory usage.  Memory
@@ -80,22 +98,8 @@ to the next release!!
 
 - Lots of tweaks.  Reorganized transaction code and osperlserver.  All
 allocators should now accept 'transient' as a valid segment.
-ObjStore::Serve supercedes the jumble logic initially prototyped in
-ObjStore::Process.
-
-
-** 04-23-98 RELEASE 1.38
-
-- Support for multiple threads.  Changed ObjStore::Transaction->new()
-to conform the standard method call convention.  While partially
-tested (perl 5.004_64 solaris), additional internal reorganization and
-testing is still needed.
-
-- osperlserver no longer invokes the 'evolve' method upon restart.
-
-- VERSIONs are not longer required for persistent classes.  Instead
-'0.001' is defaulted.  Be aware that you must use a version greater
-than '0.001' once you add an explicit version.
+ObjStore::Serve and ObjStore::Server supercede the jumbled logic
+initially prototyped in ObjStore::Process.
 
 
 see ./INSTALL for hints on installation
@@ -111,8 +115,9 @@ majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
 1. If you think you've run into a bug, try running your script with
 "perl -MObjStore=PANIC" and mail the output to the mailing list.
 
-2. The mailing list is also available for job offers (as long as they
-relate to this extension :-).  FYI, I am not myself currently looking.
+2. The mailing list is also available for job postings (as long as
+they relate to this extension.  FYI, I am not myself currently
+looking.  :-)
 
 -------------------------------------------------------------------------
 Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.

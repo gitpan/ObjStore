@@ -11,7 +11,7 @@ use ObjStore;
 use base 'ObjStore::HV';
 use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $SERVE %METERS $Init $TXOpen);
 push @ISA, 'Exporter', 'osperlserver';
-@EXPORT_OK = qw(&txqueue &txretry &meter &exitloop
+@EXPORT_OK = qw(&txqueue &txretry &meter &exitloop &seconds_delta
 		$LoopLevel $ExitLevel &init_signals);
 # :meld is EXPERIMENTAL!!
 %EXPORT_TAGS = (meld => [qw($LoopLevel $ExitLevel &init_signals
@@ -32,6 +32,20 @@ sub txqueue {
     } else {
         push @TXready, map { { retry => 0, code => $_ } } @_;
     }
+}
+
+sub seconds_delta {
+    my ($d) = @_;
+    if ($d <120) {
+	if ($d != int $d) {
+	    sprintf "%.2f secs", $d
+	} else {
+	    "$d sec" . ($d > 1?'s':'')
+	}
+    }
+    elsif ($d < 2*60*60) { int($d/60) ." minutes" }
+    elsif ($d < 2*60*60*24) { int($d/(60**2))." hours" }
+    else { int($d/(60*60*24))." days" }
 }
 
 sub restart {
@@ -75,8 +89,13 @@ use vars qw($BeforeCheckpoint $ChkptTime $TxnTime $Aborts $Commits
 	    $LoopTime);
 $LoopTime = 2;
 
+my $LoopState;
+
 sub before_checkpoint {
     my ($t) = @_;
+    confess $LoopState if $LoopState ne 'start';
+    $LoopState = 'before';
+
     $TXOpen=0;
     $t ||= ObjStore::Transaction::get_current();
     if ($SERVE and !$t->is_aborted) {
@@ -116,10 +135,17 @@ sub before_checkpoint {
 }
 
 sub after_checkpoint {
-    $ChkptTime = tv_interval($BeforeCheckpoint, [gettimeofday]);
+    confess $LoopState if $LoopState ne 'before';
+    $LoopState = 'after';
+
+    $ChkptTime = tv_interval($BeforeCheckpoint) if $BeforeCheckpoint;
 }
 
 sub start_transaction {
+    $LoopState ||= 'after';
+    confess $LoopState if $LoopState ne 'after';
+    $LoopState = 'start';
+
     $TxnTime = [gettimeofday];
     $TXOpen = 1;
     push @TXready, @TXtodo;
@@ -127,10 +153,13 @@ sub start_transaction {
 }
 
 sub dotodo {
+    confess "no transaction" if !lock $TXOpen;
     my @c = @TXready;
     @TXready = ();
-    for my $j (@c) {    my $c = $$j{code};
-        if ($$j{retry}) { push @TXtodo if !$c->(); }
+    for my $j (@c) {
+	if (ref $j ne 'HASH') { warn "ignoring $j"; next; } #XXX
+	my $c = $$j{code};
+        if ($$j{retry}) { push @TXtodo, $j if !$c->(); }
         else { $c->(); }
     }
 }
@@ -164,7 +193,7 @@ sub Loop_single {
                 while (!$Checkpoint and !$TXN->is_aborted) {Event->DoOneEvent() }
             }
         };
-        if ($@) { $TXN->abort; warn }
+        if ($@) { warn; $TXN->abort }
         $o->_checkpoint($ExitLevel);
     }
 
@@ -208,22 +237,29 @@ sub Loop_async {
     local $Status = 'abnormal';
     local $LoopLevel = $LoopLevel+1;
     ++$ExitLevel;
-    if (!$Init) { &init_signals; ++$Init; }
+    warn 1;
     while ($ExitLevel >= $LoopLevel) {
+	warn 1;
 	begin 'update', sub {
 	    # not thread-safe? XXX
-	    Event->timer(-after => $LoopTime, -callback => sub {
-			     $Q->enqueue(DATA => 0, PRIORITY => 1)
-			 });
+#	    Event->timer(-after => $LoopTime, -callback => sub {
+#			     $Q->enqueue(DATA => 0, PRIORITY => 1)
+#			 });
+	    # XXX
+	    warn 1;
             start_transaction();
 	    dotodo() if @TXready;
 	    while (1) {
 		my $do = $Q->dequeue;
-		return if !ref $do;  #checkpoint
+		warn $do;
+		last if !ref $do;  #checkpoint
 		$do->();
 	    }
+	    warn 1;
 	    before_checkpoint();
+	    warn 1;
 	};
+	warn 1;
 	warn if $@;
 	after_checkpoint();
     }
@@ -239,15 +275,26 @@ sub Loop_mt {
     ++$ExitLevel;
     if (!$Init) { &init_signals; ++$Init; }
     while ($ExitLevel >= $LoopLevel) {
-        lock $TXOpen;
-        eval {
-            dotodo() if @TXready;
-            Event->DoOneEvent();
-        };
-        if ($@) {
-            ObjStore::Transction::get_current()->abort();
-            warn;
-        }
+        {
+	    # UNUSEABLE FOR UPDATES XXX
+
+	    # can't lock here, otherwise nested looping
+	    # can't switch transactions
+#	    lock $TXOpen;
+	    eval {
+	        {
+		    lock $TXOpen;
+		    dotodo() if $TXOpen && @TXready;
+		}
+		Event->DoOneEvent();
+	    };
+	    if ($@) {
+		warn;
+		# can't XXX
+#		my $tx = ObjStore::Transaction::get_current();
+#		$tx->abort() if $tx;
+	    }
+	}
     }
     $Status
 }
@@ -357,7 +404,7 @@ __END__
 =head1 DESCRIPTION
 
 EXPERIMENTAL package to integrate ObjStore transactions with Event.
-Implements dynamic transactions.
+Implements dynamic transactions.  Great service is key.
 
 =head1 SEE ALSO
 

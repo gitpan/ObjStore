@@ -185,7 +185,7 @@ struct OSSV {
   void s(OSSVPV *);
   void s(ospv_bridge *mg);
   //get
-  char *stringify();
+  char *stringify(char *tmp = 0);
 };
 
 #define OSvIV32(sv)	((OSPV_iv*)(sv)->vptr)->iv
@@ -342,7 +342,7 @@ struct OSPV_Generic : OSPV_Container {
   virtual void UNSHIFT(SV **base, int items);
   virtual void SPLICE(int offset, int length, SV **top, int count);
   // index
-  virtual void add(OSSVPV *);
+  virtual int add(OSSVPV *);
   virtual void remove(OSSVPV *);
   virtual void configure(SV **top, int items);
   virtual OSSVPV *FETCHx(SV *keyish);

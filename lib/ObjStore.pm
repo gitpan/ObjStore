@@ -18,7 +18,7 @@ use vars
     qw($DEFAULT_OPEN_MODE $MAX_RETRIES),                       # simulated
     qw($EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.39';
+$VERSION = '1.40';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -216,50 +216,57 @@ sub bless ($;$) {
 
 sub require_isa_tree {
     no strict 'refs';
-    my $class = shift;
+    my ($class, $isa) = @_;
+#    warn "require_isa_tree $class $isa";
     unless (@{"$class\::ISA"}) {
 	my $file = $class;
 	$file =~ s,::,/,g;
 	eval { require "$file.pm" };
 	die $@ if $@ && $@ !~ m"Can't locate .*? in \@INC";
     }
-    for my $c (@{"$class\::ISA"}) { require_isa_tree($c) }
-}
-
-sub mark_unloaded {
-    # Is there a hook to undo the damage if eventually loaded? XXX
-    no strict;
-    my $class = shift;
-    warn "[marking $class as UNLOADED]\n" if $ObjStore::REGRESS;
-    $ {"${class}::UNLOADED"} = 1;
-    eval "package $class; ".' sub AUTOLOAD {
-Carp::croak(qq[Sorry, "$AUTOLOAD" is not loaded.  You may need to adjust \@INC in order for your database code to be automatically loaded when the database is opened.\n]);
-};';
-    die if $@;
-}
-
-sub safe_require {
-    no strict 'refs';
-    my ($base, $class) = @_;
-    return if $class eq 'ObjStore::Database';  #usual special case
-    # We can check @ISA because all persistent classes are...
-    unless (@{"$class\::ISA"}) {
-	require_isa_tree($class);
-	# We need to fake-up the class if it wasn't loaded.
-	if (@{"${class}::ISA"} == 0) {
-	    push(@{"${class}::ISA"}, $base);
-	    mark_unloaded($class);
-	}
+    for (my $x=0; $x < @$isa; $x+=2) {
+	require_isa_tree($isa->[$x], $isa->[$x+1]);
     }
+}
+
+sub force_load {
+    # Can the damage be undone if eventually loaded? XXX
+    no strict;
+    my ($class, $isa) = @_;
+
+    return if !@$isa || @{"${class}::ISA"};
+
+#    warn "force_load $class $isa";
+
+    $ {"${class}::UNLOADED"} = 1;
+    for (my $x=0; $x < @$isa; $x+=2) {
+	push @{"${class}::ISA"}, $isa->[$x];
+	force_load($isa->[$x], $isa->[$x+1]);
+    }
+
+#    warn "[ObjStore: marking $class as UNLOADED]\n";# if $ObjStore::REGRESS;
+#    eval "package $class; ".' sub AUTOLOAD {
+#Carp::croak(qq[Sorry, "$AUTOLOAD" is not loaded.  You may need to adjust \@INC in order for your database code to be automatically loaded when the database is opened.\n]);
+#};';
+#    die if $@;
 }
 
 $CLASS_AUTO_LOAD = 1;
 
-$CLASSLOAD = sub {
-    my ($ignore, $base, $class) = @_;
-    safe_require($base, $class) if ($base ne $class and $CLASS_AUTO_LOAD);
+sub _isa_loader {
+    no strict 'refs';
+    my ($bs, $base, $class) = @_;
+#    warn "_isa_loader $bs $base $class";
+    if (!@{"$class\::ISA"} and $CLASS_AUTO_LOAD) {
+	return $class if $class eq 'ObjStore::Database';
+
+	my $isa = $bs ? $bs->[3] : [$base,[]];
+	require_isa_tree($class, $isa);
+	force_load($class, $isa);
+    }
     $class;
 };
+$CLASSLOAD = \&_isa_loader;
 
 sub disable_auto_class_loading {
     $CLASS_AUTO_LOAD = 0;
@@ -666,8 +673,11 @@ use Carp;
 use vars qw($VERSION @OPEN0 @OPEN1 %_ROOT_KEYS);
 
 $VERSION = '1.00';
+
+#EXPERIMENTAL !!!!!!!!!!!!!!!!!!!!!!!
 @OPEN0=(sub { shift->sync_INC() });
 @OPEN1=();
+#EXPERIMENTAL !!!!!!!!!!!!!!!!!!!!!!!
 
 sub database_of { $_[0]; }
 sub segment_of { $_[0]->get_default_segment; }
@@ -734,7 +744,7 @@ sub import_blessing {
     my $bs = $db->_blessto_slot;
     if ($bs) {
 	my $class = $bs->[1];
-	&ObjStore::safe_require('ObjStore::Database', $class);
+	&ObjStore::_isa_loader($bs, 'ObjStore::Database', $class);
 
 	# Must use CORE::bless here -- the database is _already_ blessed, yes?
 	CORE::bless($db, $class);
@@ -1189,7 +1199,7 @@ $VERSION = '1.01';
 # will build at compile time... XXX
 sub new {
     my ($this, $loc, $how) = @_;
-    $loc = $loc->segment_of;
+    $loc = $loc->segment_of if ref $loc;
     my $class = ref($this) || $this;
     my ($av, $sz, $init);
     if (ref $how) {
@@ -1252,7 +1262,7 @@ $VERSION = '1.01';
 # will build at compile time... XXX
 sub new {
     my ($this, $loc, $how) = @_;
-    $loc = $loc->segment_of;
+    $loc = $loc->segment_of if ref $loc;
     my $class = ref($this) || $this;
     my ($hv, $sz, $init);
     if (ref $how) {
@@ -1321,7 +1331,7 @@ $VERSION = '1.00';
 # HashIndex will probably be a separate class? XXX
 sub new {
     my ($this, $loc, @CONF) = @_;
-    $loc = $loc->segment_of;
+    $loc = $loc->segment_of if ref $loc;
     my $class = ref($this) || $this;
     # How should this work by default?
     my $x;

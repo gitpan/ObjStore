@@ -5,7 +5,7 @@ use lib './lib';
 use Config;
 use ObjStore::Config ':ALL';
 use ExtUtils::MakeMaker;
-use vars qw(@PREREQ);
+use vars qw(@PREREQ @MORE @OPT $OPTIMIZE);
 
 if ($] < 5.00404) {
     print "perl 5.004_04 (or better) is required\n";
@@ -95,6 +95,15 @@ ccov_registry$(OBJ_EXT): .ccov-timestamp
     }
 }
 
+use Config;
+my $thrlib = $Config{usethreads} ? '-losthr' : '-losths';
+push @MORE, LIBS => ["-R$ENV{OS_ROOTDIR}/lib -loscol -los $thrlib -lC"];
+#push @MORE, LIBS => ["-R$ENV{OS_ROOTDIR}/lib.sym -loscol -los $thrlib -lC"];
+
+$OPTIMIZE = '-O2 -g';
+push @OPT, "-DOSP_DEBUG";          # optional runtime debugging
+#push @OPT, "-DOSP_SAFE_BRIDGE";    # increment refcnts on reads?
+
 #$Verbose = 1;
 WriteMakefile
     (
@@ -104,10 +113,9 @@ WriteMakefile
 		       # Proc::Daemon
 		     },
      VERSION_FROM => 'lib/ObjStore.pm',
-     OPTIMIZE     => '-g -O2',
+     OPTIMIZE     => $OPTIMIZE,
      EXE_FILES  => [qw/ospeek posh qtposh osperlserver osp_hack/],
-     'LIBS'     => ["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losths"],
-     'DEFINE'   => "-DOSP_DEBUG -DOSP_SAFE_BRIDGE -DSCHEMADIR=$sdir",
+     'DEFINE'   => join(' ', "-DSCHEMADIR=$sdir", @OPT),
      INC      => "-I. -I$OS_ROOTDIR/include",
      'OBJECT'	=> join(' ',reverse
 			"osperl-$schema_version-osschema.o", @CCOV,
@@ -115,6 +123,7 @@ WriteMakefile
 			   tvcommon.o osp_hkey.o ODI.o Splash.o FatTree.o]),
      'XSPROTOARG' => '-prototypes '.($] < 5.00460? '-nolinenumbers' : ''),
      dist	=> {COMPRESS=>'gzip -9f', SUFFIX => 'gz'},
+     @MORE
     );
 
 package MY;

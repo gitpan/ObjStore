@@ -24,6 +24,7 @@ os_segment *osp_thr::sv_2segment(SV *sv)
     return os_segment::get_transient_segment();
   mysv_dump(sv);
   croak("sv_2segment only accepts ObjStore::Segment");
+  return 0;
 }
 
 ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
@@ -491,31 +492,33 @@ void OSSV::s(OSSV *nval)
 }
 */
 
-/* CCov: off */
 char OSSV::strrep1[64];
-char *OSSV::stringify() // debugging ONLY!
+char *OSSV::stringify(char *buf)    //limited to 63 chars
 {
+  if (!buf) {
+    // debugging ONLY!
+    buf = strrep1;
+  }
   switch (natural()) {
   case OSVt_UNDEF: return "<UNDEF>";
-  case OSVt_IV32:  sprintf(strrep1, "%ld", OSvIV32(this)); break;
-  case OSVt_NV:    sprintf(strrep1, "%f", OSvNV(this)); break;
+  case OSVt_IV32:  sprintf(buf, "%ld", OSvIV32(this)); break;
+  case OSVt_NV:    sprintf(buf, "%f", OSvNV(this)); break;
   case OSVt_PV:{
     STRLEN len;
     char *s1 = OSvPV(this, len);
     if (len > 60) len = 60;
-    if (len) {assert(s1); memcpy(strrep1, s1, len);}
-    strrep1[len]=0;
+    if (len) {assert(s1); memcpy(buf, s1, len);}
+    buf[len]=0;
     break;}
-  case OSVt_RV:    sprintf(strrep1, "OBJECT(0x%p)", vptr); break;
-  case OSVt_IV16:  sprintf(strrep1, "%d", xiv); break;
+  case OSVt_RV:    sprintf(buf, "OBJECT(0x%p)", vptr); break;
+  case OSVt_IV16:  sprintf(buf, "%d", xiv); break;
   default:
     warn("SV %s has no string representation", type_2pv());
-    strrep1[0]=0;
+    buf[0]=0;
     break;
   }
-  return strrep1;
+  return buf;
 }
-/* CCov: on */
 
 int OSSV::istrue()
 {
@@ -569,6 +572,7 @@ int OSSV::compare(OSSV *that)
       return OSvIV16(this) - OSvIV16(that);
     default:
       croak("OSSV: type '%s' not comparible", type_2pv(t1));
+      return 0;
     }
   } else {  //unfortunately, this is a fairly likely case
     if (t1 != OSVt_PV && t2 != OSVt_PV) {
@@ -578,14 +582,16 @@ int OSSV::compare(OSSV *that)
       case OSVt_IV32:  v1 = OSvIV32(this); break;
       case OSVt_NV:    v1 = OSvNV(this); break;
       case OSVt_IV16:  v1 = OSvIV16(this); break;
-      default: croak("OSSV: %s not numerically comparible", type_2pv(t1));
+      default:
+	croak("OSSV: %s not numerically comparible", type_2pv(t1)); return 0;
       }
       switch (t2) {
       case OSVt_UNDEF: return 1;
       case OSVt_IV32:  v2 = OSvIV32(that); break;
       case OSVt_NV:    v2 = OSvNV(that); break;
       case OSVt_IV16:  v2 = OSvIV16(that); break;
-      default: croak("OSSV: %s not numerically comparible", type_2pv(t2));
+      default:
+	croak("OSSV: %s not numerically comparible", type_2pv(t2)); return 0;
       }
       assert(v1 != v2); //type mixup should be impossible
       if (v1 < v2)
@@ -595,10 +601,36 @@ int OSSV::compare(OSSV *that)
     } else {
       if (t1 == OSVt_UNDEF) { return -1; }
       else if (t2 == OSVt_UNDEF) { return 1; }
-      else if (t1 == OSVt_PV) {
-	croak("OSSV: cannot compare a string with %s", type_2pv(t2));
-      } else {
-	croak("OSSV: cannot compare a string with %s", type_2pv(t1));
+      else {
+        // This sucks.  We have to stringify the non-string
+        // OSSV and then do a string comparison.  Slow, but correct.
+        STRLEN l1,l2;
+        char buf[90];
+        char *pv1;
+        char *pv2;
+        if (t1 == OSVt_PV) {
+          pv1 = OSvPV(this, l1);
+        } else {
+          this->stringify(buf);
+          pv1 = buf;
+          l1 = strlen(buf);
+        }
+        if (t2 == OSVt_PV) {
+          pv2 = OSvPV(that, l2);
+        } else {
+          that->stringify(buf);
+          pv2 = buf;
+          l2 = strlen(buf);
+        }
+        // copied from above
+        if (!l1) return l2 ? -1 : 0;
+        if (!l2) return 1;
+        int retval = memcmp((void*)pv1, (void*)pv2, l1 < l2 ? l1 : l2);
+        if (retval) return retval < 0 ? -1 : 1;
+        if (l1 == l2)
+          return 0;
+        else
+          return l1 < l2 ? -1 : 1;
       }
     }
   }
@@ -752,12 +784,13 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
   // MUST BE FASTER!!
   dOSP;
   char *CLASS=0;
+  OSPV_Generic *blessinfo=0;
 
   if (classname) {
     if (OSPvBLESS2(this)) {
-      OSPV_Generic *av = (OSPV_Generic*)classname;
-      assert(av);
-      OSSV *str = av->avx(1);
+      blessinfo = (OSPV_Generic*)classname;
+      assert(blessinfo);
+      OSSV *str = blessinfo->avx(1);
       assert(str && str->natural() == OSVt_PV);
       CLASS = OSvPV(str, *CLEN);
     } else {
@@ -776,8 +809,9 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
     if (msvp) toclass = *msvp;
 
     if (!toclass || !SvPOK(toclass)) {		// load and add to CACHE
-      // CAN BE SLOW
+      // CAN BE SLOW AS MUD
       STRLEN len;
+      SV *bsv = osp_thr::ospv_2sv(blessinfo);
       char *oscl = os_class(&len);
       if (len != strlen(oscl)) croak("os_class(): length of %s is wrong", oscl);
       SV *ldr = perl_get_sv("ObjStore::CLASSLOAD", 0);
@@ -787,18 +821,18 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
       SAVETMPS;
       PUSHMARK(SP);
       EXTEND(SP, 3);
-      PUSHs(sv_2mortal(newSVpv("the database is not relavent", 0)));
+      PUSHs(bsv);
       SV *sv1, *sv2;
       assert(len);
       PUSHs(sv1 = sv_2mortal(newSVpv(oscl, len)));
       assert(CLEN && *CLEN);
       PUSHs(sv2 = sv_2mortal(newSVpv(CLASS, *CLEN)));
       PUTBACK;
-      int count = perl_call_sv(ldr, G_SCALAR);
+      int count = perl_call_sv(ldr, G_SCALAR|G_EVAL);
       SPAGAIN;
       toclass = POPs;
-      if (count != 1) {
-	croak("$ObjStore::CLASSLOAD('%s', '%s'): %d != 1 args, $@='%s'", 
+      if (SvTRUE(GvSV(errgv)) || count != 1) {
+	croak("$ObjStore::CLASSLOAD('%s', '%s'): got %d, $@='%s'", 
 	      SvPV(sv1, na), SvPV(sv2, na), count, SvPV(GvSV(errgv), na));
       }
       if (!SvPOK(toclass)) {
@@ -969,7 +1003,8 @@ ospv_bridge::ospv_bridge(OSSVPV *_pv)
   holding = txn->can_update(pv);
   if (holding) {
     enter_txn(txn);
-    if (pv->_refs == 0) croak("attempt to read a deleted object");
+    // hard to tell
+    //    if (pv->_refs == 0) croak("attempt to read a deleted object");
     pv->REF_inc();
   }
 #endif
@@ -981,7 +1016,8 @@ OSSVPV *ospv_bridge::ospv()
 void ospv_bridge::hold()
 {
   if (detached) croak("attempt to hold invalid object");
-  if (pv->_refs == 0) croak("attempt to read a deleted object");
+    // hard to tell
+  //  if (pv->_refs == 0) croak("attempt to read a deleted object");
   if (manual_hold) return;
   manual_hold=1;
   if (!holding) {
@@ -1047,7 +1083,7 @@ void OSPV_Generic::SPLICE(int, int, SV **, int) { NOTFOUND("SPLICE"); }
 
 // INDEX
 OSSVPV *OSPV_Generic::FETCHx(SV*) { NOTFOUND("FETCHx"); return 0; }
-void OSPV_Generic::add(OSSVPV*) { NOTFOUND("add"); }
+int OSPV_Generic::add(OSSVPV*) { NOTFOUND("add"); return 0; }
 void OSPV_Generic::remove(OSSVPV*) { NOTFOUND("remove"); }
 void OSPV_Generic::configure(SV **top, int items)
 { fwd2rep("configure", top, items); }

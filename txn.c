@@ -86,7 +86,7 @@ void osp_thr::boot()
   assert(TXGV);
   // REFCNT_inc(TXGV) ??
   TXStack = perl_get_av("ObjStore::Transaction::Stack", 1);
-  condpair_magic((SV*) TXStack); //init for later
+//  condpair_magic((SV*) TXStack); //init for later
   SvREADONLY_on(TXStack);
 }
 
@@ -241,13 +241,15 @@ osp_bridge::osp_bridge()
   manual_hold = 0;
   next = prev = 0;
   refs = 1;
+  txsv = 0;
 
   // get transaction
-  assert(AvFILL(osp_thr::TXStack) >= 0);
-  SV *txref = *av_fetch(osp_thr::TXStack, AvFILL(osp_thr::TXStack), 0);
-  assert(SvROK(txref));
-  txsv = SvRV(txref);
-  SvREFCNT_inc(txsv);
+  if (AvFILL(osp_thr::TXStack) >= 0) {
+    SV *txref = *av_fetch(osp_thr::TXStack, AvFILL(osp_thr::TXStack), 0);
+    assert(SvROK(txref));
+    txsv = SvRV(txref);
+    SvREFCNT_inc(txsv);
+  }
 }
 
 osp_txn *osp_bridge::get_transaction()

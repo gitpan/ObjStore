@@ -5,7 +5,7 @@ modify it under the same terms as Perl itself.
 
 Name           DSLI  Description                                  Info
 -----------    ----  -------------------------------------------- -----
-ObjStore       am+O  ObjectStore DBMS Interface                   JPRIT
+ObjStore       bm+O  ObjectStore DBMS Interface                   JPRIT
 
 Easy, flexible, lightning-fast persistent via ObjectStore.  Stores
 scalars, hashes, and references without flattening.  Perl databases
@@ -27,7 +27,16 @@ see ./CHANGES for a historical perspective
 ### RECENT CHANGES ###
 
 
-** Released 1.05
+** 07-05-97 Released 1.06 
+
+- Improved peek.  Now peek from the command line - 'ospeek <database>'!
+
+- Database::get_all_roots Root::get_name
+
+- Fixes...
+
+
+** 07-03-97 Released 1.05
 
 - ObjectStore exceptions trigger a dump of the perl call stack.
 
@@ -36,23 +45,4 @@ see ./CHANGES for a historical perspective
 - Bug fixes.
 
 - $store->set_fetch_policy(os_fetch_policy, os_int32)
-
-
-** Released 1.03
-
-- Investigated schema evolution.  Will provide a database evolver
-going forward.
-
-- Can't wait for reasonable tied arrays!  Added array-based Sacks.
-They're not tied, but at least they're inefficient.
-
-- Found and fixed problems with reference counting.  Now the tests
-can be run and the database does not grow.
-
-- Blessings are now persistent!  (Untested)
-
-- Re-designed the make system again.
-
-- Started writing documentation.  (Yawn.)
-
 

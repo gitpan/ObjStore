@@ -74,7 +74,6 @@ ok; #1
     };
     die "[Abort] $@\n" if $@;
     
-    $DB->close;
     ok;
 }
 exit 0;

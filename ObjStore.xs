@@ -131,7 +131,7 @@ OSSV::~OSSV()
 { undef(); }
 
 // references and roots can REFER
-// hashes and arrays (OSSVPV) can BE REFERRED TO
+// OSSV and OSSVPV can BE REFERRED TO
 
 void OSSV::REF_inc()
 {
@@ -147,17 +147,7 @@ void OSSV::REF_dec()
 #ifdef DEBUG_REFCNT
   warn("OSSV::REF_dec() 0x%x to %d", this, _refs);
 #endif
-  REF_chk();
-}
-
-void OSSV::REF_chk()
-{
-  if (_refs <= 0) {
-#ifdef DEBUG_REFCNT
-    warn("OSSV::REF_chk() =%d deleting 0x%x", _refs, this);
-#endif
-    delete this;
-  }
+  if (_refs <= 0) delete this;
 }
 
 int OSSV::PvREFok()
@@ -898,6 +888,8 @@ static os_fetch_policy str_2fetch(char *str)
   croak("str_2fetch: %s unrecognized", str);
 }
 
+//----------------------------- Exceptions
+
 static void osperl_exception_hook(tix_exception_p cause, os_int32 value,
 	os_char_p report)
 {
@@ -977,7 +969,9 @@ os_database::open(pathname, read_only, create_mode)
 	int create_mode
 
 void
-os_database::close()
+os_database::DESTROY()
+	CODE:
+	THIS->close();
 
 void
 os_database::destroy()
@@ -1039,6 +1033,21 @@ os_database::get_all_segments()
 	for (xx=0; xx < num; xx++) {
 		PUSHs(sv_setref_pv( newSViv(0) , CLASS, segs[xx] ));
 	}
+	delete [] segs;
+
+void
+os_database::get_all_roots()
+	PPCODE:
+	char *CLASS = "ObjStore::Root";
+	os_int32 num = THIS->get_n_roots();
+	os_database_root **roots = new os_database_root*[num];
+	THIS->get_all_roots(num, roots, num);
+	EXTEND(sp, num);
+	int xx;
+	for (xx=0; xx < num; xx++) {
+		PUSHs(sv_setref_pv( newSViv(0), CLASS, roots[xx] ));
+	}
+	delete [] roots;
 
 OSSV *
 os_database::newHV(rep)
@@ -1094,11 +1103,14 @@ os_database_root::destroy()
 	if (ossv) ossv->REF_dec();
 	delete THIS;
 
+char *
+os_database_root::get_name()
+
 SV *
 os_database_root::get_value()
 	CODE:
 	if (!THIS) XSRETURN_UNDEF;
-	OSSV *ossv = (OSSV*) THIS->get_value();  // check type! XXX
+	OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
 	ST(0) = ossv_2sv(ossv);
 
 void
@@ -1108,8 +1120,8 @@ os_database_root::set_value(sv)
 	OSSV *ossv = sv_2ossv(sv);
 	if (!ossv) croak("os_database_root::set_value(sv): bad type");
 	if (!THIS) croak("ObjStore::ROOT->set_value(nval)");
-	OSSV *prior = (OSSV*) THIS->get_value();
-	if (prior) {		// check type! XXX
+	OSSV *prior = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
+	if (prior) {
 	  prior->REF_dec();
 	}
 	THIS->set_value(ossv, OSSV::get_os_typespec());
@@ -1210,17 +1222,11 @@ MODULE = ObjStore	PACKAGE = ObjStore::HV
 char *
 OSSV::Type()
 
-void
-OSSV::DESTROY()
-	CODE:
-	if (!THIS) croak("THIS invalid");
-	THIS->REF_chk();
-
 SV *
 OSSV::FETCH(key)
 	char *key;
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_hv) croak("THIS=%s is not a HASH", THIS->Type());
 	OSSVPV *hv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(hv);
@@ -1231,7 +1237,7 @@ OSSV::_STORE(key, nval)
 	char *key;
 	SV *nval;
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_hv) croak("THIS=%s is not a HASH", THIS->Type());
 	OSSVPV *hv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(hv);
@@ -1241,7 +1247,7 @@ void
 OSSV::DELETE(key)
 	char *key;
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_hv) croak("THIS=%s is not a HASH", THIS->Type());
 	OSSVPV *hv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(hv);
@@ -1251,7 +1257,7 @@ int
 OSSV::EXISTS(key)
 	char *key;
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_hv) croak("THIS=%s is not a HASH", THIS->Type());
 	OSSVPV *hv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(hv);
@@ -1262,7 +1268,7 @@ OSSV::EXISTS(key)
 SV *
 OSSV::FIRSTKEY()
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_hv) croak("THIS=%s is not a HASH", THIS->Type());
 	OSSVPV *hv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(hv);
@@ -1272,7 +1278,7 @@ SV *
 OSSV::NEXTKEY(lastkey)
 	char *lastkey;
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_hv) croak("THIS=%s is not a HASH", THIS->Type());
 	OSSVPV *hv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(hv);
@@ -1281,7 +1287,6 @@ OSSV::NEXTKEY(lastkey)
 void
 OSSV::CLEAR()
 	CODE:
-	if (!THIS) croak("THIS invalid");
 	if (THIS->natural() != ossv_hv) croak("THIS=%s is not a HASH", THIS->Type());
 	OSSVPV *hv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(hv);
@@ -1295,16 +1300,10 @@ char *
 OSSV::Type()
 
 void
-OSSV::DESTROY()
-	CODE:
-	if (!THIS) croak("THIS invalid");
-	THIS->REF_chk();
-
-void
 OSSV::a(nval)
 	SV *nval;
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_cv) croak("THIS=%s is not a SACK", THIS->Type());
 	OSSVPV *cv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(cv);
@@ -1314,7 +1313,7 @@ void
 OSSV::r(nval)
 	SV *nval;
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_cv) croak("THIS=%s is not a SACK", THIS->Type());
 	OSSVPV *cv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(cv);
@@ -1323,7 +1322,7 @@ OSSV::r(nval)
 SV *
 OSSV::first()
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_cv) croak("THIS=%s is not a SACK", THIS->Type());
 	OSSVPV *cv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(cv);
@@ -1332,7 +1331,7 @@ OSSV::first()
 SV *
 OSSV::next()
 	CODE:
-	if (!THIS) croak("THIS invalid");
+	assert(THIS);
 	if (THIS->natural() != ossv_cv) croak("THIS=%s is not a SACK", THIS->Type());
 	OSSVPV *cv = (OSSVPV *) THIS->u.pv.vptr;
 	assert(cv);

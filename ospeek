@@ -1,0 +1,22 @@
+#!/nw/dist/prod/bin/osperl -w
+
+use ObjStore qw(:ALL);
+
+sub usage {
+    print "ospeek <database>\n";
+    exit;
+}
+
+&usage if @ARGV != 1;
+
+{
+    my $db = shift @ARGV;
+    my $DB = ObjStore::Database->open($db, 0, 0666);
+    try_read {
+	for my $r ($DB->get_all_roots) {
+	    my $top = $r->get_value;
+	    print "ObjStore::Root ".$r->get_name." ". peek(1, $top);
+	}
+    };
+    die "[Abort] $@\n" if $@;
+}

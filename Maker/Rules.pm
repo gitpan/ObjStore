@@ -10,6 +10,7 @@ use strict;
 use Carp;
 use Cwd;
 use Config;
+use IO::File;
 use File::stat;
 use ExtUtils::Embed;
 
@@ -53,10 +54,10 @@ sub set_defaults {
 
     if ($hint eq 'perl-module') {
 	$o->{install_dirs} = {
-	    'bin' => ["./blib/bin", $Config{installbin}],
+	    'bin' => ["./blib/bin", $Config{installbin}, $Config{bin}],
 	    'man1' => ["./blib/man/man1", $Config{installman1dir}],
 	    'man3' => ["./blib/man/man3", $Config{installman3dir}],
-	    'script' => ["./blib/bin", $Config{installscript}],
+	    'script' => ["./blib/bin", $Config{installscript}, $Config{script}],
 	    'arch' => ["./blib/arch", $Config{installsitearch}],
 	    'lib' => ["./blib/lib", $Config{installsitelib}],
 	};
@@ -142,10 +143,18 @@ sub _populate_install {
 	    my ($blib,$rdir) = @{$Dest->{$k}};
 	    
 	    for my $f (@$v) {
-		if (!$real) {
-		    $o->x('cp', $f, "$blib/$f") if -e $f;
+		if ($f =~ m|/$|) {
+		    if (!$real) {
+			$o->x('mkdir', "$blib/$f");
+		    } else {
+			$o->x('mkdir', "$rdir/$f");
+		    }
 		} else {
-		    $o->x('cp', "$blib/$f", "$rdir/$f");
+		    if (!$real) {
+			$o->x('cp', $f, "$blib/$f") if -e $f;
+		    } else {
+			$o->x('cp', "$blib/$f", "$rdir/$f");
+		    }
 		}
 	    }
 	}
@@ -164,6 +173,11 @@ sub populate_blib {
 
 sub install {
     my ($o, $map) = @_;
+    if ($map->{bin}) {
+	for my $b (@{$map->{bin}}) {
+	    $o->exe($b, "$o->{install_dirs}{bin}[2]/$b");
+	}
+    }
     new Maker::Seq($o->_make_install_dirs(1, $map),
 		   $o->_populate_install(1, $map),
 		   new Maker::Unit('_inst', sub {}));
@@ -184,6 +198,7 @@ sub uninstall {  # merge with install XXX
 sub opt {
     my ($o, $opt) = @_;
     if ($opt) {
+	# -DNDEBUG to turn off assert
 	$o->flags('cc', '-O');
 	$o->flags('cxx', '-O');
     } else {
@@ -206,7 +221,7 @@ sub objstore {
     $o->{osdbdir} = $schdir;
 
     die "OS_ROOTDIR not set" unless defined $ENV{OS_ROOTDIR};
-    die "OS_LDBBASE not set" unless defined $ENV{OS_LDBBASE};
+    $ENV{OS_LIBDIR} = "$ENV{OS_ROOTDIR}/lib" if !defined $ENV{OS_LIBDIR};
 
     $o->flags('cxx', '-vdelx', '-pta'); # fix vector delete & full tmpl instantiation
     $o->flags('cxx', "-I$ENV{OS_ROOTDIR}/include", qq(-DSCHEMADIR="$o->{osdbdir}"));
@@ -221,14 +236,16 @@ sub objstore {
 	if (defined $features{$_}) {
 	    die $_ if !defined $OS_FEATURE->{$_};
 	    $o->flags('ld', $OS_FEATURE->{$_}{lib});
-	    $o->flags('LDB', "$ENV{OS_LDBBASE}/lib/".$OS_FEATURE->{$_}{ldb}) if
+	    $o->flags('LDB', "$ENV{OS_LIBDIR}/".$OS_FEATURE->{$_}{ldb}) if
 		defined $OS_FEATURE->{$_}{ldb};
 	}
     }
     $o->flags('ld', "-los", "-losths");
     
     $o->clean("$tag-osschema.c");
-    # osrm -f foo.db
+    $o->spotless(sub {
+	$o->x("osrm -f $o->{osdbdir}/$tag.adb");
+    });
 
     new Maker::Seq(new Maker::Unit("ossg $tag", sub {
 	if (newer("$tag-osschema.c", "$tag-schema.c")) {
@@ -302,6 +319,37 @@ sub xs {
 	}
     }),
 		   $o->cxx("$f.c"));
+}
+
+sub HashBang {
+    my $o = shift;
+    my $ename = shift;
+    my @REST = @_;
+    new Maker::Unit(sub {
+	my $exe = $o->exe($ename);
+	my ($s,$d) = (new IO::File, new IO::File);
+	for my $bin (@REST) {
+	    {
+		$s->open($bin) or croak "$bin not found";
+		my $l1 = <$s>;
+		my $args;
+		if ($l1 =~ /^\#\!\S+\s(.*)$/) {
+		    $args = $1;
+		} else {
+		    croak "$bin doesn't start with \#!";
+		}
+		$d->open(">$bin.new") or croak "open $bin.new: $!";
+		print $d "#!$exe $args\n";
+		while (defined(my $l=<$s>)) {
+		    print $d $l;
+		}
+		$s->close;
+		$d->close;
+	    }
+	    rename("$bin.new", $bin) or croak "rename $bin.new $bin: $!";
+	    chmod(oct('777'), $bin) or croak "chmod 777 $bin: $!";
+	}
+    });
 }
 
 sub link {

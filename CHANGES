@@ -3,6 +3,24 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** Released 1.03
+
+- Investigated schema evolution.  Will provide a database evolver
+going forward.
+
+- Can't wait for reasonable tied arrays!  Added array-based Sacks.
+They're not tied, but at least they're inefficient.
+
+- Found and fixed problems with reference counting.  Now the tests
+can be run and the database does not grow.
+
+- Blessings are now persistent!  (Untested)
+
+- Re-designed the make system again.
+
+- Started writing documentation.  (Yawn.)
+
+
 ** Released 1.02
 
 - Improved make file.  Fixed blib.  Usage now looks like this:

@@ -8,63 +8,6 @@
 # Everything in here should be generic relative to the programming language.
 # Extensive use of anonymous subs works quite nicely.
 
-=head1 NAME
-
-Maker - Yet Another Make-like Program
-
-=head1 DESCRIPTION
-
-Why yet another make?  I have never found a make program that I
-thought was easy enough to use.  In fact, a year of two ago I wrote a
-make package similar to this but it turned out too hard to use and I
-ended up discarding it.  Here are some features that make this maker
-unique:
-
-=item Due to the adherence to object-oriented organization, multiple
-targets can easily be built in the same be-file in a natural and
-obvious manner.
-
-=item Rules have two phases of execution.  Once when they are added
-to the rule tree and once when they are executed.  The complete power
-of perl is available at both times.  Rules do not need to be written
-only in terms of pattern matching.  This makes for more organic, 
-intelligent behavior.
-
-=item The reliance of the rule selection engine is kept to an absolute
-minimum.  Be-files state exactly what to do in a direct procedural
-fashion.  The full power of perl is available to factor out duplicate
-information.
-
-=head1 TODO
-
-=item A front-end needs to be designed to allow be-files to be
-very short and simple.  I tend to think of the be-files as
-a target language for a front-end preprocessor.  At least there
-should be a script to get people up and compiling quick.
-
-=item Makefile.PL translator & front-end for be-files.
-
-=item Generate dependencies with makedepend and grok them.
-
-=item RCS/SCCS/ClearCase support.
-
-=item Parallel builds on multiple hosts.  (Should be easy.)
-
-=item The documentation.
-
-=head1 SYNOPSIS
-
-=head1 AUTHOR
-
-Joshua Pritikin, pritikin@mindspring.com
-
-=head1 SEE ALSO
-
-MakeMaker, /bin/make, gmake, nmake, imake, build, cook, plan9 make,
-clearmake, ParallelMake, etc..
-
-=cut
-
 my $NEXT = 'aaa';
 
 package Maker::Package;
@@ -112,11 +55,25 @@ sub new {
 	exit;
     });
     $o->A('clean', 'Delete intermediate files.', sub {
-	for my $yuck (@{$o->{clean}}) { $o->x('rm', glob($yuck)); }
+	for my $yuck (@{$o->{clean}}) {
+	    if (!ref $yuck) {
+		$o->x('rm', glob($yuck));
+	    } elsif (ref $yuck eq 'CODE') {
+		&$yuck;
+	    } else {
+		die "How to clean '$yuck' ?";
+	    }
+	}
     });
     $o->A('spotless', 'Delete all generated files.', sub {
 	for my $yuck (@{$o->{clean}}, @{$o->{spotless}}) {
-	    $o->x('rm', glob($yuck));
+	    if (!ref $yuck) {
+		$o->x('rm', glob($yuck));
+	    } elsif (ref $yuck eq 'CODE') {
+		&$yuck;
+	    } else {
+		die "How to clean '$yuck' ?";
+	    }
 	}
     });
     $o->A('tested', 'Run regression tests.', sub {
@@ -195,7 +152,7 @@ sub post_help {
 sub pm_2version {
     my ($o, $file) = @_;
     my $fh = new IO::File;
-    $fh->open($file) or die "open $file: $!";
+    $fh->open($file) or croak "open $file: $!";
     my $ok=0;
     while (defined (my $l =<$fh>)) {
 	if ($l =~ m/\$VERSION\s*\=\s*([\d.]+)/) {

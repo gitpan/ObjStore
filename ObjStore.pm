@@ -2,10 +2,11 @@
 # This package is free software; you can redistribute it and/or
 # modify it under the same terms as Perl itself.
 package ObjStore;
+require 5.004;
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-$VERSION = 1.05;
+$VERSION = 1.06;
 
 =head1 NAME
 
@@ -19,12 +20,17 @@ ObjStore - Perl extension for ObjectStore ODMS
   my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
 
   try_update {
-      $top = $DB->root('megabase', $DB->newHV('dict'));
+      my $top = $DB->root('whiteboard');
+      if ($top) {
+	  print "Very impressive.  I see you are already an expert.\n";
+	  exit;
+      }
+      $top = $DB->root('whiteboard', $DB->newHV('dict'));
       for (my $x=1; $x < 1000000000; $x++) {
 	  $top->{$x} = {
 	      id => $x,
 	      m1 => "I will not talk in ObjectStore/Perl class.",
-	      m2 => "I will read the documentation.",
+	      m2 => "I will study the documentation before asking questions.",
 	  };
       }
   };
@@ -32,16 +38,15 @@ ObjStore - Perl extension for ObjectStore ODMS
 
 =head1 DESCRIPTION
 
-[Run peek on one of our databases so people understand the simplicity
-that comes from not having a rigid schema.]
+The new SQL of the late 1990s.  The end of relational databases.
 
 =head1 OBJECTSTORE PHILOSOPHY
 
 ObjectStore is outrageously powerful and sophisticated.  It actually
 does way too much for the average get-the-job-done programmer.  The
-theme of this interface to ObjectStore is simplicity and easy of use.
+theme of this interface for ObjectStore is simplicity and easy of use.
 The performance of raw ObjectStore is so good that even with a gunky
-perl layer, benchmarks will find relational databases left on the
+Perl layer, benchmarks will find relational databases left on the
 bookshelf.
 
 Specifically, the interface is optimized for flexibility, then memory
@@ -51,24 +56,24 @@ additional C++ objects.
 
 =head1 TRANSACTIONS
 
-1. You cannot access persistent data outside of a transaction.  Care
-must be taken that all persistent variables go out of scope before
-transactions complete.
+1. You cannot access or modify persistent data outside of a transaction.
 
     {
 	my $var;
 	try_update {
 	    $var = $DB->root('top');
 	};
-    }      # $var destroy causes ObjStore exception
+	$var->{foo} = 2;      # $var usage causes ObjStore exception
+    }
 
-2. It is impractical to use 'read' transactions because
-collections include embedded cursors.  You cannot be able to iterate
-over collections without modifying the cursors in the database.  This
-should be construed as a bug in perl.  As a work around, read
-transactions are implemented with the abort_only transaction mode.
-This mode allows you to modify the database but will not commit the
-changes.
+2. It is impractical to use read_only transactions because collections
+include embedded cursors.  You cannot iterate over collections without
+modifying the cursors in the database.  This should be construed as a
+bug in the Perl core.  As a work-around, read transactions are
+implemented with the abort_only transaction mode.  This mode allows
+you to modify the database but will not commit the changes.  However,
+you should not assume that read transactions will always be
+implemented with abort_only.
 
 =head1 REFERENCE COUNTING
 
@@ -79,30 +84,30 @@ require a custom solution.
 1. All data allocated in the database is reference counted separately
 from transient data.
 
-2. You cannot take a reference to a scalar value.
+2. You cannot take a reference to a persistent scalar value.  Is there
+a good reason to allow this?
 
 =head1 CONTAINERS
 
 There are a few considerations when creating a container: which
-segment, which symantics, and which representation.
+segment, which symantics, and which implementation.
 
 =head2 HASHES
 
-    $DB->newHV('array');
-    $DB->newHV('dict');
+    my $h1 = $store->newTiedHV('array');
+    $h1->{abc} = 3;
 
-    my $seg = $DB->create_segment;
-    $seg->newHV('array');
-    $seg->newHV('dict');
+    my $h2 = $store->newTiedHV('dict');
+    $h2->{def} = 3;
 
-Array representations have one caveat:  if they need to resize, any
-transient references you might have will become pointers to random
-memory.  This case actually doesn''t come up very often.  To mess
-up, you need to go through these contortions:
+Array implementations have one caveat: if they need to resize, any
+transient references you might have around will become pointers to
+random memory.  This case actually doesn''t come up very often.  To
+mess up, you need to go through these contortions:
 
     my $top = $DB->newTiedHV('array');
     my $dict = $top->{dict} = $DB->newHV('dict');
-    for (1..14) { $top->{$_} = $_; }   # cause resize of $top
+    for (1..14) { $top->{$_} = $_; }   # force resize of $top
 
     $dict->{foo} = 'bar';              # $dict points to random OOPS!
 
@@ -111,7 +116,7 @@ up, you need to go through these contortions:
 
 =head2 SACKS
 
-    $DB->newSack('array');
+    $store->newSack('array');
 
 Sacks are sequential access containers.  They support the following 
 methods:
@@ -134,7 +139,7 @@ Joshua Pritikin, pritikin@mindspring.com
 
 =head1 SEE ALSO
 
-ObjectStore Documentation
+Perl documentation, ObjectStore documentation
 
 =cut
 
@@ -188,10 +193,8 @@ sub peek {
     } else {
 	($lv, $h) = @_;
     }
-    if (!ref $h) {
-	print ' 'x$lv . "$h\n";
-	return;
-    }
+    if (!ref $h) { return ' 'x$lv . peek_scalar($h). "\n";  }
+    my $s = '';
     my $class = ref $h;
     if ($class eq 'HASH') {
 	my @S;
@@ -201,19 +204,20 @@ sub peek {
 	    push(@S, [$k,$v]);
 	}
 	@S = sort { $a->[0] cmp $b->[0] } @S;
-	my $limit = (@S > 20) ? 2 : $#S;
+	my $big = @S > 20;
+	my $limit = $big ? 2 : $#S;
+	$s .= "$class {\n";
 	for $x (0..$limit) {
 	    my ($k,$v) = @{$S[$x]};
 
 	    if (ref $v) {
-		print ' 'x$lv . "$k => {\n";
-		peek($lv+1, $v);
-		print ' 'x$lv . "},\n";
+		$s .= ' 'x$lv . "$k ".peek($lv+2, $v);
 	    } else {
-		$v = 'undef' if !defined $v;
-		print ' 'x$lv . "$k => '$v'\n";
+		$s .= ' 'x$lv . "$k => ".peek_scalar($v).",\n";
 	    }
 	}
+	$s .= ' 'x$lv . "...\n" if $big;
+	$s .= ' 'x$lv . "},\n";
     } elsif (isa($class, 'ObjStore::CV')) {
 	my @S;
 	my $x=0;
@@ -221,21 +225,36 @@ sub peek {
 	    last if $x++ > 21;
 	    push(@S, $v);
 	}
-	my $limit = (@S > 20) ? 2 : @S;
+	my $big = @S > 20;
+	my $limit = $big ? 2 : @S;
+	$s .= "$class {\n";
 	for (my $v=$h->first; $v; $v=$h->next) {
 	    last if $limit-- <= 0;
 
 	    if (ref $v) {
-		print ' 'x$lv . "{\n";
-		peek($lv+1, $v);
-		print ' 'x$lv . "},\n";
+		$s .= ' 'x$lv . peek($lv+2, $v);
 	    } else {
-		$v = 'undef' if !defined $v;
-		print ' 'x$lv . "'$v'\n";
+		$s .= ' 'x$lv . peek_scalar($v).",\n";
 	    }
 	}
+	$s .= ' 'x$lv . "...\n" if $big;
+	$s .= ' 'x$lv . "},\n";
     } else {
 	die "Unknown class '$class'";
+    }
+    $s;
+}
+
+sub peek_scalar {
+    my ($val) = @_;
+
+    if (!defined $val) {
+	'undef';
+    } elsif ($val =~ /^-?[1-9]\d{0,8}$/) {
+	$val;
+    } else {
+	$val =~ s/([\\\'])/\\$1/g;
+	'\'' . $val .  '\'';
     }
 }
 

@@ -150,7 +150,7 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
   case SVt_PVMG:{
     SV *rv = sv_2mortal(newRV_noinc(br));
     (void)sv_bless(rv, stash);
-    DEBUG_wrap(warn("mgwrap %p", ospv); Perl_sv_dump(br););
+    DEBUG_wrap({ warn("mgwrap %p", ospv); Perl_sv_dump(br); });
     return rv;}
   case SVt_PVHV:
   case SVt_PVAV:{
@@ -174,7 +174,7 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
 
     (void)sv_bless(rv, stash);
     
-    DEBUG_wrap(warn("[av]wrap %p", ospv); Perl_sv_dump(rv););
+    DEBUG_wrap({ warn("[av]wrap %p", ospv); Perl_sv_dump(rv); });
     return rv;}
   }
   croak("osp::ossv_2sv: unknown perl type (%d)", ospv->get_perl_type());
@@ -365,6 +365,21 @@ void OSSV::FORCEUNDEF()
 
 int OSSV::natural() const
 { return OSvTYPE(this); }
+
+int OSSV::folded_typeof() const
+{
+  int ty = OSvTYPE(this);
+  switch (ty) {
+  case OSVt_UNDEF:
+  case OSVt_UNDEF2:
+    return OSVt_UNDEF;
+  case OSVt_PV:
+  case OSVt_1CHAR:
+    return OSVt_PV;
+  default:
+    return ty;
+  }
+}
 
 int OSSV::is_set()
 { return (OSvTYPE(this) != OSVt_UNDEF && OSvTYPE(this) != OSVt_UNDEF2); }
@@ -573,12 +588,12 @@ char *OSSV::stringify(char *buf)    //limited to 63 chars
     STRLEN len;
     char *s1 = OSvPV(this, len);
     if (len > 60) len = 60;
-    if (len) {assert(s1); memcpy(buf, s1, len);}
+    if (len) memcpy(buf, s1, len);
     buf[len]=0;
     break;}
   case OSVt_RV:    sprintf(buf, "OBJECT(0x%p)", vptr); break;
   case OSVt_IV16:  sprintf(buf, "%d", xiv); break;
-  case OSVt_1CHAR: sprintf(buf, "%c", (char*) &xiv); break;
+  case OSVt_1CHAR: sprintf(buf, "'%c'", (char*) &xiv); break;
   default:
     warn("SV %s has no string representation", type_2pv());
     buf[0]=0;
@@ -608,47 +623,49 @@ int OSSV::istrue()
 
 int OSSV::compare(OSSV *that)
 {
-  int t1 = natural();
-  int t2 = that->natural();
+  int retval;
+  int t1 = folded_typeof();
+  int t2 = that->folded_typeof();
   if (t1 == t2) {
     switch (t1) {
     case OSVt_UNDEF:
-    case OSVt_UNDEF2:
-      return 0;
+      retval = 0; goto RET;
     case OSVt_IV32:  
-      return OSvIV32(this) - OSvIV32(that);
+      retval = OSvIV32(this) - OSvIV32(that); goto RET;
     case OSVt_NV:
-      if (OSvNV(this) == OSvNV(that))
-	return 0;
-      else if (OSvNV(this) < OSvNV(that))
-	return -1;
-      else
-	return 1;
-    case OSVt_PV: case OSVt_1CHAR:{  //adapted from sv_cmp
+      if (OSvNV(this) == OSvNV(that)) {
+	retval = 0; goto RET;
+      } else if (OSvNV(this) < OSvNV(that)) {
+	retval = -1; goto RET;
+      } else {
+	retval = 1; goto RET;
+      }
+    case OSVt_PV: {  //adapted from sv_cmp
       STRLEN l1,l2;
       char *pv1 = OSvPV(this, l1);
       char *pv2 = OSvPV(that, l2);
-      if (!l1) return l2 ? -1 : 0;
-      if (!l2) return 1;
-      int retval = memcmp((void*)pv1, (void*)pv2, l1 < l2 ? l1 : l2);
-      if (retval) return retval < 0 ? -1 : 1;
-      if (l1 == l2)
-	return 0;
-      else
-	return l1 < l2 ? -1 : 1;
+      if (!l1) { retval = l2 ? -1 : 0; goto RET; }
+      if (!l2) { retval = 1; goto RET; }
+      retval = memcmp((void*)pv1, (void*)pv2, l1 < l2 ? l1 : l2);
+      if (retval) { retval = retval < 0 ? -1 : 1; goto RET; }
+      if (l1 == l2) {
+	retval = 0; goto RET;
+      } else {
+	retval = l1 < l2 ? -1 : 1; goto RET;
+      }
     }
     case OSVt_IV16:
-      return OSvIV16(this) - OSvIV16(that);
+      retval = OSvIV16(this) - OSvIV16(that);
+      goto RET;
     default:
       croak("OSSV: type '%s' not comparible", type_2pv(t1));
       return 0;
     }
   } else {  //unfortunately, this is a fairly likely case
-    if (t1 != OSVt_PV && t1 != OSVt_1CHAR &&
-	t2 != OSVt_PV && t2 != OSVt_1CHAR) {
+    if (t1 != OSVt_PV && t2 != OSVt_PV) {
       double v1,v2;
       switch (t1) {
-      case OSVt_UNDEF: case OSVt_UNDEF2: return -1;
+      case OSVt_UNDEF: retval = -1; goto RET;
       case OSVt_IV32:  v1 = OSvIV32(this); break;
       case OSVt_NV:    v1 = OSvNV(this); break;
       case OSVt_IV16:  v1 = OSvIV16(this); break;
@@ -656,7 +673,7 @@ int OSSV::compare(OSSV *that)
 	croak("OSSV: %s not numerically comparible", type_2pv(t1)); return 0;
       }
       switch (t2) {
-      case OSVt_UNDEF: case OSVt_UNDEF2: return 1;
+      case OSVt_UNDEF: retval = 1; goto RET;
       case OSVt_IV32:  v2 = OSvIV32(that); break;
       case OSVt_NV:    v2 = OSvNV(that); break;
       case OSVt_IV16:  v2 = OSvIV16(that); break;
@@ -664,13 +681,14 @@ int OSSV::compare(OSSV *that)
 	croak("OSSV: %s not numerically comparible", type_2pv(t2)); return 0;
       }
       assert(v1 != v2); //type mixup should be impossible
-      if (v1 < v2)
-	return -1;
-      else 
-	return 1;
+      if (v1 < v2) {
+	retval = -1; goto RET;
+      } else {
+	retval =  1; goto RET;
+      }
     } else {
-      if (t1 == OSVt_UNDEF || t1 == OSVt_UNDEF2) { return -1; }
-      else if (t2 == OSVt_UNDEF || t2 == OSVt_UNDEF2) { return 1; }
+      if (t1 == OSVt_UNDEF) { retval = -1; goto RET; }
+      else if (t2 == OSVt_UNDEF) { retval = 1; goto RET; }
       else {
         // This sucks.  We have to stringify the non-string
         // OSSV and then do a string comparison.  Slow, but correct.
@@ -678,14 +696,14 @@ int OSSV::compare(OSSV *that)
         char buf[90];
         char *pv1;
         char *pv2;
-        if (t1 == OSVt_PV || t1 == OSVt_1CHAR) {
+        if (t1 == OSVt_PV) {
           pv1 = OSvPV(this, l1);
         } else {
           this->stringify(buf);
           pv1 = buf;
           l1 = strlen(buf);
         }
-        if (t2 == OSVt_PV || t1 == OSVt_1CHAR) {
+        if (t2 == OSVt_PV) {
           pv2 = OSvPV(that, l2);
         } else {
           that->stringify(buf);
@@ -693,17 +711,27 @@ int OSSV::compare(OSSV *that)
           l2 = strlen(buf);
         }
         // copied from above
-        if (!l1) return l2 ? -1 : 0;
-        if (!l2) return 1;
-        int retval = memcmp((void*)pv1, (void*)pv2, l1 < l2 ? l1 : l2);
-        if (retval) return retval < 0 ? -1 : 1;
-        if (l1 == l2)
-          return 0;
-        else
-          return l1 < l2 ? -1 : 1;
+        if (!l1) { retval = l2 ? -1 : 0; goto RET; }
+        if (!l2) { retval = 1; goto RET; }
+        retval = memcmp((void*)pv1, (void*)pv2, l1 < l2 ? l1 : l2);
+        if (retval) { retval = retval < 0 ? -1 : 1; goto RET; }
+        if (l1 == l2) {
+          retval = 0; goto RET;
+        } else {
+          retval = l1 < l2 ? -1 : 1; goto RET;
+	}
       }
     }
   }
+  croak("compare didn't");
+
+ RET:
+  DEBUG_compare({
+    char buf1[64];
+    warn("compare '%s' '%s' => %d",
+	 this->stringify(buf1), that->stringify(), retval);
+  });
+  return retval;
 }
 
 /* CCov: off */
@@ -763,6 +791,10 @@ void OSSV::verify_correct_compare()
   o2.s("test2", 5);
   assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
   
+  o1.s("a", 1);
+  o2.s("abc", 3);
+  assert(o1.compare(&o2) < 0);
+
   // there's nothing like 100% ...
 }
 
@@ -1012,6 +1044,9 @@ int OSSVPV::can_update(void *vptr)
   }
 }
 
+void OSSVPV::_debug1(void *)
+{}
+
 static void save_cxxdelete(void *blk)
 { delete blk; }
 
@@ -1230,6 +1265,8 @@ void osp_pathexam::init(int _desc)
   descending = _desc;
   pathcnt = 0;
   keycnt = 0;
+  target = 0;
+  conflict = 0;
 }
 
 void osp_pathexam::load_path(OSSVPV *paths)
@@ -1268,7 +1305,6 @@ OSSV *osp_pathexam::path_2key(int zpath, OSSVPV *obj, char _mode)
   for (int px=0; px < len; px++) {
     OSSV *tmp1 = path->avx(px);
     thru = OSvPV(tmp1, thru_len);
-    if (mode != 'x') trail[trailcnt++] = obj;
     if (px < len-1) {
       obj = obj->traverse1(*this);
       if (!obj) break;
@@ -1289,9 +1325,10 @@ void osp_pathexam::set_conflict()
 
 void osp_pathexam::no_conflict()
 {
-  assert(trailcnt > 0 && trailcnt < INDEX_MAXKEYS*4); //XXX hardcoded limit!
+  assert(target);
   if (conflict) {
-    croak("attempt to add the same key (at '%s') to multiple indices", conflict);
+    croak("Attempt to add %s(0x%p) '%s' to multiple indices using the same indexing key '%s'",
+	  target->os_class(&PL_na), target, kv_string(), conflict);
   }
 }
 
@@ -1305,12 +1342,15 @@ void osp_pathexam::no_conflict()
 // but getting the right behavior is a hassel.  It's almost not
 // worth it.  Perhaps the current behavior should be documented? XXX
 
+// THE WORK AROUND IS TO GET THE KEYS TWICE; THE FIRST TIME JUST
+// TO SEE IF IT WORKS; THE SECOND TIME TO SET THE INDEX FLAGS.  YUCK.
+
 int osp_pathexam::load_target(char _mode, OSSVPV *pv)
 {
   if (!pathcnt) croak("no path loaded");
   keycnt = 0;
   conflict = 0;
-  trailcnt = 0;
+  target = pv;
   if (pv->is_OSPV_Ref2())
     pv = ((OSPV_Ref2*)pv)->focus();
 
@@ -1325,7 +1365,7 @@ int osp_pathexam::load_target(char _mode, OSSVPV *pv)
 
 OSSV *osp_pathexam::mod_ossv(OSSV *sv)
 {
-  if (sv && !OSvREADONLY(sv)) {
+  if (sv && !OSvREADONLY(sv) && sv->is_set()) {
     if (get_mode() == 's') {
       if (OSvINDEXED(sv)) {
 	set_conflict();
@@ -1348,7 +1388,6 @@ void osp_pathexam::load_args(SV **top, int items)
   }
   keycnt = 0;
   conflict = 0;
-  trailcnt = 0;
   for (xa=0; xa < items; xa++) {
     tmpkeys[xa] = copy[xa];  //may cause SP to change
     keys[xa] = &tmpkeys[xa];

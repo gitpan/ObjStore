@@ -551,7 +551,12 @@ sub new {
 
 sub run {
     my ($o) = @_;
-    print("posh $ObjStore::VERSION (Perl $] ".ObjStore::release_name.")\n");
+    print("posh $ObjStore::VERSION (Perl $], ".ObjStore::release_name.")\n");
+    my $rc = "$ENV{HOME}/.poshrc";
+    if (-e $rc) {
+	print "[reading $rc...]\n";
+	do $rc;
+    }
     print "[set for \U$o->{ttype}]\n";
     while (1) {
 	my $input;

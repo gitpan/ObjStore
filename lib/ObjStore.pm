@@ -17,7 +17,7 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                    # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.42';
+$VERSION = '1.43';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -338,6 +338,7 @@ sub debug {
 	/^decode/   and $mask |= 0x10000, next;
 	/^schema/   and $mask |= 0x20000, next;
 	/^pathexam/ and $mask |= 0x40000, next;
+	/^compare/  and $mask |= 0x80000, next;
 	/^PANIC/  and $mask = 0xfffff, next;
 	die "Snawgrev $_ tsanik brizwah dork'ni";
     }

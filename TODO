@@ -10,6 +10,8 @@ following in the body of your message:
 
 + IDEAS +
 
+Devel::Leak!
+
 think about avoiding string copies again?
 can BLESS be faster? (at least the first time?)
 

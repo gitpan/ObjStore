@@ -51,13 +51,14 @@ your compiler to shut-up, and send me a patch. :-) */
 #define DEBUG_splash(a)   if (osp_thr::fetch()->debug & 0x200) a
 #define DEBUG_txn(a)      if (osp_thr::fetch()->debug & 0x400) a
 #define DEBUG_ref(a)	  if (osp_thr::fetch()->debug & 0x800) a
-#define DEBUG_wrap(a)	  if (osp_thr::fetch()->debug & 0x1000) {a}
+#define DEBUG_wrap(a)	  if (osp_thr::fetch()->debug & 0x1000) a
 #define DEBUG_thread(a)	  if (osp_thr::fetch()->debug & 0x2000) a
 #define DEBUG_index(a)	  if (osp_thr::fetch()->debug & 0x4000) a
 #define DEBUG_norefs(a)	  if (osp_thr::fetch()->debug & 0x8000) a
 #define DEBUG_decode(a)	  if (osp_thr::fetch()->debug & 0x10000) a
 #define DEBUG_schema(a)	  if (osp_thr::fetch()->debug & 0x20000) a
 #define DEBUG_pathexam(a) if (osp_thr::fetch()->debug & 0x40000) a
+#define DEBUG_compare(a)  if (osp_thr::fetch()->debug & 0x80000) a
 #else
 #define assert(what)
 #define DEBUG_refcnt(a)
@@ -78,6 +79,7 @@ your compiler to shut-up, and send me a patch. :-) */
 #define DEBUG_decode(a)
 #define DEBUG_schema(a)
 #define DEBUG_pathexam(a)
+#define DEBUG_compare(a)
 #endif
 
 #endif

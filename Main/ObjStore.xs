@@ -1480,7 +1480,7 @@ OSPV_Cursor2::each(...)
 	PPCODE:
 	int delta = 1;
 	if (items == 2) {
-	  if (!SvIOK(ST(1))) croak("each takes an integer step size");
+	  if (!SvIOK(ST(1))) croak("each only accepts integer step sizes");
 	  delta = SvIV(ST(1));
 	}
 	PUTBACK;
@@ -1531,6 +1531,12 @@ OSPV_Cursor2::keys()
 	PUTBACK;
 	THIS->keys();
 	return;
+
+void
+OSPV_Cursor2::_debug1()
+	CODE:
+	THIS->_debug1(0);
+
 
 MODULE = ObjStore	PACKAGE = ObjStore::Database
 

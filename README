@@ -27,6 +27,12 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 =head1 R!CENT CHANGES
 
 
+** 07-28-98 RELEASE 1.43
+
+- Fixed index bugs.  The lexicographical ordering logic was broken.
+Also there was a potential memory corruption problem.
+
+
 ** 07-27-98 RELEASE 1.42
 
 - ObjectStore 5.1 is required.  Static linkage is no longer supported.
@@ -64,28 +70,6 @@ readonly method is no longer implemented (but you can still check
 easily with eval).
 
 
-** 07-07-98 RELEASE 1.41
-
-- If an object is blessed into a package matching RE m/_fake\:\:/,
-then the package will be ignored (on reads).  A script for generic
-import of CSV files is now a trival exercise.
-
-- os_transaction::checkpoint has been tested and appears to work as
-well as standard transactions.  The performance gain appears
-measurable.
-
-- Prototyped an ObjStore::Index with a (splash) binary heap
-representation.
-
-- Indices now auto-dereference (just once) in the case that references
-are used.
-
-- Transaction deadlocks are no longer re-tried automatically.  If you
-relied on this behavior it is fairly easy to cobble it together
-yourself.  Perl 5.005 will allow die $ref, which makes the
-implementation even closer to trival.
-
-
 see ./INSTALL for hints on installation
 see ./UPGRADE to evolve databases from prior releases
 see ./TODO for a list of stuff in the queue
@@ -99,7 +83,7 @@ Perl-ObjectStore mailing list is waiting for your contribution--
 - Any job postings (as long as they relate to this extension.  FYI, I
 am not myself currently looking, but you never know...  :-)
 
-majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
+majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.domain.org"
 
 -------------------------------------------------------------------------
 Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.

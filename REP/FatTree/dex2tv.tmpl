@@ -32,7 +32,10 @@
 
 #define DEXTV_MAXKEYS 8
 
-#define TV_DAT_2STRING(dat) dat->os_class(&na)
+//#define TV_DUMP
+//#define TV_ESEEK_DEBUG
+#define TV_DAT_2STRING(dat) \
+	(sprintf(tmpbuf, "%s(0x%p)", dat->os_class(&na), dat), tmpbuf)
 
 
 #define TV_ESEEK_FDECL \

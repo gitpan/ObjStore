@@ -57,6 +57,7 @@ struct OSPV_fatindex2_cs : OSPV_Cursor2 {
   virtual void at();
   virtual int seek(osp_pathexam &);
   virtual I32 pos();
+  virtual void _debug1(void *);
 };
 
 /*

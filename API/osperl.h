@@ -102,6 +102,7 @@ struct OSSV {
   //what
   int morph(int nty);
   int natural() const;
+  int folded_typeof() const;
   int is_set();
   int istrue();
   int compare(OSSV*);
@@ -173,6 +174,7 @@ struct OSSVPV : os_virtual_behavior {
 
   virtual int get_perl_type();
   virtual void make_constant();
+  virtual void _debug1(void *); //whatever you want
 
   // must be NULL terminated
   virtual char *os_class(STRLEN *len);
@@ -435,8 +437,7 @@ protected:
   OSSV tmpkeys[PATHEXAM_MAXKEYS]; //should never be RVs
   OSSV *keys[PATHEXAM_MAXKEYS];
   char *conflict;
-  int trailcnt;
-  OSSVPV *trail[PATHEXAM_MAXKEYS*4]; //XXX hardcode limit
+  OSSVPV *target;
   
 protected:
   OSSV *path_2key(int zpath, OSSVPV *obj, char mode = 'x');

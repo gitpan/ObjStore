@@ -1,11 +1,13 @@
 # tables and tables of -*-perl-*-
 use Test;
-BEGIN { plan tests => 4 }
+BEGIN { plan tests => 6 }
 
 use strict;
 use ObjStore;
 use lib './t';
 use test;
+
+ObjStore::fatal_exceptions(0);
 
 &open_db;
 begin 'update', sub {
@@ -27,8 +29,17 @@ begin 'update', sub {
     $tbl->add_index('name',
 		   ObjStore::Index->new($j, path => 'name', unique => 0));
 
-    $tbl->add(ObjStore::HV->new($j, { name => 'one leg', id => undef }));
+    my $oneleg = ObjStore::HV->new($j, { name => 'one leg', id => undef });
+    $tbl->add($oneleg);
     ok @{ $tbl->index('name') }, @{ $tbl->index('id') }+1;
+    ok $oneleg->{id}=10, 10;
+    $tbl->add($oneleg);
+
+    begin sub {
+	my $name2 = ObjStore::Index->new($j, path => 'name', unique => 0);
+	$name2->add($oneleg);
+    };
+    ok $@, '/multiple indices/';
 
     my @m = $tbl->fetch('name', 'chicken');
     ok join('', sort map { $_->{id} } @m), '123';

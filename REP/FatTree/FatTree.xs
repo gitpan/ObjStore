@@ -238,8 +238,6 @@ char *OSPV_fatindex2::rep_class(STRLEN *len)
 int OSPV_fatindex2::get_perl_type()
 { return SVt_PVAV; }
 
-// Is it really true that only one reference is auto-dereferenced? XXX
-
 void OSPV_fatindex2::CLEAR()
 {
   if (!conf_slot) {
@@ -254,7 +252,6 @@ void OSPV_fatindex2::CLEAR()
   tc_moveto(&gl->tc, 0);
   OSSVPV *pv;
   while (dex2tc_fetch(&gl->tc, &pv)) {
-    if (pv->is_OSPV_Ref2()) pv = ((OSPV_Ref2*)pv)->focus();
     exam->load_target('u', pv);
     pv->REF_dec();
     tc_step(&gl->tc, 1);
@@ -268,34 +265,28 @@ int OSPV_fatindex2::add(OSSVPV *target)
     croak("%s->add(%p): index not configured", os_class(&na), target);
   int unique = conf_slot->avx(1)->istrue();
 
-  OSSVPV *orig_target = target;
-  if (target->is_OSPV_Ref2()) target = ((OSPV_Ref2*)target)->focus();
   dOSP;
   osp_pathexam *exam = &osp->exam;
   exam->init();
   exam->load_path(conf_slot->avx(2)->safe_rv());
-  if (!exam->load_target('s', target)) return 0;
+  if (!exam->load_target('x', target)) return 0;
 
   dGCURSOR(&tv);
   if (dex2tc_seek(&gl->tc, unique, *exam)) {
     OSSVPV *obj;
     if (unique) {
-      obj=0;
       dex2tc_fetch(&gl->tc, &obj);
-      if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
       if (obj == target) {
 	return 0; //already added
       } else {
-	croak("%s->add(0x%p): attempt to insert two distinct records matching (%s) into a unique index", os_class(&na), target, exam->kv_string());
+	croak("%s->add(): attempt to insert two distinct records (0x%p & 0x%p) matching '%s' into a unique index", os_class(&na), target, obj, exam->kv_string());
       }
     } else {
       dex2tc_fetch(&gl->tc, &obj);
-      if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
       if (obj == target) return 0; //already added
       while (1) {
 	if (!tc_step(&gl->tc, 1)) break;
 	dex2tc_fetch(&gl->tc, &obj);
-	if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
 	if (obj == target) return 0; //already added
 	int cmp;
 	cmp = exam->compare(obj);
@@ -306,10 +297,11 @@ int OSPV_fatindex2::add(OSSVPV *target)
       }
     }
   }
+  exam->load_target('s', target);
   exam->no_conflict();
   DEBUG_index(warn("%p->add(%p)", this, target));
-  orig_target->REF_inc();
-  dex2tc_insert(&gl->tc, orig_target);
+  target->REF_inc();
+  dex2tc_insert(&gl->tc, target);
   return 1;
 }
 
@@ -318,15 +310,13 @@ void OSPV_fatindex2::remove(OSSVPV *target)
   assert(conf_slot);
   int unique = conf_slot->avx(1)->istrue();
 
-  OSSVPV *orig_target = target;
-  if (target->is_OSPV_Ref2()) target = ((OSPV_Ref2*)target)->focus();
   dOSP;
   osp_pathexam *exam = &osp->exam;
   exam->init();
   exam->load_path(conf_slot->avx(2)->safe_rv());
   if (!exam->load_target('u', target))
-    croak("%s->remove: (%s) could not be a member",
-	  os_class(&na), exam->kv_string());
+    croak("%s->remove: %s could not be a member (%s)",
+	  os_class(&na), target->os_class(&na), exam->kv_string());
 
   dGCURSOR(&tv);
   int match = dex2tc_seek(&gl->tc, unique, *exam);
@@ -335,13 +325,11 @@ void OSPV_fatindex2::remove(OSSVPV *target)
   if (unique) {
     OSSVPV *obj;
     dex2tc_fetch(&gl->tc, &obj);
-    if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
     if (target != obj) croak("%p->remove: pointer mismatch at (%s)",
 			     this, exam->kv_string());
   } else {
     OSSVPV *obj;
     while (dex2tc_fetch(&gl->tc, &obj)) {
-      if (obj->is_OSPV_Ref2()) obj = ((OSPV_Ref2*)obj)->focus();
       if (obj == target) break;
       if (!tc_step(&gl->tc, 1))
 	croak("%s->remove: (%s) not found", os_class(&na), exam->kv_string());
@@ -353,7 +341,7 @@ void OSPV_fatindex2::remove(OSSVPV *target)
   }
   DEBUG_index(warn("%p->remove(%p)", this, target));
   dex2tc_delete(&gl->tc);
-  orig_target->REF_dec();
+  target->REF_dec();
 }
 
 /*
@@ -457,7 +445,14 @@ int OSPV_fatindex2_cs::seek(osp_pathexam &exam)
 {
   OSSVPV *conf = myfocus->conf_slot;
   exam.load_path(conf->avx(2)->safe_rv());
-  if (exam.get_keycnt() < 1 || exam.get_pathcnt() < 1) return 0;
+  if (exam.get_keycnt() < 1) {
+    warn("Seek to where?  No keys given");
+    return 0;
+  }
+  if (exam.get_pathcnt() < 1) {
+    warn("Seek with no path.  Is index configured?");
+    return 0;
+  }
   return dex2tc_seek(&tc, conf->avx(1)->istrue(), exam);
 }
 
@@ -470,6 +465,14 @@ void OSPV_fatindex2_cs::at()
     XPUSHs(ret);
     PUTBACK;
   }
+}
+
+void OSPV_fatindex2_cs::_debug1(void *)
+{
+#ifdef TV_DUMP
+  if (!TcDEBUGSEEK(&tc)) TcFLAGS(&tc) |= TCptv_DEBUGSEEK;
+  else dex2tc_dump(&tc);
+#endif
 }
 
 MODULE = ObjStore::REP::FatTree		PACKAGE = ObjStore::REP::FatTree

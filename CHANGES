@@ -1,3 +1,25 @@
+** 07-07-98 RELEASE 1.41
+
+- If an object is blessed into a package matching RE m/_fake\:\:/,
+then the package will be ignored (on reads).  A script for generic
+import of CSV files is now a trival exercise.
+
+- os_transaction::checkpoint has been tested and appears to work as
+well as standard transactions.  The performance gain appears
+measurable.
+
+- Prototyped an ObjStore::Index with a (splash) binary heap
+representation.
+
+- Indices now auto-dereference (just once) in the case that references
+are used.
+
+- Transaction deadlocks are no longer re-tried automatically.  If you
+relied on this behavior it is fairly easy to cobble it together
+yourself.  Perl 5.005 will allow die $ref, which makes the
+implementation even closer to trival.
+
+
 ** 05-30-98 RELEASE 1.40
 
 - Scrubbed code with Insure++ (Parasoft).  Insure++ is a product

@@ -1,11 +1,11 @@
 use 5.00404;
 use strict;
 package ObjStore::MakeMaker;
-require ObjStore::Config;
+use ObjStore::Config qw(DEBUG);
 use Config;
 require Exporter;
 use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS
-	    $Debug $CXX $OS_ROOTDIR $OS_LIBDIR);
+	    $CXX $OS_ROOTDIR $OS_LIBDIR);
 @ISA       = 'Exporter';
 @EXPORT_OK = qw($OS_ROOTDIR $OS_LIBDIR
 		&add_os_args &os_schema_rule);
@@ -72,7 +72,7 @@ sub add_os_args {
 	    symlink "$top/hints", "hints" or warn "symlink hints: $!";
 	}
     }
-    $arg{DEFINE} .= ' -DOSP_DEBUG' if $Debug;
+    $arg{DEFINE} .= ' -DOSP_DEBUG' if DEBUG;
     $arg{INC} .= " -I$OS_ROOTDIR/include";
     $arg{LIBS} ||= [''];
 

@@ -3,6 +3,26 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 10-31-97 Released 1.19 (Haloween Edition)
+
+- Emulation of RDBMS tables.  Unstructured perl databases are, well,
+unstructured.  The RDBMS table paradigm is a surprisingly good way to
+structure data.  And since you can store complex nested structures per
+row, add the same row to multiple tables, or nest tables, it's not
+half bad.
+
+- Persistent support for fake hashes (requires 5.004_50+).  Schema
+evolution for the same.
+
+- $o->NOREFS method invoked when an object becomes persistently
+unreachable.
+
+- Transaction support has been complete rewritten.  Nested
+transactions are now fully supported.
+
+- Bless is now non-intrusive and customizable.
+
+
 ** 10-11-97 Released 1.17
 
 - PERL / OBJECTSTORE SHELL !!
@@ -13,7 +33,7 @@ modify it under the same terms as Perl itself.
 
 - Support for cross database references.
 
-- Simplified API for 'open'.
+- Simplified 'open' API.
 
 - Sets depreciated.  The interface is there, but they are
 re-implemented with hashes.
@@ -28,9 +48,9 @@ uncovering.  I am very interested to see any examples of code that
 still leaks memory.  To recover memory already lost, a script to copy
 databases is in the works.
 
-- The default stargate now destroys data as it is copied into the
-database.  This is necessary to prevent the inadvertant creation of
-uncollectable cyclic structures.
+- The default stargate now destroys transient data as it is copied
+into the database.  This is necessary to prevent the inadvertant
+creation of uncollectable cyclic structures.
 
 
 ** 09-27-97 Released 1.15
@@ -44,10 +64,6 @@ uncollectable cyclic structures.
 - Blessed objects now try to 'require' their class the first time they
 are instantiated in transient memory.
 
-- Renamed $Exception to $EXCEPTION.
-
-- PHTML.pm and Eval.pm moved to their own distribution.
-
 
 ** 08-16-97 Released 1.11
 
@@ -59,7 +75,7 @@ transactions.  Persistent memory leaks no longer possible.
 
 ** 08-11-97 Released 1.10
 
-- Overloaded the '""' (stringify) operator for persistent objects.
+- Overloaded the stringify operator for persistent objects.
 
 - ospeek [-addr]
 
@@ -83,11 +99,11 @@ blazingly fast!
 - Regularized peristent typing in preparation for extensibility.
 
 - Peek rewrite with ideas from Data::Dumper.  Peek on circular data
-structures.  Peek reports percent utilization to the delight of the
+structures.  Peek reports percent utilization to the delight of
 accountants everywhere.
 
-- Unions removed from the schema.  This fix makes it possible to
-evolve databases in the event of future schema enhancements.
+- Unions removed from the schema.  This fix makes it easy to evolve
+databases in the event of future schema enhancements.
 
 - Reference counts are now 32bits wide and check for overflow.
 
@@ -114,13 +130,17 @@ can be run and the database does not grow.
 
 ** Released 1.02
 
-- Added ObjStore::peek($var) - like Data::Dumper except that it will work better
-on gigantic databases.  Only three elements are printed from large hashes,
-while small hashes are printed completely.  The meaning of 'large' can be
-customized (not yet).
+- Added ObjStore::peek($var) - like Data::Dumper except that it works
+better on gigantic databases.  Only three elements are printed from
+large hashes, while small hashes are printed completely.  The meaning
+of 'large' can be customized (not yet).
 
 
 ** Released 1.00
 
 - The first release, written during our 60 day ObjectStore evaluation.
-Why does ObjectStore have a reputation of being difficult to work with?
+Why does ObjectStore have a reputation of being difficult to work
+with?  With over ten years of self-directed study I knew this
+combination would be fantastic and I finally had a chance!
+Apparently, it is my mission to save the world from the unspeakable
+torture of relational databases!

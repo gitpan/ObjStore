@@ -18,9 +18,9 @@ OSSVPV *		O_OSSVPV
 OSPV_Container *	O_OSSVPV
 OSPV_Generic *		O_OSSVPV
 OSPV_Ref *		O_OSSVPV
+OSPV_Ref2 *		O_OSSVPV
 OSPV_Cursor *		O_OSSVPV
-RAW_STRING *		T_PTRREF
-ossv_bridge *		O_OBJECT
+ossv_bridge *		T_PTRREF
 osp_txn *		O_OBJECT
 
 ######################################################################

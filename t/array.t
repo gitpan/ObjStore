@@ -1,12 +1,12 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..6\n"; }
+BEGIN { $| = 1; $tx=1; print "1..7\n"; }
 
 use ObjStore;
 use lib './t';
 use test;
 
 #use Devel::Peek qw(Dump SvREFCNT);
-#ObjStore::_debug qw(assign array splash);
+#ObjStore::debug qw(PANIC);
 
 &open_db;
 try_update {

@@ -38,7 +38,7 @@ struct OSPV_hvarray : OSPV_Generic {
   static void _boot(HV *);
   virtual OSPV_Cursor *new_cursor(os_segment *seg);
   virtual ossv_bridge *_new_bridge(OSSVPV *);
-  virtual char *base_class();
+  virtual char *os_class(STRLEN *);
   virtual int get_perl_type();
   int index_of(char *key);
   int first(int start);
@@ -70,7 +70,7 @@ struct OSPV_setarray : OSPV_Generic {
   static void _boot(HV *);
   virtual OSPV_Cursor *new_cursor(os_segment *seg);
   virtual ossv_bridge *_new_bridge(OSSVPV *);
-  virtual char *base_class();
+  virtual char *os_class(STRLEN *);
   int first(int start);
   virtual void add(SV *);
   virtual int contains(SV *);
@@ -91,7 +91,7 @@ struct OSPV_setarray_cs : OSPV_Cursor {
   virtual void next();
 };
 
-// ObjectStore collections (extra bloated!)
+// ObjectStore collections
 #include <ostore/coll.hh>
 #include <ostore/coll/cursor.hh>
 #include <ostore/coll/dict_pt.hh>
@@ -104,7 +104,7 @@ struct OSPV_hvdict : OSPV_Generic {
   static void _boot(HV *);
   virtual ossv_bridge *_new_bridge(OSSVPV *);
   virtual OSPV_Cursor *new_cursor(os_segment *seg);
-  virtual char *base_class();
+  virtual char *os_class(STRLEN *);
   virtual int get_perl_type();
   virtual SV *FETCHp(char *key);
   virtual SV *STOREp(char *key, SV *value);
@@ -113,7 +113,6 @@ struct OSPV_hvdict : OSPV_Generic {
   virtual int EXISTS(char *key);
   virtual SV *FIRST(ossv_bridge*);
   virtual SV *NEXT(ossv_bridge*);
-  virtual RAW_STRING *_get_raw_string(char *key);
   virtual int _count();
 };
 
@@ -135,7 +134,7 @@ struct OSPV_sethash : OSPV_Generic {
   static void _boot(HV *);
   virtual ossv_bridge *_new_bridge(OSSVPV *);
   virtual OSPV_Cursor *new_cursor(os_segment *seg);
-  virtual char *base_class();
+  virtual char *os_class(STRLEN *);
   virtual void add(SV *);
   virtual int contains(SV *);
   virtual void rm(SV *);
@@ -181,10 +180,10 @@ struct OSPV_avarray : OSPV_Generic {
   virtual ~OSPV_avarray();
   static void _boot(HV *);
   virtual OSPV_Cursor *new_cursor(os_segment *seg);
-  virtual char *base_class();
+  virtual char *os_class(STRLEN *);
   virtual int get_perl_type();
-  virtual SV *FETCHi(int xx);
-  virtual SV *STOREi(int xx, SV *value);
+  virtual OSSV *FETCHi(int xx);
+  virtual OSSV *STOREi(int xx, SV *value);
   virtual SV *Pop();
   virtual SV *Unshift();
   virtual void Push(SV *);
@@ -210,7 +209,7 @@ struct OSPV_hvarray2 : OSPV_Generic {
   static void _boot(HV *);
   virtual OSPV_Cursor *new_cursor(os_segment *seg);
   virtual ossv_bridge *_new_bridge(OSSVPV *);
-  virtual char *base_class();
+  virtual char *os_class(STRLEN *);
   virtual int get_perl_type();
   int index_of(char *key);
   int first(int start);

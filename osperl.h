@@ -19,6 +19,12 @@ extern "C" {
 }
 #endif
 
+// embed.h is a little too aggressive XXX
+#undef rs
+#undef op
+#undef GIMME_V
+#define GIMME_V            OP_GIMME(Perl_op, block_gimme())
+
 #include <ostore/ostore.hh>
 
 #ifdef OSP_DEBUG
@@ -33,6 +39,9 @@ extern "C" {
 #define DEBUG_root(a)     if (osp_thr::fetch()->debug & 256) a
 #define DEBUG_splash(a)   if (osp_thr::fetch()->debug & 512) a
 #define DEBUG_txn(a)      if (osp_thr::fetch()->debug & 1024) a
+#define DEBUG_ref(a)	  if (osp_thr::fetch()->debug & 2048) a
+#define DEBUG_wrap(a)	  if (osp_thr::fetch()->debug & 4096) {a}
+#define DEBUG_thread(a)	  if (osp_thr::fetch()->debug & 8192) a
 #else
 #define DEBUG_refcnt(a)
 #define DEBUG_assign(a)
@@ -45,6 +54,9 @@ extern "C" {
 #define DEBUG_root(a)
 #define DEBUG_splash(a)
 #define DEBUG_txn(a)
+#define DEBUG_ref(a)
+#define DEBUG_wrap(a)
+#define DEBUG_thread(a)
 #endif
 
 typedef void (*XS_t)(CV*);
@@ -62,12 +74,10 @@ enum ossvtype {
 struct ossv_bridge;
 struct OSSVPV;
 
-typedef char RAW_STRING;
-
 // 8 bytes
 struct OSSV {
   static os_typespec *get_os_typespec();
-  static char strrep[32];
+  static char strrep[64];
   void *vptr;
   os_int16 xiv;
   os_int16 _type;
@@ -103,13 +113,10 @@ struct OSSV {
   void s(OSSV *);
   void s(OSSVPV *);
   void s(ossv_bridge *mg);
-  void bless(char *);
-  //private
-  RAW_STRING *get_raw_string();
-  //debugging
-  char *as_pv();
+  //get
+  char *pv(STRLEN *lp);
+  char *stringify();
 };
-typedef OSSV OSSV_RAW;
 
 struct OSPV_iv {
   static os_typespec *get_os_typespec();
@@ -121,58 +128,83 @@ struct OSPV_nv {
   double nv;
 };
 
-#define OSPV_NOREFS	0x0001	/* refcnt fell to zero, running NOREFS */
+#define OSPV_INUSE	0x0001	/* protect against race conditions */
+#define OSPV_BLESS2	0x0002	/* blessed with 'bless version 2' */
 
 #define PvFLAGS(pv)		(pv)->pad_1
 
-#define PvNOREFS(pv)		(PvFLAGS(pv) & OSPV_NOREFS)
-#define PvNOREFS_on(pv)		(PvFLAGS(pv) |= OSPV_NOREFS)
-#define PvNOREFS_off(pv)	(PvFLAGS(pv) &= ~OSPV_NOREFS)
+#define PvINUSE(pv)		(PvFLAGS(pv) & OSPV_INUSE)
+#define PvINUSE_on(pv)		(PvFLAGS(pv) |= OSPV_INUSE)
+#define PvINUSE_off(pv)		(PvFLAGS(pv) &= ~OSPV_INUSE)
+
+#define PvBLESS2(pv)		(PvFLAGS(pv) & OSPV_BLESS2)
+#define PvBLESS2_on(pv)		(PvFLAGS(pv) |= OSPV_BLESS2)
+#define PvBLESS2_off(pv)	(PvFLAGS(pv) &= ~OSPV_BLESS2)
 
 struct OSSVPV : os_virtual_behavior {
   static os_typespec *get_os_typespec();
   os_unsigned_int32 _refs;
   os_unsigned_int16 _weak_refs;
   os_int16 pad_1;		//should rename to 'flags'
-  char *classname;
+  char *classname;		//should be an OSSVPV*
   OSSVPV();
   virtual ~OSSVPV();
   void REF_inc();
   void REF_dec();
-  void wREF_inc();
-  void wREF_dec();
+//  void wREF_inc();
+//  void wREF_dec();
   int _is_blessed();
-  char *_blessed_to(int load);
-  virtual void _bless(char *);
+  char *blessed_to(STRLEN *len);
+  virtual void bless(SV *);
   virtual ossv_bridge *_new_bridge(OSSVPV *);
-  virtual char *base_class();
+  virtual char *os_class(STRLEN *len);  //must be NULL terminated too
   virtual int get_perl_type();
 };
 
-struct OSPV_Ref : OSSVPV {
+struct OSPV_Ref2 : OSSVPV {
   static os_typespec *get_os_typespec();
-  OSPV_Ref(OSSVPV *);
-  virtual ~OSPV_Ref();
-  virtual char *base_class();
-  // lock down the implementation with non-virtual methods (& for speed :-)
+  OSPV_Ref2();
+  virtual char *os_class(STRLEN *len);
+  virtual os_database *get_database();
+  virtual int deleted();
+  virtual OSSVPV *focus();
+  virtual char *dump();
+};
+
+struct OSPV_Ref2_hard : OSPV_Ref2 {
+  static os_typespec *get_os_typespec();
+  os_reference myfocus;
+  OSPV_Ref2_hard(OSSVPV *);
+  OSPV_Ref2_hard(char *, os_database *);
+  virtual os_database *get_database();
+  virtual int deleted();
+  virtual OSSVPV *focus();
+  virtual char *dump();
+};
+
+struct OSPV_Ref2_protect : OSPV_Ref2 {
+  static os_typespec *get_os_typespec();
   os_reference_protected myfocus;
-  int _broken();
-  os_database *get_database();
-  int deleted();
-  OSSVPV *focus();
+  OSPV_Ref2_protect(OSSVPV *);
+  OSPV_Ref2_protect(char *, os_database *);
+  virtual os_database *get_database();
+  virtual int deleted();
+  virtual OSSVPV *focus();
+  virtual char *dump();
 };
 
 // A cursor must be a single composite object.  Otherwise you would
 // need cursors for cursors.
 
-struct OSPV_Cursor : OSPV_Ref {
+struct OSPV_Cursor2 : OSSVPV {
   static os_typespec *get_os_typespec();
-  OSPV_Cursor(OSSVPV *);
-  virtual char *base_class();
+  OSPV_Cursor2(OSSVPV *);
+  virtual char *os_class(STRLEN *len);
   virtual void seek_pole(int);
   virtual void at();
   virtual void next();
 };
+struct OSPV_Cursor; //XXX
 
 // Any OSSVPV that contains pointers to other OSSVPVs (except a cursor)
 // must be a container.  Also note that the STORE method must be compatible
@@ -182,16 +214,18 @@ struct OSPV_Container : OSSVPV {
   static os_typespec *get_os_typespec();
   static void install_rep(HV *hv, const char *file, char *name, XS_t mk);
   //  virtual void _rep();
-  virtual RAW_STRING *_get_raw_string(char *key);
   virtual double _percent_filled();
   virtual int _count();
   virtual OSPV_Cursor *new_cursor(os_segment *seg);
 };
 
 // Generic collections support the standard perl array & hash
-// collection types.  This is a single class because you might
+// collection types.  This is 1 class (instead of 2-3) because you might
 // have a single collection that can be accessed as a hash or
 // an array.
+
+// Methods should return OSSV, OSPV_*, or void.  Not all methods
+// conform to this convention yet.
 
 struct OSPV_Generic : OSPV_Container {
   static os_typespec *get_os_typespec();
@@ -206,10 +240,10 @@ struct OSPV_Generic : OSPV_Container {
   virtual void DELETE(char *key);
   virtual int EXISTS(char *key);
   // array (preliminary)
-  virtual SV *FETCHi(int xx);
-  virtual SV *STOREi(int xx, SV *value);
+  virtual OSSV *FETCHi(int xx);
+  virtual OSSV *STOREi(int xx, SV *value);
   virtual int _LENGTH();
-  virtual SV *Pop();
+  virtual SV *Pop();    //these will change soon
   virtual SV *Unshift();
   virtual void Push(SV *);
   virtual void Shift(SV *);
@@ -220,19 +254,52 @@ struct OSPV_Generic : OSPV_Container {
 };
 
 struct ossv_bridge {
-  ossv_bridge *next, *prev;
+  ossv_bridge *next;
   OSSVPV *pv;
+  int is_strong_ref;
+  int is_transient;
+  int can_delete;
 
   ossv_bridge(OSSVPV *_pv);
-  void invalidate();
   virtual ~ossv_bridge();
   void dump();
   void *get_location();
   OSSVPV *ospv();
+  void HOLD();
+  void release();
+  void unref();
+  int ready();
+  void invalidate(OSSVPV * = 0);
 
-  // Add transient cursors here (when you sub-class)
+  // Add transient cursors here in sub-classes
 };
 
 #if !OSSG
 #include "txn.h"
 #endif
+
+////////////////////////////////////////////////////////////////////////
+// DEPRECIATED (but still included for schema compatibility)
+
+struct OSPV_Ref : OSSVPV {
+  static os_typespec *get_os_typespec();
+  OSPV_Ref(OSSVPV *);
+  OSPV_Ref(char *, os_database *);
+  virtual ~OSPV_Ref();
+  virtual char *os_class(STRLEN *len);
+  os_reference_protected myfocus;
+  os_database *get_database();
+  char *dump();
+  int deleted();
+  OSSVPV *focus();
+};
+
+struct OSPV_Cursor : OSPV_Ref {
+  static os_typespec *get_os_typespec();
+  OSPV_Cursor(OSSVPV *);
+  virtual char *os_class(STRLEN *len);
+  virtual void seek_pole(int);
+  virtual void at();
+  virtual void next();
+};
+

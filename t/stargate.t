@@ -1,5 +1,5 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..5\n"; }
+BEGIN { $| = 1; $tx=1; print "1..6\n"; }
 
 use Carp;
 use ObjStore;
@@ -26,12 +26,12 @@ try_update {
     $john->STORE('gated', $c);
     @$c == 0? ok:not_ok; #2
 
-    chk_refs($john->_refcnt, $refs+2); #3
+    chk_refs($john->_refcnt, $refs+1); #3
 };
 
 try_update {
     my $john = $db->root('John');
-    chk_refs($john->_refcnt, $refs+2);
+    chk_refs($john->_refcnt, $refs+1);
     $john->DELETE('gated');
     chk_refs($john->_refcnt, $refs);
 };

@@ -1,14 +1,7 @@
-# Simulated RDBMS tables :-) :-)
-#
-# Oops, but you can store rows in multiple tables (or nest tables)
-# Oops, but you can create indices keyed off of a perl sub...
-# Oops, but you can ...
-#
-# Completely optional, of course.
-#
-use strict;  #lexical?
+# DEPRECIATED
+use strict;
+require ObjStore::Table2; #new version
 
-# Tied array where adds/deletes can trigger index updates
 package ObjStore::Table;
 use Carp;
 use ObjStore;
@@ -25,9 +18,12 @@ sub new {
     $o;
 }
 
+# works as database or not
+sub table { $_[0]; }
 sub array { $_[0]->{array}; }
-
-sub index { $_[0]->{indices}{$_[1]}; }  #no check...? XXX
+sub indices { $_[0]->{'indices'}; }
+sub index { $_[0]->{'indices'}{$_[1]}; }
+sub fetch { my $o=shift; $o->index(shift)->fetch(@_) }
 
 sub new_index {
     my ($o, $type, @REST) = @_;
@@ -37,151 +33,114 @@ sub new_index {
 
 sub add_index {
     my ($o, $index) = @_;
-    $o->{indices}{ $index->name } = $index;
-}
-
-sub indices {
-    my ($o) = @_;
-    keys %{$o->{indices}};
+    $o->indices->{ $index->name } = $index;
 }
 
 sub remove_index {
     my ($o, $name) = @_;
     die "$o->remove_index($name): index doesn't exist"
-	if !exists $o->{'indices'}{ $name };
-    delete $o->{'indices'}{ $name };
+	if !exists $o->indices->{ $name };
+    delete $o->indices->{ $name };
+}
+
+sub build_indices {
+    my ($o) = @_;
+    for my $i (values %{ $o->indices }) { $i->build unless $i->is_built; }
+}
+
+sub rebuild_indices {
+    my ($o) = @_;
+    for my $i (values %{ $o->indices }) { $i->rebuild; }
+}
+
+sub drop_indices {
+    my ($o) = @_;
+    for my $i (values %{ $o->indices }) { $i->drop; }
 }
 
 sub NOREFS {
+    # arg will never be a database
     my $o = shift;
     delete $o->{'indices'};
 }
 
-# Should be able to build indices all at once or incrementally
-package ObjStore::Table::Index;
-use ObjStore;
-use base 'ObjStore::HV';
-
-# An index should be autonomous and do it's own clustering.
-sub new {
-    my ($class, $table, $name) = @_;
-    my $o = $class->SUPER::new($table);
-    $o->{_table} = $table->new_ref;
-    $o->{_name} = $name;
-    $o;
-}
-
-sub name { $_[0]->{_name} }
-sub table { $_[0]->{_table}->focus }
-sub detach { delete $_[0]->{_table} }
-
-sub build { die "You must override build"; }
-
-sub is_built {
-    my ($o) = @_;
-    for my $k (keys %$o) { return 1 if $k !~ m/^_/; }
-    0;
-}
-# someday distinguish between built, active, and stale
-*is_active = \&is_built;
-
-sub drop {
-    my ($o) = @_;
-    for my $k (keys %$o) {
-	next if $k =~ m/^_/;
-	delete $o->{$k};
-    }
-}
-
-sub rebuild {
-    my $o = shift;
-    $o->drop;
-    $o->build(@_);
-}
-
-sub peek {
+sub POSH_PEEK {
     my ($val, $o, $name) = @_;
-    my $built = $val->is_built ? 'ACTIVE' : 'inactive';
-    $o->prefix;
-    $o->o("$name $built");
+    $o->o("TABLE ". $name . " {");
+    $o->nl;
+    $o->indent(sub {
+	my $ar = $val->array;
+	$o->o("array[".$ar->_count ."] of ");
+	$o->peek_any($ar->[0]);
+	$o->nl;
+	$o->o("indices: ");
+	$o->o(join(', ', sort map { $_->is_built ? uc($_->name) : $_->name }
+		   values %{ $val->indices }), ";");
+	$o->nl;
+	my $table = $val->table;
+	for my $k (sort keys %{ $table }) {
+	    next if ($k eq 'array' or $k eq 'indices');
+	    $o->o("$k => ");
+	    my $v = $table->{$k};
+	    if (ref $v) { $o->o("..."); }
+	    else { $o->peek_any($v); }
+	    $o->nl;
+	}
+    });
+    $o->o("},");
     $o->nl;
 }
 
-package ObjStore::Table::Index::Field;
-use Carp;
-use ObjStore;
-use base 'ObjStore::Table::Index';
-
-sub new {
-    my ($class, $table, $name, $field) = @_;
-    $field ||= $name;
-    my $o = $class->SUPER::new($table, $name);
-    $o->{_field} = $field;
-    $o;
+sub POSH_CD {
+    my ($t, $to) = @_;
+    if ($to =~ m/^\d+$/) {
+	$t->array->[$to];
+    } else {
+	$t->index->{$to};
+    }
 }
 
-sub build {
-    my ($o, $collision) = @_;
-    my $tbl = $o->table;
-    my $arr = $tbl->array;
-    my $total = $arr->_count();
-    my $seg = $o->database_of->create_segment;
-    $seg->set_comment($o->name." index");
-    my $xx = $o->{ $o->name } = new ObjStore::HV($seg, $total * .25);
+package ObjStore::Table::Database;
+use ObjStore;
+use base 'ObjStore::Database';
+use vars '@ISA';
+push(@ISA, 'ObjStore::Table');
 
-    for (my $z=0; $z < $total; $z++) {
-	my $rec = $arr->[$z];
-	next if !defined $rec;
-	my $key = $rec->{$o->{_field}};
-	next if !$key;
-	my $old = $xx->{ $key };
-	if ($old and $collision) {
-	    my $do = $collision->($o, $old, $rec);
-	    if ($do eq 'neither') {
-		delete $rec->{ $key };
-		next;
-	    } elsif ($do eq 'old') {
-		next;
-	    } elsif ($do eq 'new') {
-	    } else { croak "Collision returned '$do'" }
+sub ROOT() { 'table' }
+sub default_size() { 21 }  #can override
+
+sub new {
+    my $class = shift;
+    my $db = $class->SUPER::new(@_);
+    $db->table; #set root
+    $db;
+}
+
+sub table {
+    my ($db) = @_;
+    $db->root(&ROOT, sub { ObjStore::Table->new($db, &default_size) } );
+}
+sub array { $_[0]->root(&ROOT)->{array}; }
+sub indices { $_[0]->root(&ROOT)->{'indices'}; }
+sub index { $_[0]->root(&ROOT)->{'indices'}{$_[1]}; }
+
+sub BLESS {
+    return $_[0]->SUPER::BLESS($_[1]) if ref $_[0];
+    my ($class, $db) = @_;
+    if ($db->isa('ObjStore::HV::Database')) {
+	warn 'convert';
+	my $o = $db->table;
+	my $ar = $o->array;
+	my $hash = $db->hash;
+	for my $z (values %$hash) {
+	    warn "push $z";
+	    $ar->_Push($z);
 	}
-	$xx->{ $key } = $rec;
+	$db->destroy_root($db->ROOT);
     }
+    $class->SUPER::BLESS($db);
 }
 
-package ObjStore::Table::Index::GroupBy;
-use Carp;
-use ObjStore;
-use base 'ObjStore::Table::Index';
-
-sub new {
-    my ($class, $table, $name, $field) = @_;
-    $field ||= $name;
-    my $o = $class->SUPER::new($table, $name);
-    $o->{_field} = $field;
-    $o;
-}
-
-sub build {
-    my ($o) = @_;
-    my $tbl = $o->table();
-    my $arr = $tbl->array();
-    my $total = $arr->_count();
-    my $seg = $o->database_of->create_segment;
-    $seg->set_comment($o->name." index");
-    my $xx = $o->{ $o->name } = new ObjStore::HV($seg, $total * .1);
-
-    for (my $z=0; $z < $total; $z++) {
-	my $rec = $arr->[$z];
-	next if !defined $rec;
-	my $key = $rec->{$o->{_field}};
-	next if !$key;
-	my $old = $xx->{ $key } ||= [];
-	$old->_Push($rec);
-    }
-}
-
-package ObjStore::Table::Index::Custom;
-#store the perl code in the database?
+sub POSH_ENTER { shift->table; }
 
 1;

@@ -14,6 +14,13 @@ sub new {
     $class = ref($this) || $this;
     if (!defined $rep) {
 	&{$REP{splash_array}}($class, $loc, 7, @REST);
+
+    } elsif (ref $rep) {
+	my $av = &{$REP{splash_array}}($class, $loc, scalar(@$rep)||7, @REST);
+	for (my $x=0; $x < @$rep; $x++) { $av->STORE($x, $rep->[$x]); }
+	@$rep = ();  #must avoid leaving junk in transient memory
+	$av;
+
     } elsif ($rep =~ /^\d+(\.\d+)?$/) {
 	&{$REP{splash_array}}($class, $loc, $rep, @REST);
     } elsif (!$rep) {
@@ -36,6 +43,14 @@ sub new {
     $class = ref($this) || $this;
     if (!defined $rep) {
 	&{$REP{splash_array}}($class, $loc, 7, @REST);
+
+    } elsif (ref $rep) {
+	my ($total) = split(m'/', scalar %$rep);
+	my $hv = &{$REP{splash_array}}($class, $loc, $total || 7, @REST);
+	while (my($hk,$v) = each %$rep) { $hv->STORE($hk, $v); }
+	%$rep = ();  #must avoid leaving junk in transient memory
+	$hv;
+
     } elsif ($rep =~ /^\d+(\.\d+)?$/) {
 	confess "$rep < 1" if $rep < 1;
 	if ($rep < 25) {

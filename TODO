@@ -11,58 +11,89 @@ following in the body of your message:
 Optimize for flexibility, then memory performance, then speed.
 
 1. Flexibility
-Flexibility is the most important because ObjectStore should be
-easier to use and everyone complains that it can't do SQL.
-We'll show 'em!
+Flexibility is the most important because ObjectStore should be easy
+to use and everyone complains that it can't do SQL.  We'll show 'em!
 
 2. Memory Performance
 Memory performance is also very important due to the potential size of
 databases.  Small memory efficiency improvements in a 5TB database
-have a big impact.
+have an impact.
 
 3. Speed
-Speed is pretty good already, compared to a relational database!
-Of course, there is always room for improvement.
+Speed is pretty good already, compared to a relational database!  Not
+that there isn't always room for improvement...
 
 
 + IDEAS +
 
-nuke -lC
+Threads!
 
-begin wantarray
+posh
+  detect @INC modifications and print help message
+  persist command history!
+    remember the string used to 'cd' and show during 'pwd'?
+  tkposh ?
+
+t/
+  churning stress test
+  ISA: check complete tree & basic_type check
+
+ospeek
+  -depth switch?
+
+move AVHV to separate file
+
+complain if 'is_corrupted' is re-defined in subclass?
+
+Why does _new_bridge get passed itself twice?  Could this be a mistake?
+
+optimize: do autoclassloading upon open
+
+Peeker
+  fix comma - $o->comma, then check in $o->nl
+  fix for "$at = " prefix ?
+
+Support for notification, database access control
+
+nuke -lC
 
 _Per_segment_data is not free'd when no longer needed
 
-Threads support!
-
-Write up 'tight vs. loose binding' for ObjStore.pod
-
-Peeker fix comma & semi // fix for "$at = " prefix
-
-Support for notification, database access control, transaction hooks?
-
-posh
-  sync_INC on reopen
-  special case 'chdir database' for blessed databases & $at->open('mvcc')
-  create empty databases
-  Devel::Symdump->methods when peeking if blessed?
-  multiple instances per user
-  peek directly to STDOUT
-
-osp_copy - get rid of the -step option.
+use Error
 
 
 + VAGUE POSSIBILITIES +
 
+Improve transaction memory management.  Go back to using doubly-linked
+lists to destroy the bridge as soon as possible.
+
+iterating over AVHV is broken - cursor is stored in the ossv_bridge
+  unmagic the keys hash - make non-lazy?
+
 posh
-  use posh as a front-end for utilities?
-  call system() when in ufs?
+  improve pre/post eval logic
+  nuke $view->{where}
+  $at->open('mvcc') ?
+  Devel::Symdump->methods when peeking if blessed?
+  Multiple sessions per user?  Who cares?
+  Call system() when in ufs?  How about rawfs?
 
-TRANSIENT ObjStore::Ref ?
+cache last lookup to avoid gv_fetchmethod(NOREFS)?
 
+script to insure consistent pod grammer? (get Pod::Parser)
+
+migrate to OSPV_Cursor2
+
+move all ospv->sv conversions back into ObjStore/ObjStore.xs
+
+assignment to $SIG{SEGV} should not reset SEGV handler
+
+Weak refs are currently not used.  Add weak collections?
 Reference weaken/strengthen?  Use some bits in OSSVPV?
 
 Split GENERIC into ObjectStore & Splash parts?
+
+transaction hooks?
 
 depreciate os_object_cursor?
 
@@ -92,11 +123,6 @@ Support for multiple application schemas (expected 1Q98)
 
 Add support for parts of the TimeSeries Object Manager?
 
-Could perl performance be improve?  Streamline typemap?
-
-Expand Maker to encompass all architectures/compilers/situations?
-Makefile.PL?
-
 
 + CORE-PERL WISH LIST +
 
@@ -105,10 +131,3 @@ able to hide whatever necessary complexity in the module that
 implements the 'tie' so the user doesn't have to know anything
 special.  How about lvalues?  How about proper support for nested
 structures?
-
-Devel::Peek seems to indicate that hash-elements under a tied hash
-are being allocated.  I don't understand how this could be necessary. 
-Tied values should take an absolute minimum amount of transient memory. 
-Why store things twice?
-
-Make 'blessed' a built-in?

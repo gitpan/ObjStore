@@ -2,7 +2,7 @@
 
 Tested Systems:
 
-   perl 5.004, 5.004_53
+   perl 5.004_04, 5.004_53-5.004_54
 
    Solaris 2.5.1
      SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1, 4.0.2
@@ -10,17 +10,17 @@ Tested Systems:
 
 -------------------------------------------------------------------------
 
-The build process is a bit radical and needs some explaination.
+The build process is non-standard and needs some explaination.
 
 1. xemacs ./Config.pm
 
 2. perl ./be
 
-     It should build all the code and run the test scripts.
+  If you have a problem with objectstore::get_unassigned_address_space(),
+  just delete the code chunk and keep going.  This API is only available
+  with OS 5.0 service pack #2.
 
-     ./t/hash.t will fail 2/4 until bugrep015834 is fixed.
-     ./t/transact.t will fail test 4 occationally.
-     ./t/z_ospeek.t is very sensitive to the success of the other tests.
+  ./t/z_ospeek.t is very sensitive to the success of the other tests.
 
 3. perl ./be test
 
@@ -32,5 +32,11 @@ The build process is a bit radical and needs some explaination.
 
 If you succeed on a system that is not listed in above, please send
 a note to perl-objectstore@parallax.co.uk announcing your success!
+
+-------------------------------------------------------------------------
+
+While 'be' was great for development, I acknowledge the need to move
+to a Makefile.PL.  If somebody could contribute one, that'd be great.
+For an example of a clean build, see 'solaris.out'.
 
 -------------------------------------------------------------------------

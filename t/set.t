@@ -1,5 +1,5 @@
 # set -*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..6\n"; }
+BEGIN { $| = 1; $tx=1; print "1..7\n"; }
 
 use strict;
 use ObjStore;

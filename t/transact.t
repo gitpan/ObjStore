@@ -1,5 +1,5 @@
 # test all transaction types for -*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..9\n"; }
+BEGIN { $| = 1; $tx=1; print "1..8\n"; }
 
 use strict;
 use ObjStore ':ALL';
@@ -7,14 +7,13 @@ use ObjStore::Config;
 use lib './t';
 use test;
 
-ObjStore::rethrow_exceptions(0);
+ObjStore::fatal_exceptions(0);
 ObjStore::set_transaction_priority(0);
 
 &open_db;
 
-if (1) {
-eval { my $b = ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
-$@ =~ m/does not exist/ ? ok: do {not_ok; warn $@;};
+eval { &ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
+$@ =~ m/does not exist/? ok:not_ok;
 
 # make sure the tripwire is ready
 try_update {
@@ -22,28 +21,21 @@ try_update {
 };
 die if $@;
 
-my @ret = try_update {
+try_update {
     my $john = $db->root('John');
     $john->{right} = 69;
-    qw(void context for now);
 };
-@ret ? not_ok : ok;
 
 begin('read', sub {
     my $john = $db->root('John');
     
-    eval { my $b = ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
-    $@ =~ m/does not exist/ ? ok: do {not_ok; warn $@;};
-
     eval { $john->{'write'} = 0; };
-    $@ =~ m/Attempt to write during a read-only/ ? ok : not_ok;
+    $@ =~ m/Attempt to write during a read-only/? ok:not_ok;
 
     $john->{right} == 69? ok : not_ok;
 });
 $@ ? not_ok:ok;
-}
 
-if (1) {
 begin('update', sub {
     my $j = $db->root('John');
     begin('update', sub {
@@ -54,7 +46,6 @@ begin('update', sub {
     exists $j->{oopsie}? not_ok : ok;
 });
 $@ ? not_ok : ok;
-}
 
 if (1) {
 #ObjStore::debug qw(txn);
@@ -64,7 +55,7 @@ my $debug =0;
 set_max_retries(10);
 my $retry=0;
 my $attempt=0;
-try_update {
+begin 'update', sub {
     ++ $retry;
 
     my $right = $db->root('John');
@@ -74,7 +65,7 @@ try_update {
     my $code = sub {
 	warn "begin bogus code" if $debug;
 	my $quiet = 1? '2>/dev/null':'';
-	system("perl -Mblib t/deadlock.pl $quiet &");
+	system("perl -Mblib t/deadlock.pl 1>/dev/null $quiet &");
 	warn "[1]sleep\n" if $debug;
 	sleep 5;
 	warn "[1]left\n" if $debug;
@@ -83,19 +74,16 @@ try_update {
 	$left->{left} = $right->{right};
     };
     ++ $attempt;
-#    warn "attempt $attempt retry $retry";
+    warn "attempt $attempt retry $retry" if $debug;
     if ($attempt == 1) {
 	&$code;
 	die "Didn't get deadlock";
     } elsif ($attempt == 2) {
-	eval { &$code };
-	die if $@;
-    } elsif ($attempt == 3) {
 	try_update(\&$code);
 	die if $@;
     } else { 1 }
 };
 warn $@ if $@;
-if ($attempt==4) {ok}
+if ($attempt==3) {ok}
 else {warn $attempt; not_ok; }
 }

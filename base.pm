@@ -33,9 +33,13 @@ sub import {
 
     foreach my $base (@_) {
 	unless (defined %{"$base\::"}) {
-	    my $file = $base;
-	    $file =~ s,::,/,g;
-	    require "$file.pm";
+	    eval "require $base";
+	    unless (defined %{"$base\::"}) {
+		require Carp;
+		Carp::croak("Base class package \"$base\" is empty.\n",
+			    "\t(Perhaps you need to 'use' the module ",
+			    "which defines that package first.)");
+	    }
 	}
     }
     

@@ -20,7 +20,7 @@ $pk->post_help('1. Please set the following environment variables before compili
 2. Please edit "./Config.pm" to your preference.
 
 ');
-    
+
 # build just one target, i.e. 'be osp'
 my @scripts = qw(ospeek osp_copy posh);
 $pk->default_targets('blib', 'osp',  @scripts);
@@ -28,14 +28,18 @@ $pk->default_targets('blib', 'osp',  @scripts);
 my $inst = {
     bin =>    [], #['osp_evolve'],
     script => [@scripts],
-    man3 =>   ['ObjStore.3'],
+    man3 =>   ['ObjStore.3', 'ObjStore::Table2.3', 'ObjStore::Tutorial.3'],
     lib =>    ['ObjStore.pm', 'ObjStore/',
 	       'ObjStore/Config.pm', 'ObjStore/GENERIC.pm',
-	       'ObjStore/Ref.pm', 'ObjStore/Cursor.pm', 'ObjStore/Table.pm',
+	       'ObjStore/Path/',
+	       'ObjStore/Path/Ref.pm', 'ObjStore/Path/Cursor.pm',
+	       'ObjStore/Table.pm', 'ObjStore/Table2.pm',
+	       'ObjStore/Tutorial.pm',
 	       'ObjStore/AppInstance.pm',
-	       'ObjStore/Peeker.pm',
+	       'ObjStore/CSV.pm', 'ObjStore/Peeker.pm',
 	       'ObjStore/SetEmulation.pm',
-	       'ObjStore/PoweredByOS.gif', 'ObjStore/ObjStore.html',
+	       'ObjStore/PoweredByOS.gif', 'ObjStore/ObjStore.html', 
+	       'ObjStore/Table2.html', 'ObjStore/Tutorial.html',
 	       ($] < 5.00450? 'base.pm':())],
 };
 
@@ -49,8 +53,8 @@ my $r = Maker::Rules->new($pk, 'perl-module');
     new Maker::Seq($r->HashBang(&LINKAGE eq 'dyn'? 'perl' : 'osperl', $_),
 		   new Maker::Unit($_, sub {})) } @scripts;
 $r->opt(1);
-#$r->flags('cxx', '-g');
-$r->flags('cxx', '-DOSP_DEBUG');
+#$r->flags('cxx', '-O');
+$r->flags('cxx', '-DOSP_DEBUG', '-DDEBUGGING');
 #$r->flags('ossg', '-padc', '-arch','set1');
 $r->flags('ld-dl', '-ztext');   # SunPro specific?
 $r->flags('xsubpp', "-nolinenumbers"); #line numbers tickle a BUS error :-(
@@ -60,7 +64,7 @@ my $build =
 				     ($r->cxx('perlmain.c'),
 				      $r->embed_perl('ObjStore')) :
 				     ()),
-				    $r->objstore(&SCHEMA_DBDIR, 'osperl-07',
+				    $r->objstore(&SCHEMA_DBDIR, 'osperl-08',
 						 ['collections']),
 				    $r->cxx('osperl.c'),
 				    $r->cxx('txn.c'),
@@ -73,7 +77,12 @@ my $build =
 
 $pk->a(new Maker::Seq(new Maker::Phase($build,
 				       $r->pod2man('ObjStore.pod', 3),
-				       $r->pod2html('ObjStore.pod')),
+				       $r->pod2html('ObjStore.pod'),
+				       $r->pod2man('Table2.pm', 'ObjStore::Table2.3'),
+				       $r->pod2html('Table2.pm'),
+				       $r->pod2man('Tutorial.pm', 'ObjStore::Tutorial.3'),
+				       $r->pod2html('Tutorial.pm'),
+				      ),
 		      $r->blib($inst),
 		      $r->populate_blib($inst),
 		      new Maker::Unit('osp', sub {}),
@@ -86,7 +95,7 @@ $pk->a(new Maker::Seq(new Maker::Phase($build,
        $r->uninstall($inst),
        );
 $pk->clean(sub {
-    $pk->x("osrm -f ".&SCHEMA_DBDIR."/perltest.db");
+    $pk->x("osrm -f ".&SCHEMA_DBDIR."/perltest");
 });
 
 $r = new Maker::Rules($pk, 'perl-module');

@@ -1,5 +1,5 @@
 # -*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..3\n"; }
+BEGIN { $| = 1; $tx=1; print "1..4\n"; }
 
 use ObjStore ':ALL';
 use lib './t';
@@ -23,18 +23,18 @@ try_update {
     $john->{junk_seg} = $seg->get_number();
 
     my $h = new ObjStore::HV($seg, 10);
-    $john->{junk_in_seg} = $h->new_cursor($john);
+    $john->{junk_in_seg} = $h;
 
     # fill up the segment with junk
     for (keys %$junk) { $h->{$_} = $junk->{$_}; }
-    $h->{sptr} = $h->{strs}->new_cursor;
+    $h->{sptr} = $h->{strs}->new_ref($h);
 	
     # segment is determined by OSSVPV, not from OSSV
-    my $nseg = ObjStore::Segment::of(tied %{$h});
+    my $nseg = $h->segment_of;
     $nseg->get_number() == $seg->get_number()? ok : not_ok;
     
     # double-check the obvious
-    $nseg = ObjStore::Segment::of(tied @{$h->{nums}});
+    $nseg = $h->{nums}->segment_of;
     $nseg->get_number() == $seg->get_number()? ok : not_ok;
 };
 

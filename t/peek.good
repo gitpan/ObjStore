@@ -1,4 +1,6 @@
-ObjStore::Root John = ObjStore::HV (1) {
+TestDB {
+  John => ObjStore::HV (1) {
+     => 'zero',
     1 => 'String 1',
     10 => 'String 10',
     2 => 'String 2',
@@ -27,15 +29,15 @@ ObjStore::Root John = ObjStore::HV (1) {
       5,
     ],
     c => ObjStore::SetEmulation (1) [
-      ObjStore::HV (1) {
-        joe => 1,
-      },
-      ObjStore::HV (1) {
-        bob => 2,
-      },
-      ObjStore::HV (1) {
-        ed => 3,
-      },
+    ObjStore::HV (1) {
+      joe => 1,
+    },
+    ObjStore::HV (1) {
+      bob => 2,
+    },
+    ObjStore::HV (1) {
+      ed => 3,
+    },
     ],
     dict => ObjStore::HV (1) {
       1 => 3.14159,
@@ -55,34 +57,34 @@ ObjStore::Root John = ObjStore::HV (1) {
       32762,
       ...
     ],
-    junk_in_seg => ObjStore::UNIVERSAL::Cursor (1) => ObjStore::HV (1) {
-        nums => ObjStore::AV (1) [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7,
-          8,
-          9,
-          10,
-          11,
-          12,
-          13,
-        ],
-        sptr => ObjStore::UNIVERSAL::Cursor (1) => ObjStore::HV (2) {
-            a => 'b',
-            c => 'd',
-            e => 'f',
-            g => 'h',
-            i => ObjStore::AV (1) [
-              'a',
-              1,
-            ],
-          },
-        strs => ObjStore::HV (2) ...
-      },
+    junk_in_seg => ObjStore::HV (1) {
+      nums => ObjStore::AV (1) [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+      ],
+      sptr => ObjStore::Ref (1) => ObjStore::HV (1) {
+          a => 'b',
+          c => 'd',
+          e => 'f',
+          g => 'h',
+          i => ObjStore::AV (1) [
+            'a',
+            1,
+          ],
+        },
+      strs => ObjStore::HV (1) ...
+    },
 
     obj => PTest (1) {
       is => 1,
@@ -107,6 +109,7 @@ ObjStore::Root John = ObjStore::HV (1) {
       8 => 1,
     },
   },
-ObjStore::Root tripwire = ObjStore::HV (1) {
+  tripwire => ObjStore::HV (1) {
   },
-count = 269
+},
+count = 270

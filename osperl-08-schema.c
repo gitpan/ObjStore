@@ -10,11 +10,15 @@ OS_MARK_SCHEMA_TYPE(OSPV_nv);
 // interfaces
 OS_MARK_SCHEMA_TYPE(OSPV_Container);
 OS_MARK_SCHEMA_TYPE(OSPV_Generic);
-// references
-OS_MARK_SCHEMA_TYPE(OSPV_Ref);
-OS_MARK_SCHEMA_TYPE(OSPV_Cursor);
+OS_MARK_SCHEMA_TYPE(OSPV_Ref2);
+OS_MARK_SCHEMA_TYPE(OSPV_Cursor);  // in limbo
+OS_MARK_SCHEMA_TYPE(OSPV_Cursor2);
 
-//-------------------------------- NEW COLLECTIONS
+//-------------------------------- REFERENCES
+OS_MARK_SCHEMA_TYPE(OSPV_Ref2_protect);
+OS_MARK_SCHEMA_TYPE(OSPV_Ref2_hard);
+
+//-------------------------------- COLLECTIONS
 OS_MARK_SCHEMA_TYPE(hvent2);
 // splash
 OS_MARK_SCHEMA_TYPE(OSPV_avarray);
@@ -22,7 +26,8 @@ OS_MARK_SCHEMA_TYPE(OSPV_avarray_cs);
 OS_MARK_SCHEMA_TYPE(OSPV_hvarray2);
 OS_MARK_SCHEMA_TYPE(OSPV_hvarray2_cs);
 
-//-------------------------------- OLD COLLECTIONS
+//-------------------------------- DEPRECIATED
+OS_MARK_SCHEMA_TYPE(OSPV_Ref);
 OS_MARK_SCHEMA_TYPE(hkey);
 OS_MARK_SCHEMA_TYPE(hent);
 // splash

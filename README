@@ -1,24 +1,46 @@
-ObjStore 1.19 (Haloween Edition)
-10-31-97
+What do you get when you cross a mission-critical enterprise-class
+database with a camel?
 
+Name           DSLI  Description                                  Info
+-----------    ----  -------------------------------------------- -----
+ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
-* High performance relational engine using memory-mapped files.
-
-* Precomputes joins between multiple tables to reach over 20000
-complex inserts per minute (not using bcp!).
-
-* Terminate and stay resident SQL emulator written in perl.
-
-* Directly memory access 64-bit channels to Sybase, Informix, or Oracle
-relational databases.
-
-* Full duplex nested transactions now supported in native mode.
-
-* Automatic schema evolution.
-
-* Internet ready.
+- Requires ObjectStore OODBMS (http://www.odi.com) & perl 5.004_04.
+- Perl 5.004_54 or better recommended.
 
 Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
+
+
+##################
+# RE@ENT CHAN@ES #
+##################
+
+
+** 12-13-97 Released 1.21
+
+- THE TUTORIAL IS DONE!  See ObjStore::Tutorial!
+
+- Fixed numerous minor bugs; fixed ObjStore::UNIVERSAL::isa;
+significant changes to posh; NOREFS invokation optimized out unless
+the method is present; re-organized the stargate; moved CSV stuff to
+ObjStore::CSV; untested support for kernel threads.
+
+- 'Table' redesigned for performance.  See ObjStore::Table2.
+
+- The documentation is updated & re-written!
+
+
+** 11-21-97 Released 1.20
+
+- 'bless' now stores the @ISA tree at bless-time.  Use $o->isa($class)
+to query it.  For the transient @ISA, use $o->UNIVERSAL::isa($class).
+
+- Reference support is revamped.  Transient references and unprotected
+references are now supported.
+
+- 'posh' is vastly enhanced.
+
+- Basic export of 2D structure to CSV format files (Excel format).
 
 
 see ./INSTALL for hints on installation
@@ -31,6 +53,8 @@ Perl-ObjectStore mailing list:
 
 majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
 
+(If you think you've run into a bug, try running your script with
+"perl -MObjStore=PANIC" and mail the output to the mailing list.)
 
 -------------------------------------------------------------------
 Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.

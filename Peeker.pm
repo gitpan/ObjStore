@@ -1,64 +1,63 @@
-# create persistent Peekers?
+# factor to TIEHANDLE?
+
 package ObjStore::Peeker;
 use strict;
 use Carp;
-use vars qw{
-    $vareq
-    $prefix
-	$indent
-	    $sep
-		$addr
-		    $refcnt
-			$summary_width
-			    $instances
-				$width
-				    $depth
-					$to
-					    $all
-					    };
-$vareq=0;
-$prefix='';
-$indent='  ';
-$sep="\n";
-$addr=0;
-$refcnt=0;
-$summary_width=3;
-$instances=3;
-$width=30;
-$depth=20;
-$to='string';
-$all=0;
+use IO::Handle;
+use ObjStore ':ADV';
+use vars qw($debug);
+
+sub debug {
+    my $ret = $debug;
+    $debug = shift;
+    $ret;
+}
 
 sub new {
     my ($class, @opts) = @_;
     my $o = bless {
-	serial => 1,
 	vareq => 0,
-	prefix => $prefix,
-	indent => $indent,
-	sep => $sep,
-	addr => $addr,
-	refcnt => $refcnt,
-	summary_width => $summary_width,
-	instances => $instances,
-	width => $width,
-	depth => $depth,
-	to => $to,
-	all => $all,
+	prefix => '',
+	indent => '  ',
+	sep => "\n",
+	addr => 0,
+	refcnt => 0,
+	summary_width => 3,
+	width => 30,
+	depth => 20,
+	to => 'string',
+	all => 0,
+	pretty => 1,
     }, $class;
+    $o->reset;
     croak "Odd number of parameters" if @opts & 1;
-    while (@opts) { $o->{pop @opts} = pop @opts }
+    while (@opts) {
+	my ($k, $v) = (shift @opts, shift @opts);
+	if (!exists $o->{$k}) { carp "Attribute '$k' unrecognized"; next; }
+	$o->{$k} = $v;
+    }
     $o;
+}
+
+sub reset {
+    my ($o) = @_;
+    $o->{seen} = {};
+    $o->{coverage} = 0;
+    $o->{serial} = 1;
+}
+
+sub reset_class {
+    my ($o, $cl) = @_;
+    $cl = ref $cl if ref $cl;
+    delete $o->{seen}{$cl};
 }
 
 sub Peek {
     my ($o, $top) = @_;
-    $o->{output} = '';
-    $o->{seen} = {};
-    $o->{level} = 0;
+    $o->{_level} = 0;
     $o->{has_sep} = 0;
     $o->{has_prefix} = 0;
-    $o->{coverage} = 0;
+    $o->{output} = '';
     $o->o('$fake'.$o->{serial}." = ") if $o->{vareq};
     $o->peek_any($top);
     $o->nl;
@@ -74,23 +73,35 @@ sub Coverage {
 }
 
 sub prefix {
-    my ($o) = @_;
-    return if $o->{has_prefix};
-    $o->o($o->{prefix}, $o->{indent} x $o->{level});
-    $o->{has_prefix}=1;
+    my $o = shift;
+    carp "prefix is depreciated; simply use ->o";
+    $o->o(@_);
+}
+
+sub indent {
+    my ($o, $code) = @_;
+    ++ $o->{_level};
+    $code->();
+    -- $o->{_level};
 }
 
 sub nl {
-    my ($o) = @_;
+    my ($o, $rep) = @_;
+    $rep ||= 1;
     return if $o->{has_sep};
-    $o->o($o->{sep});
+    $o->o($o->{sep} x $rep);
     $o->{has_sep}=1;
+    $o->{has_prefix}=0;
 }
 
+# convert with *STDOUT{IO} notation
 sub o {
     my $o = shift;
+    if (!$o->{has_prefix}) {
+	$o->{has_prefix}=1;
+	$o->o($o->{'prefix'}, $o->{'indent'} x $o->{_level});
+    }
     $o->{has_sep}=0;
-    $o->{has_prefix}=0;
     my $t = ref $o->{to};
     if (!$t) {
 	if ($o->{to} eq 'string') {
@@ -109,62 +120,63 @@ sub o {
     }
 }
 
-sub avg {
-    if (@_) {
-	my $sum=0;
-	for (@_) { $sum += $_ }
-	$sum / @_;
-    } else { 0 }
-}
-
 sub peek_any {
     my ($o, $val) = @_;
 
     # interrogate
-    my $type = ObjStore::reftype $val;
-    my $class = ref $val;
-    my $blessed = $class ne $type;
+    my $type = reftype $val;
+    my $class = blessed $val;
+    my $basic_type;
 
-    # Since persistent-bless might be tweaked... ? XXX
-    $class = $val->_blessed_to if ($class and $class->isa('ObjStore::UNIVERSAL'));
-
-    if (!$class) {
-	if (!defined $val) {
-	    $o->o('undef,');
-	} elsif ($val =~ /^-?\d+(\.\d+)?$/) {
-	    $o->o("$val,");
-	} else {
-	    # do special quoting? XXX
-	    $o->o("'$val',");
-	}
+    if (!$type) {
+	if (!defined $val) {                $o->o('undef,');  }
+	elsif ($val =~ /^-?\d+(\.\d+)?$/) { $o->o("$val,");   }
+	else {				    $o->o("'$val',"); } # quoting? XXX
 	++ $o->{coverage};
 	return;
     }
 
+    warn "peek_any($val): type=$type; class=$class\n" if $debug;
+
+    if ($class) {
+	for my $t (qw(Database Ref Cursor)) {
+	    if ($val->isa("ObjStore::$t")) {
+		$basic_type = "ObjStore::$t";
+		last;
+	    }
+	}
+	warn "basic_type=$basic_type\n" if $debug && $basic_type;
+    }
+
     my $addr = "$val";
-    my $name = $o->{addr} ? $addr : $class;
-    if ($o->{refcnt} and $blessed and $val->can("_refcnt")) {
+    my $name = $o->{addr} ? $addr : ($class or $type);
+    if ($o->{refcnt} and $class and $val->can("_refcnt")) {
 	$name .= " (".join(',', $val->_refcnt).")";
     }
-    $o->{seen}{$class} ||= 0;
+    $o->{seen}{$class} ||= 0 if $class;
 
-    if ($o->{level} > $o->{depth} or defined($o->{seen}{$addr}) or
-	($blessed and $val->can('_is_blessed') and
-	 $val->_is_blessed and $o->{seen}{$class} > $o->{instances})) {
+    if ($o->{_level} > $o->{depth} or defined($o->{seen}{$addr})) {
 	$o->o("$name ...");
 	++ $o->{coverage};
 	return;
     }
     $o->{seen}{$addr}=1;
-    ++ $o->{seen}{$class};
+    ++ $o->{seen}{$class} if $class;
+#    $name .= " (".$o->{seen}{$class}.")";
 
-    $o->prefix;
-    if ($blessed and $val->can('peek')) {
-	$val->peek($o, $name);
+    if ($class and $basic_type and !$o->{pretty}) {
+	my $m = "$basic_type\::POSH_PEEK";
+	$val->$m($o, $name);
+    } elsif ($class and $o->{pretty} and $val->can('POSH_PEEK')) {
+	$val->POSH_PEEK($o, $name);
     } elsif ($type eq 'ARRAY') {
 	$o->peek_array($val, $name);
     } elsif ($type eq 'HASH') {
 	$o->peek_hash($val, $name);
+    } elsif ($type eq 'REF') {
+	++ $o->{coverage};
+	$o->o('\ ');
+	$o->peek_any($$val);
     } elsif ($type eq 'SCALAR') {
 	++ $o->{coverage};
 	$o->o($name);
@@ -175,7 +187,7 @@ sub peek_any {
 
 sub peek_array {
     my ($o, $val, $name) = @_;
-    my $blessed = ref($val) ne ObjStore::reftype($val);
+    my $blessed = blessed($val);
     my $len = ($blessed and $val->can("_count"))? $val->_count : @$val;
     $o->{coverage} += $len;
     my $big = $len > $o->{width};
@@ -183,19 +195,16 @@ sub peek_array {
     
     $o->o($name . " [");
     $o->nl;
-    ++$o->{level};
-    for (my $x=0; $x < $limit; $x++) {
-	$o->prefix;
-	$o->peek_any($val->[$x]);
-	$o->nl;
-    }
-    if ($big) {
-	$o->prefix;
-	$o->o("...");
-	$o->nl;
-    }
-    --$o->{level};
-    $o->prefix;
+    $o->indent(sub {
+	for (my $x=0; $x < $limit; $x++) {
+	    $o->peek_any($val->[$x]);
+	    $o->nl;
+	}
+	if ($big) {
+	    $o->o("...");
+	    $o->nl;
+	}
+    });
     $o->o("],");
     $o->nl;
 }
@@ -215,23 +224,19 @@ sub peek_hash {
     
     $o->o($name . " {");
     $o->nl;
-    ++$o->{level};
-    for $x (0..$limit) {
-	my ($k,$v) = @{$S[$x]};
-	
-	$o->prefix;
-	$o->o("$k => ");
-	$o->{has_prefix}=1;
-	$o->peek_any($v);
-	$o->nl;
-    }
-    if ($big) {
-	$o->prefix;
-	$o->o("...");
-	$o->nl;
-    }
-    --$o->{level};
-    $o->prefix;
+    $o->indent(sub {
+	for $x (0..$limit) {
+	    my ($k,$v) = @{$S[$x]};
+	    
+	    $o->o("$k => ");
+	    $o->peek_any($v);
+	    $o->nl;
+	}
+	if ($big) {
+	    $o->o("...");
+	    $o->nl;
+	}
+    });
     $o->o("},");
     $o->nl;
 }

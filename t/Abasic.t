@@ -4,19 +4,21 @@
 
 ######################### We start with some black magic to print on failure.
 
-BEGIN { $| = 1; $tx=1; print "1..7\n"; }
+BEGIN { $| = 1; $tx=1; print "1..8\n"; }
 END {print "not ok 1\n" unless $loaded;}
 
 use ObjStore;
 use lib './t';
 use test;
 
+#ObjStore::debug 'PANIC';
+
 $loaded = 1; ok; #1
 
-$db = ObjStore::open(&test_db, 0, 0666);
+$db = ObjStore::open(&test_db, 0, 0666) or die $@;
 $db? ok : not_ok; #2
 
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     if (! $john) {
 	my $hv = new ObjStore::HV($db, 'splash_array', 7);

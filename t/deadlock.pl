@@ -10,7 +10,7 @@ use test;
 #open(STDERR, ">>/dev/null") or die "open: $@";
 
 &open_db;
-try_update {
+begin 'update', sub {
     my $left = $db->root('tripwire');
     ++ $left->{left};
     warn "[2]left\n";

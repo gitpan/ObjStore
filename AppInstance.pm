@@ -9,8 +9,8 @@ sub ROOT() { 'instances' }
 sub new {
     my ($class, $app, @opts) = @_;
     my $dbdir = $ENV{"\U${app}_DBDIR"} || TMP_DBDIR;
-    $dbdir =~ s,/+$,,;
-    my $wdb = ObjStore::open("$dbdir/$app.db", 0, 0666);
+    $dbdir =~ s,/+?$,,;
+    my $wdb = ObjStore::open("$dbdir/$app", 0, 0666);
     my $o = bless { _wdb => $wdb, _app => $app, _cached => 0 }, $class;
     $o->config(@opts);
 }
@@ -94,3 +94,46 @@ sub destroy {
 }
 
 1;
+
+=head1 NAME
+
+ObjStore::AppInstance
+
+=head1 SYNOPSIS
+
+  use base 'ObjStore::AppInstance';
+
+  sub new {
+    my ($class) = @_;
+    my $o = $class->SUPER::new('app-name', pvars => [qw(ttype pref view)]);
+    ...
+    $o
+  }
+
+=head1 DESCRIPTION
+
+Sessions contain both transient and persistent data.
+
+The persistent data can only be accessed within a transaction but
+transient data is always available.
+
+=head1 METHODS
+
+=over 4
+
+=item * cache
+
+=item * uncache
+
+=item * destroy
+
+=back
+
+=head1 TODO
+
+Make it an ObjStore::Table.
+
+Identify sessions with hostname/pid or custom keys and garbage collect
+if unused for long enough.
+
+=cut

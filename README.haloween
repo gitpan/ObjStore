@@ -1,0 +1,39 @@
+ObjStore 1.19 (Haloween Edition)
+10-31-97
+
+
+* High performance relational engine using memory-mapped files.
+
+* Precomputes joins between multiple tables to reach over 20000
+complex inserts per minute (not using bcp!).
+
+* Terminate and stay resident SQL emulator written in perl.
+
+* Directly memory access 64-bit channels to Sybase, Informix, or Oracle
+relational databases.
+
+* Full duplex nested transactions now supported in native mode.
+
+* Automatic schema evolution.
+
+* Internet ready.
+
+Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
+
+
+see ./INSTALL for hints on installation
+see ./UPGRADE to evolve databases from prior releases
+see ./TODO for a list of stuff in the queue
+see ./CHANGES for a visionary perspective
+
+
+Perl-ObjectStore mailing list:
+
+majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
+
+
+-------------------------------------------------------------------
+Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
+This software is provided "as is" without express or implied warranty.
+This package is free software; you can redistribute it and/or modify
+it under the same terms as perl itself.

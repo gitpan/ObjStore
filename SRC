@@ -1,5 +1,8 @@
 NOTES
 
+o Some of my code might be hard to read.  Imagine how hard it was to
+write.
+
 o Functions or methods starting with '_' are internal to osperl.  They
 should not be used and are subject to change without notice.
 
@@ -8,18 +11,48 @@ all object files if you suspect they are out of sync.
 
 o Avoid const, private & templates.  C++ sucks.  Long live C++!
 
-o The following might change the perl stack:
-  OSSVPV::_bless,
-  OSSVPV::_blessed_to, wrap_object, osp::*_2sv, osp::push_*
-  osperl::force_sv_2bridge, OSSV::operator=
-
-o Weak references are conceptually orthogonal to cursors.  However,
-the extra complexity necessary to split the dimension seems like
-overkill.  After more contemplation, maybe they are not orthogonal.
-In any case, it is far simpler just to make cursors a subclass of
-references.
+o The relationship between references and cursors is strange.  It's
+probably best not to think about it.
 
 o Cross database pointers cannot be enabled.  They are too dangerous
 for reference counted data.
 
-o Coding XS is very strange.
+o Coding XS is very strange and very cool.
+
+o Bless is extremely confusing.  Here is some pseudo-code:
+
+  # must be very fast (in read transaction) [*]
+  _blessed_to($load)
+    $class = classname;
+    # code C++ for $classname->[0]
+    if ($load)
+      $class = hv_fetch(ObjStore::CLASSLOAD, $class)
+      if (!$class) {
+        # can be slow -> perl
+        $class = &ObjStore::CLASSLOAD($db, $os_close, $class)
+          # calls require_isa_tree mess
+          # insure $class->isa(baseclass)
+        hv_store(ObjStore::CLASSLOAD, $class)
+      }
+    }
+    return $class
+
+  # can be slow (in write transaction)
+  ABSORB
+    lookup BRAHMA, etc...
+  BRAHMA => {
+    classname => [
+      [0] = bless version
+      [1] = classname
+      [2] = cache timestamp
+      [3] = [@ISA]         #depth first array
+    ]
+  }
+    $o->_blessto_slot($blessto)
+
+  # can be slow
+  $o->ObjStore::UNIVERSAL::isa($class);
+    $blessing = $o->classname;
+    $class in? ($blessing, @{$blessing->{isa}})
+
+o For gdb - handle SIGSEGV nostop noprint pass

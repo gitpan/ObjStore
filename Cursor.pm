@@ -1,25 +1,8 @@
-package ObjStore::Cursor;	# simply a stack of cursors
+package ObjStore::Path::Cursor;
 use strict;
 use Carp;
 use ObjStore;
-use vars qw(@ISA);
-require ObjStore::Ref;
-@ISA = 'ObjStore::Ref';
-
-sub Push {
-    my ($o, $loc) = @_;
-    if ($loc->isa("ObjStore::Database")) {
-	# create cursors to all the roots
-	my %roots = (map {$_->get_name(), $_->get_value()->new_cursor($o)}
-		     $loc->get_all_roots());
-
-	my $rmap = ObjStore::translate($o, \%roots);
-	while ($o->depth) { $o->_Pop };
-	$o->_Push($rmap->new_cursor($o));
-    } else {
-	$o->_Push($loc->new_cursor($o));
-    }
-}
+use base 'ObjStore::Path::Ref';
 
 # Do something reasonable if the stack is made of Cursors.
 

@@ -1,5 +1,5 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..1\n"; }
+BEGIN { $| = 1; $tx=1; print "1..3\n"; }
 BEGIN { require 5.00452; }
 
 use ObjStore;
@@ -8,12 +8,13 @@ use test;
 
 &open_db;
 
+#ObjStore::debug 'refcnt';
+
+require ObjStore::Table2;
 require ObjStore::Table;
 require Row;
 
-try_update {
-    $db->verify_class_fields;
-
+begin 'update', sub {
     my $john = $db->root('John');
     die "No john" if !$john;
 
@@ -23,26 +24,35 @@ try_update {
 	my $r = new Row($tbl);
 	$r->{f1} = $x ** 1;
 	$r->{f2} = $x ** 2;
-	$r->{f3} = "This is big ".($x ** 3);
+	$r->{f3} = ["This is big ".($x ** 3)];
 	$ar->[$x] = $r;
     }
     $ar->[16] = $ar->[14];
     $ar->[23] = new Row($tbl);
+    $ar->[23]{f3} = ['Empty'];
 
     $tbl->new_index('Field', 'e1', 'f1');
     $tbl->new_index('Field', 'e2', 'f2');
-    $tbl->new_index('Field', 'big', 'f3');
+    $tbl->new_index('Field', 'long', 'f3->0');
 
     $tbl->index('e1')->build;
     $tbl->index('e2')->build;
-    $tbl->index('big')->build;
+    $tbl->index('long')->build;
+
+    bless $tbl, 'ObjStore::Table2';
+    if ($tbl->is_corrupted(1)) {
+	not_ok; ObjStore::peek($tbl);
+    } else {ok}
+
+    $tbl->rebuild_indices;
+    if ($tbl->is_corrupted(1)) {
+	not_ok; ObjStore::peek($tbl);
+    } else {ok}
 };
 
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     die "No john" if !$john;
 
     delete $john->{table};
 };
-
-ok;

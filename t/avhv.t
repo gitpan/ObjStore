@@ -19,9 +19,9 @@ use Class::Fields qw(my pretty name is horsht);
 package main;
 use ObjStore;
 
-try_update {
-    $db->verify_class_fields();
+#ObjStore::debug qw(wrap);
 
+begin 'update', sub {
     my $john = $db->root('John');
     my $o = new Test::AVHV1($db);
     $john->{avhv} = $o;
@@ -32,7 +32,7 @@ try_update {
 #    warn ObjStore::peek($o);
 };
 
-try_update {
+begin 'update', sub {
     my $john = $db->root('John');
     my $o = $john->{avhv};
     bless $o, 'Test::AVHV2';
@@ -43,7 +43,5 @@ try_update {
      $o->{'is'} == 3) ? ok : not_ok;
     $o->{horsht} = 5;
     $o->{pretty} = 4;
-#    warn ObjStore::peek($o);
+#    ObjStore::peek($o);
 };
-
-ok;

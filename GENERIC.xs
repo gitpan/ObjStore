@@ -155,7 +155,6 @@ XS(XS_ObjStore__HV__new_splash_array)
   SP -= items;
 
   dOSP ;
-  char *clsv = SvPV(ST(0), na);
   os_segment *area = osp->sv_2segment(ST(1));
   int card = (int)SvIV(ST(2));
   PUTBACK;
@@ -168,8 +167,7 @@ XS(XS_ObjStore__HV__new_splash_array)
   }
   
   OSSVPV *pv = new(area, OSPV_hvarray::get_os_typespec()) OSPV_hvarray(card);
-  pv->_bless(clsv);
-  osp->push_ospv(pv);
+  pv->bless(ST(0));
 }
 
 void OSPV_hvarray::_boot(HV *hv)
@@ -192,8 +190,8 @@ double OSPV_hvarray::_percent_filled()
 int OSPV_hvarray::_count()
 { return hv.count(); }
 
-char *OSPV_hvarray::base_class()
-{ return "ObjStore::HV"; }
+char *OSPV_hvarray::os_class(STRLEN *len)
+{ *len = 12; return "ObjStore::HV"; }
 
 int OSPV_hvarray::get_perl_type()
 { return SVt_PVHV; }
@@ -228,8 +226,9 @@ SV *OSPV_hvarray::STOREp(char *key, SV *value)
     hv[hv.count()].hk.s(key, strlen(key)+1);
   }
   hv[xx].hv = value;
+  dTHR;
   if (GIMME_V == G_VOID) return 0;
-  dOSP ;
+  dOSP;
   return osp->ossv_2sv(&hv[xx].hv);
 }
 
@@ -341,7 +340,6 @@ XS(XS_ObjStore__Set__new_splash_array)
   SP -= items;
 
   dOSP ;
-  char *clsv = SvPV(ST(0),na);
   os_segment *area = osp->sv_2segment(ST(1));
   int card = (int)SvIV(ST(2));
   PUTBACK;
@@ -354,8 +352,7 @@ XS(XS_ObjStore__Set__new_splash_array)
   }
 
   OSSVPV *pv = new(area, OSPV_setarray::get_os_typespec()) OSPV_setarray(card);
-  pv->_bless(clsv);
-  osp->push_ospv(pv);
+  pv->bless(ST(0));
 }
 
 void OSPV_setarray::_boot(HV *hv)
@@ -380,8 +377,8 @@ double OSPV_setarray::_percent_filled()
 int OSPV_setarray::_count()
 { return cv.count(); }
 
-char *OSPV_setarray::base_class()
-{ return "ObjStore::Set"; }
+char *OSPV_setarray::os_class(STRLEN *len)
+{ *len = 13; return "ObjStore::Set"; }
 
 int OSPV_setarray::first(int start)
 {
@@ -406,7 +403,7 @@ void OSPV_setarray::add(SV *nval)
   if (cv[spot].natural() != ossv_obj)
     croak("OSPV_setarray::add(nval): sets can only contain objects");
 
-  //  warn("added %s", cv[spot].as_pv());
+  //  warn("added %s", cv[spot].stringify());
   /*
   for (int zz=0; zz < cv.count(); zz++) {
     warn("cv[%d]: %d\n", zz, cv[zz].natural());
@@ -537,7 +534,6 @@ XS(XS_ObjStore__HV__new_os_dictionary)
   SP -= items;
 
   dOSP ;
-  char *clsv = SvPV(ST(0), na);
   os_segment *area = osp->sv_2segment(ST(1));
   int card = (int)SvIV(ST(2));
   PUTBACK;
@@ -545,8 +541,7 @@ XS(XS_ObjStore__HV__new_os_dictionary)
   if (card <= 0) croak("Non-positive cardinality");
   
   OSSVPV *pv = new(area, OSPV_hvdict::get_os_typespec()) OSPV_hvdict(card);
-  pv->_bless(clsv);
-  osp->push_ospv(pv);
+  pv->bless(ST(0));
 }
 
 void OSPV_hvdict::_boot(HV *hv)
@@ -565,32 +560,24 @@ OSPV_hvdict::~OSPV_hvdict()
 int OSPV_hvdict::_count()
 { return hv.cardinality(); }
 
-char *OSPV_hvdict::base_class()
-{ return "ObjStore::HV"; }
+char *OSPV_hvdict::os_class(STRLEN *len)
+{ *len = 12; return "ObjStore::HV"; }
 
 int OSPV_hvdict::get_perl_type()
 { return SVt_PVHV; }
 
-RAW_STRING *OSPV_hvdict::_get_raw_string(char *key)
-{
-  OSSV *ret = hv.pick(key);
-  if (ret) {
-    return ret->get_raw_string();
-  } else {
-    croak("OSPV_hvdict::_get_raw_string(%s): not found", key);
-  }
-}
-
 SV *OSPV_hvdict::FETCHp(char *key)
 {
   OSSV *ret = hv.pick(key);
-  DEBUG_hash(warn("OSPV_hvdict::FETCH %s => %s", key, ret? ret->as_pv() : "<0x0>"));
+  DEBUG_hash(warn("OSPV_hvdict::FETCH %s => %s", key, ret? ret->stringify() : "<0x0>"));
   dOSP ;
   return osp->ossv_2sv(ret);
 }
 
 SV *OSPV_hvdict::STOREp(char *key, SV *nval)
 {
+  if (*key == 0)
+    croak("ObjStore: os_dictionary cannot store a zero length hash key");
   OSSV *ossv = (OSSV*) hv.pick(key);
   dOSP ;
   if (ossv) {
@@ -599,8 +586,8 @@ SV *OSPV_hvdict::STOREp(char *key, SV *nval)
     ossv = osp->plant_sv(os_segment::of(this), nval);
     hv.insert(key, ossv);
   }
-  DEBUG_hash(warn("OSPV_hvdict::INSERT(%s=%s)", key, ossv->as_pv()));
-
+  DEBUG_hash(warn("OSPV_hvdict::INSERT(%s=%s)", key, ossv->stringify()));
+  dTHR;
   if (GIMME_V == G_VOID) return 0;
   return osp->ossv_2sv(ossv);
 }
@@ -708,7 +695,6 @@ XS(XS_ObjStore__Set__new_os_set)
   SP -= items;
 
   dOSP ;
-  char *clsv = SvPV(ST(0), na);
   os_segment *area = osp->sv_2segment(ST(1));
   int card = (int)SvIV(ST(2));
   PUTBACK;
@@ -716,8 +702,7 @@ XS(XS_ObjStore__Set__new_os_set)
   if (card <= 0) croak("Non-positive cardinality");
 
   OSSVPV *pv = new(area, OSPV_sethash::get_os_typespec()) OSPV_sethash(card);
-  pv->_bless(clsv);
-  osp->push_ospv(pv);
+  pv->bless(ST(0));
 }
 
 void OSPV_sethash::_boot(HV *hv)
@@ -735,8 +720,8 @@ OSPV_sethash::~OSPV_sethash()
 int OSPV_sethash::_count()
 { return set.cardinality(); }
 
-char *OSPV_sethash::base_class()
-{ return "ObjStore::Set"; }
+char *OSPV_sethash::os_class(STRLEN *len)
+{ *len = 13; return "ObjStore::Set"; }
 
 void OSPV_sethash::add(SV *nval)
 {
@@ -897,7 +882,6 @@ XS(XS_ObjStore__AV__new_splash_array)
   SP -= items;
 
   dOSP ;
-  char *clsv = SvPV(ST(0), na);
   os_segment *area = osp->sv_2segment(ST(1));
   int card = (int)SvIV(ST(2));
   PUTBACK;
@@ -910,8 +894,7 @@ XS(XS_ObjStore__AV__new_splash_array)
   }
   
   OSSVPV *pv = new(area, OSPV_avarray::get_os_typespec()) OSPV_avarray(card);
-  pv->_bless(clsv);
-  osp->push_ospv(pv);
+  pv->bless(ST(0));
 }
 
 OSPV_avarray::OSPV_avarray(int sz)
@@ -934,28 +917,27 @@ double OSPV_avarray::_percent_filled()
 int OSPV_avarray::_count()
 { return av.count(); }
 
-char *OSPV_avarray::base_class()
-{ return "ObjStore::AV"; }
+char *OSPV_avarray::os_class(STRLEN *len)
+{ *len = 12; return "ObjStore::AV"; }
 
 int OSPV_avarray::get_perl_type()
 { return SVt_PVAV; }
 
-SV *OSPV_avarray::FETCHi(int xx)
+OSSV *OSPV_avarray::FETCHi(int xx)
 {
-  if (xx < 0) return &sv_undef;
+  if (xx < 0 || xx >= av.count()) return 0;
   DEBUG_array(warn("OSPV_avarray(0x%x)->FETCHi(%d)", this, xx));
-  dOSP ;
-  return osp->ossv_2sv(&av[xx]);
+  return &av[xx];
 }
 
-SV *OSPV_avarray::STOREi(int xx, SV *value)
+OSSV *OSPV_avarray::STOREi(int xx, SV *value)
 {
-  if (xx < 0) return &sv_undef;
+  if (xx < 0) return 0;
   DEBUG_array(warn("OSPV_avarray(0x%x)->STOREi(%d)", this, xx));
   av[xx] = value;
+  dTHR;
   if (GIMME_V == G_VOID) return 0;
-  dOSP ;
-  return osp->ossv_2sv(&av[xx]);
+  return &av[xx];
 }
 
 SV *OSPV_avarray::Pop()
@@ -1026,7 +1008,6 @@ XS(XS_ObjStore__HV__new_splash_array2)
   SP -= items;
 
   dOSP ;
-  char *clsv = SvPV(ST(0), na);
   os_segment *area = osp->sv_2segment(ST(1));
   int card = (int)SvIV(ST(2));
   PUTBACK;
@@ -1039,8 +1020,7 @@ XS(XS_ObjStore__HV__new_splash_array2)
   }
   
   OSSVPV *pv = new(area, OSPV_hvarray2::get_os_typespec()) OSPV_hvarray2(card);
-  pv->_bless(clsv);
-  osp->push_ospv(pv);
+  pv->bless(ST(0));
 }
 
 void OSPV_hvarray2::_boot(HV *hv)
@@ -1063,8 +1043,8 @@ double OSPV_hvarray2::_percent_filled()
 int OSPV_hvarray2::_count()
 { return hv.count(); }
 
-char *OSPV_hvarray2::base_class()
-{ return "ObjStore::HV"; }
+char *OSPV_hvarray2::os_class(STRLEN *len)
+{ *len = 12; return "ObjStore::HV"; }
 
 int OSPV_hvarray2::get_perl_type()
 { return SVt_PVHV; }
@@ -1084,7 +1064,7 @@ SV *OSPV_hvarray2::FETCHp(char *key)
   int xx = index_of(key);
   OSSV *ret = xx==-1? 0 : &hv[xx].hv;
   DEBUG_hash(warn("OSPV_hvarray2::FETCH[%d] %s => %s",
-		  xx, key, ret?ret->as_pv():"undef"));
+		  xx, key, ret?ret->stringify():"undef"));
   dOSP ;
   return osp->ossv_2sv(ret);
 }
@@ -1098,9 +1078,10 @@ SV *OSPV_hvarray2::STOREp(char *key, SV *value)
   }
   hv[xx].hv = value;
   DEBUG_hash(warn("OSPV_hvarray2::STORE[%x] %s => %s",
-		  xx, key, hv[xx].hv.as_pv()));
+		  xx, key, hv[xx].hv.stringify()));
+  dTHR;
   if (GIMME_V == G_VOID) return 0;
-  dOSP ;
+  dOSP;
   return osp->ossv_2sv(&hv[xx].hv);
 }
 

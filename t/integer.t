@@ -1,5 +1,5 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..1\n"; }
+BEGIN { $| = 1; $tx=1; print "1..2\n"; }
 
 use strict;
 use ObjStore ':ALL';

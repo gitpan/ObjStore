@@ -72,7 +72,7 @@ sub set_defaults {
     $o->flags('cc-dl', $Config{cccdlflags});
     $o->flags('ld-dl', $Config{lddlflags});
 
-    $o->exe(perl => "$Config{bin}/perl");
+    $o->exe(perl => $^X);
 
     if ($hint and $hint eq 'perl-module') {
 	$o->flags('cc', $Config{'ccflags'});
@@ -91,10 +91,11 @@ sub set_defaults {
 	$o->spotless('./blib');
     }
 
+    $o->{thread} = $Config{archname} =~ /thread/i;
+
     # system dependent section
 
-    if ($Config{archname} =~ m/^sun4-solaris(.*)$/) {
-	$o->{thread} = ($1 =~ /thread/);
+    if ($Config{archname} =~ m/^sun4-solaris/) {
 
 	# assume SunPro 4.0
 	$o->exe('cxx', 'CC');
@@ -164,10 +165,16 @@ sub pod2man {
     my ($o, $pod, $section) = @_;
     my $stem = $pod;
     $stem =~ s/\.[^.]+$//;
-    $o->clean("$stem.$section");
-    new Maker::Unit("$stem.$section", sub {
-	if (newer("$stem.$section", $pod)) {
-	    $o->x("pod2man $pod > $stem.$section");
+    my $target;
+    if ($section =~ m/^\d+$/) {
+	$target = "$stem.$section";
+    } else {
+	$target = $section;
+    }
+    $o->clean($target);
+    new Maker::Unit($target, sub {
+	if (newer($target, $pod)) {
+	    $o->x("pod2man $pod > $target");
 	}
     });
 }
@@ -333,7 +340,7 @@ sub objstore {
     }
     $o->flags('ld', "-los",
 	      $o->want_threads? "-losthr" : "-losths",
-	      $Config{libs});  # -lC is not be required on solaris
+	      $Config{libs});  # -lC is wrong on solaris
     
     $o->clean("$tag-osschema.c", "neutral-$tag");
 #    $o->spotless(sub {$o->x("osrm -f $o->{osdbdir}/$tag.adb");});
@@ -505,10 +512,11 @@ sub test_harness {
 	$ENV{PERL_DL_NONLAZY}=1;
 #	$ENV{PERL_DL_DEBUG}=1;
 	$o->z($perl, "-I$map->{arch}[0]", "-I$map->{lib}[0]", "-I$Config{archlib}",
-	      "-I$Config{privlib}", "-e",
+	      "-I$Config{privlib}", "-e '",
 	      'use Test::Harness qw(&runtests $verbose); $verbose=0; runtests @ARGV;',
-	      grep(!/\~$/, sort glob('t/*.t')));
-
+	      "'",
+	      grep(!/\~$/, sort glob('t/*.t')),
+	      );
     });
 }
 

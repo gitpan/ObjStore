@@ -227,9 +227,11 @@ sub z {
 	0;
 
     } else {
-	print join(" ", @cmd)."\n" if $o->{verbose};
+	my $ready = join(" ", @cmd);
+	print "$ready\n" if $o->{verbose};
 	if (!$o->{nop}) {
-	    my $rc = 0xffff & system(@cmd);
+	    $ready =~ s/\"/\\\"/g;  #hack it
+	    my $rc = 0xffff & system($ready);
 	    if ($rc & 0xff) {
 		print "*** Break";
 		print " (core dumped)" if $rc & 0x80;

@@ -2,25 +2,31 @@
 struct osp_thr {
   osp_thr();
   ~osp_thr();
+  static int info_key;
   static osp_thr *fetch();
-  static void boot_single();
 
   //context
   long debug;
+  SV *errsv;
   HV *CLASSLOAD;
   SV *stargate;
   int tie_objects;
   struct osp_txn *txn;
   tix_handler handler;
+  ossv_bridge *bridge_top;   //should be invalid
 
   //methods
   int can_update();
+  void destroy_bridge();
+//  void invalidate(OSSVPV *pv);
 
   //glue methods
   os_segment *sv_2segment(SV *);
   ossv_bridge *sv_2bridge(SV *, int force, os_segment *seg=0);
+  
   SV *ossv_2sv(OSSV *);
   SV *ospv_2sv(OSSVPV *);
+  SV *wrap(OSSVPV *ospv, SV *br);
   OSSV *plant_sv(os_segment *, SV *);
   OSSV *plant_ospv(os_segment *seg, OSSVPV *pv);
   void push_ospv(OSSVPV *pv);
@@ -32,6 +38,7 @@ struct osp_txn {
   ~osp_txn();
   void abort();
   void commit();
+//  void invalidate(OSSVPV *pv);
   void post_transaction();
   int can_update();
   void prepare_to_commit();

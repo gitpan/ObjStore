@@ -27,6 +27,17 @@ see ./CHANGES for a historical perspective
 ### RECENT CHANGES ###
 
 
+** Released 1.05
+
+- ObjectStore exceptions trigger a dump of the perl call stack.
+
+- Peek on sacks.
+
+- Bug fixes.
+
+- $store->set_fetch_policy(os_fetch_policy, os_int32)
+
+
 ** Released 1.03
 
 - Investigated schema evolution.  Will provide a database evolver
@@ -45,24 +56,3 @@ can be run and the database does not grow.
 - Started writing documentation.  (Yawn.)
 
 
-** Released 1.02
-
-- Improved make file.  Fixed blib.  Usage now looks like this:
-
-perl ./be [-nop] [-silent] [-verbose] <cmd>
-   checked      - verify that the package is complete
-   made         - run the compiler, toast the pop-tarts, etc.
-   installed    - copy files to final install area
-   uninstalled  - delete any files that were installed
-   cleaned      - delete all temporary files
-   manifest     - update the MANIFEST file
-   dist         - create a tar.gz distribution file
-
-- Fixed version numbering for Exporter.  1.2 => 1.02
-
-- Added ObjStore::peek($var) - like Data::Dumper except that it will work better
-on gigantic databases.  Only three elements are printed from large hashes,
-while small hashes are printed completely.  The meaning of 'large' can be
-customized (not yet).
-
-- Installs the PoweredByOS.gif and publishes the path.

@@ -5,7 +5,7 @@ package ObjStore;
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-$VERSION = 1.03;
+$VERSION = 1.05;
 
 =head1 NAME
 
@@ -16,7 +16,7 @@ ObjStore - Perl extension for ObjectStore ODMS
   use ObjStore;
 
   $osdir = ObjStore->schema_dir;
-  $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
+  my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
 
   try_update {
       $top = $DB->root('megabase', $DB->newHV('dict'));
@@ -35,7 +35,7 @@ ObjStore - Perl extension for ObjectStore ODMS
 [Run peek on one of our databases so people understand the simplicity
 that comes from not having a rigid schema.]
 
-=head1 ObjectStore Philosophy
+=head1 OBJECTSTORE PHILOSOPHY
 
 ObjectStore is outrageously powerful and sophisticated.  It actually
 does way too much for the average get-the-job-done programmer.  The
@@ -49,13 +49,28 @@ performance, then speed.  If you really want speed, wait till Perl5
 gets access to pthreads.  Or see the TODO list about dynamic linking
 additional C++ objects.
 
-=head1 Transactions
+=head1 TRANSACTIONS
 
-1. Read transactions may not work very well until they are fixed.
+1. You cannot access persistent data outside of a transaction.  Care
+must be taken that all persistent variables go out of scope before
+transactions complete.
 
-2. You cannot access persistent data outside of a transaction.
+    {
+	my $var;
+	try_update {
+	    $var = $DB->root('top');
+	};
+    }      # $var destroy causes ObjStore exception
 
-=head1 Containers, Reference Counting, and Segments
+2. It is impractical to use 'read' transactions because
+collections include embedded cursors.  You cannot be able to iterate
+over collections without modifying the cursors in the database.  This
+should be construed as a bug in perl.  As a work around, read
+transactions are implemented with the abort_only transaction mode.
+This mode allows you to modify the database but will not commit the
+changes.
+
+=head1 REFERENCE COUNTING
 
 It is not practical to simply make perl types persistent.  Values in
 the database have different requirements than transient values and
@@ -66,10 +81,12 @@ from transient data.
 
 2. You cannot take a reference to a scalar value.
 
+=head1 CONTAINERS
+
 There are a few considerations when creating a container: which
 segment, which symantics, and which representation.
 
-=head2 Hashes
+=head2 HASHES
 
     $DB->newHV('array');
     $DB->newHV('dict');
@@ -83,23 +100,28 @@ transient references you might have will become pointers to random
 memory.  This case actually doesn''t come up very often.  To mess
 up, you need to go through these contortions:
 
-    my $top = $DB->newHV('array');
+    my $top = $DB->newTiedHV('array');
     my $dict = $top->{dict} = $DB->newHV('dict');
     for (1..14) { $top->{$_} = $_; }   # cause resize of $top
-    $dict->{foo} = 'bar';              # $dict points to random OOPS!
-    $dict = $top->{dict};              # now $dict OK
 
-=head2 Sacks
+    $dict->{foo} = 'bar';              # $dict points to random OOPS!
+
+    $dict = $top->{dict};              # now $dict OK
+    $dict->{foo} = 'bar';              # OK
+
+=head2 SACKS
 
     $DB->newSack('array');
 
 Sacks are sequential access containers.  They support the following 
 methods:
 
-    void sack->a(element);
-    void sack->r(element);
-    SV*  sack->first();
-    SV*  sack->next();
+    void $sack->a($element);
+    void $sack->r($element);
+    int  $sack->contains($element);
+    SV*  $sack->first();
+    SV*  $sack->next();
+    void $sack->bless('classname');
 
 Not very feature-ful, are they?  You''d think you would get a big
 efficiency win!  In fact, they are only a little better than
@@ -118,6 +140,7 @@ ObjectStore Documentation
 
 use Carp;
 use Config;
+use UNIVERSAL qw(isa);
 
 require Exporter;
 @ISA         = qw(Exporter);
@@ -147,46 +170,72 @@ sub try_update(&) {
     }
 }
 
-sub try_read(&) {        # is this a dumb idea?
+sub try_read(&) {
     my ($fun) = @_;
-    ObjStore->begin_read;
+    ObjStore->begin_abort;
     eval {
 #	local $SIG{'__DIE__'};
 	&$fun;
     };
-    if ($@) {
-	ObjStore->abort;  # Abort after reading?  Whatever.
-    } else {
-	ObjStore->commit;
-    }
+    ObjStore->abort;
 }
 
 sub peek {
-    my ($lv, $h) = @_;
-    my $x=0;
-    my @S;
+    croak "peek([lv,] value)" if @_ > 2;
+    my ($lv, $h);
+    if (@_ == 1) {
+	$lv=0; $h = shift;
+    } else {
+	($lv, $h) = @_;
+    }
     if (!ref $h) {
 	print ' 'x$lv . "$h\n";
 	return;
     }
-    while (my($k,$v) = each %$h) {
-	last if $x++ > 21;
-	push(@S, [$k,$v]);
-    }
-    @S = sort { $a->[0] cmp $b->[0] } @S;
-    my $limit = (@S > 20) ? 2 : $#S;
-    for $x (0..$limit) {
-	my ($k,$v) = @{$S[$x]};
-	if (ref $v eq 'HASH') {
-	    print ' 'x$lv . "$k => {\n";
-	    peek($lv+1, $v);
-	    print ' 'x$lv . "},\n";
-	} elsif (!ref $v) {
-	    $v = 'undef' if !defined $v;
-	    print ' 'x$lv . "$k => '$v'\n";
-	} else {
-	    die "unknown type";
+    my $class = ref $h;
+    if ($class eq 'HASH') {
+	my @S;
+	my $x=0;
+	while (my($k,$v) = each %$h) {
+	    last if $x++ > 21;
+	    push(@S, [$k,$v]);
 	}
+	@S = sort { $a->[0] cmp $b->[0] } @S;
+	my $limit = (@S > 20) ? 2 : $#S;
+	for $x (0..$limit) {
+	    my ($k,$v) = @{$S[$x]};
+
+	    if (ref $v) {
+		print ' 'x$lv . "$k => {\n";
+		peek($lv+1, $v);
+		print ' 'x$lv . "},\n";
+	    } else {
+		$v = 'undef' if !defined $v;
+		print ' 'x$lv . "$k => '$v'\n";
+	    }
+	}
+    } elsif (isa($class, 'ObjStore::CV')) {
+	my @S;
+	my $x=0;
+	for (my $v=$h->first; $v; $v=$h->next) {
+	    last if $x++ > 21;
+	    push(@S, $v);
+	}
+	my $limit = (@S > 20) ? 2 : @S;
+	for (my $v=$h->first; $v; $v=$h->next) {
+	    last if $limit-- <= 0;
+
+	    if (ref $v) {
+		print ' 'x$lv . "{\n";
+		peek($lv+1, $v);
+		print ' 'x$lv . "},\n";
+	    } else {
+		$v = 'undef' if !defined $v;
+		print ' 'x$lv . "'$v'\n";
+	    }
+	}
+    } else {
+	die "Unknown class '$class'";
     }
 }
 
@@ -225,7 +274,6 @@ sub newTiedHV {
 }
 
 package ObjStore::HV;
-use UNIVERSAL qw(isa);
 use Carp;
 
 sub TIEHASH {
@@ -259,7 +307,10 @@ sub STORE {
 sub bless {
     my ($o, $class) = @_;
     $o->set_classname($class);
-    CORE::bless($o, $class);
+    my %h;
+    tie %h, $class, $o;
+    my $h = \%h;
+    CORE::bless($h, $class);
 }
 
 package ObjStore::CV;
@@ -271,6 +322,14 @@ sub bless {
     isa($class, 'ObjStore::CV') or croak "$class is not an ObjStore::CV";
     $o->set_classname($class);
     CORE::bless($o, $class);
+}
+
+sub contains {
+    my ($o, $e) = @_;
+    for (my $x=$o->first; $x; $x=$o->next) {
+	return 1 if $e eq $x;
+    }
+    0;
 }
 
 1;

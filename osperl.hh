@@ -80,7 +80,6 @@ struct OSSV {
   double as_nv();
   char *as_pv();
   os_unsigned_int32 as_pvn();
-  SV *as_sv();
 };
 
 #define HKEY_MAXLEN 12
@@ -88,6 +87,7 @@ struct OSSV {
 // 12 bytes
 struct hkey {
   static os_typespec *get_os_typespec();
+  static char strrep[HKEY_MAXLEN+2];
   char str[HKEY_MAXLEN];
   hkey();
   hkey(const hkey &);
@@ -96,7 +96,7 @@ struct hkey {
   void undef();
   hkey *operator=(const hkey &);
   hkey *operator=(char *k1);
-  SV *as_sv();
+  char *as_pv();
   static int rank(const void *s1, const void *s2);
   static os_unsigned_int32 hash(const void *s1);
 };

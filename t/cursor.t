@@ -13,19 +13,24 @@ sub chk1 {
     my $ok=1;
     
     my $ah = $john->{$rep} = $DB->newHV($rep);
-    for (1..8) { $ah->{$_} = 1; }
+    for (1..8) {
+      $ah->{$_} = 1;
+      my @ks = keys %$ah;
+      @ks == $_ or die "$rep cursor break at $_";
+    }
 
     my @k = sort keys %$ah;
-    @k == 8 or $ok=0;
+    @k == 8 or warn "$rep cursors are broken = @k";
     for (my $x=1; $x <= 8; $x++) {
-	$k[$x-1] == $x or $ok=0;
+	$k[$x-1] == $x or do { $ok=0; warn "$k[$x-1] != $x"; }
     }
     $ok? ok : not_ok;
     
     delete $ah->{3};
     @k = sort keys %$ah;
     for (my $x=0; $x < @k; $x++) {
-	$k[$x] == ($x >= 2? $x+2 : $x+1) or $ok=0;
+	my $right = ($x >= 2? $x+2 : $x+1);
+	$k[$x] == $right or do { $ok=0; warn "$k[$x] != $right"; }
     }
     $ok? ok : not_ok;
 }

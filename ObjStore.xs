@@ -8,10 +8,11 @@ modify it under the same terms as Perl itself.
 #include <string.h>
 #include "osperl.hh"
 
-//#define DEBUG_MEMORY
-//#define DEBUG_OSSV
+//#define DEBUG_OSSV_VALUES
+//#define DEBUG_MEM_OSSVPV
 //#define DEBUG_NEW_OSSV
 //#define DEBUG_REFCNT
+//#define DEBUG_HVDICT
 
 /*--------------------------------------------- typemap services */
 
@@ -70,25 +71,26 @@ static OSSV *sv_2ossv(SV *nval)
   return 0;
 }
 
-SV *OSSV::as_sv()
+static SV *ossv_2sv(OSSV *ossv)
 {
-  switch (natural()) {
+  if (!ossv) return &sv_undef;
+  switch (ossv->natural()) {
   case ossv_undef: return &sv_undef;
-  case ossv_iv:    return newSViv(u.iv);
-  case ossv_nv:    return newSVnv(u.nv);
-  case ossv_pv:    return newSVpv((char*) u.pv.vptr, u.pv.len);
+  case ossv_iv:    return newSViv(ossv->u.iv);
+  case ossv_nv:    return newSVnv(ossv->u.nv);
+  case ossv_pv:    return newSVpv((char*) ossv->u.pv.vptr, ossv->u.pv.len);
   case ossv_hv:
   case ossv_av:{
-    char *CLASS = (natural() == ossv_hv? "ObjStore::HV":"ObjStore::AV");
-    SV *_tied = sv_setref_pv(sv_newmortal(), CLASS, (void*)this);
+    char *CLASS = (ossv->natural() == ossv_hv? "ObjStore::HV":"ObjStore::AV");
+    SV *_tied = sv_setref_pv(sv_newmortal(), CLASS, (void*)ossv);
     SV *_tmpsv;
-    if (natural() == ossv_hv) _tmpsv = sv_2mortal((SV*)newHV());
+    if (ossv->natural() == ossv_hv) _tmpsv = sv_2mortal((SV*)newHV());
     else _tmpsv = sv_2mortal((SV*)newAV());
     sv_magic(_tmpsv, _tied, 'P', Nullch, 0);
 
     SV *rv = newRV(_tmpsv);
     --SvREFCNT(SvRV(rv));
-    char *clname = ((OSSVPV*)u.pv.vptr)->classname;
+    char *clname = ((OSSVPV*)ossv->u.pv.vptr)->classname;
     if (clname) {
 	HV* stash = gv_stashpv(clname, TRUE);
 	(void)sv_bless(rv, stash);
@@ -96,14 +98,20 @@ SV *OSSV::as_sv()
     return rv;
   }
   case ossv_cv:{
-    char *CLASS = ((OSSVPV*)u.pv.vptr)->classname;
+    char *CLASS = ((OSSVPV*)ossv->u.pv.vptr)->classname;
     if (!CLASS) CLASS = "ObjStore::CV";
-    return sv_setref_pv(sv_newmortal(), CLASS, (void*)this);
+    return sv_setref_pv(sv_newmortal(), CLASS, (void*)ossv);
   }
   default:
-    warn("OSSV %s is not implemented", Type());
+    warn("OSSV %s is not implemented", ossv->Type());
     return &sv_undef;
   }
+}
+
+static SV *hkey_2sv(hkey *hk)
+{
+  if (!hk) return &sv_undef;
+  return sv_2mortal(newSVpv(hk->as_pv(), 0));
 }
 
 /*--------------------------------------------- OSSV */
@@ -274,7 +282,7 @@ int OSSV::morph(ossvtype nty)
     break;
 
   case ossv_pv:
-#ifdef DEBUG_OSSV
+#ifdef DEBUG_OSSV_VALUES
     warn("OSSV::morph(%d -> %d): deleting string '%s' 0x%x", _type, nty,u.pv.vptr,u.pv.vptr);
 #endif
     delete [] ((char*)u.pv.vptr);
@@ -296,7 +304,7 @@ void OSSV::undef()
 void OSSV::s(os_int32 nval)
 {
   morph(ossv_iv); u.iv = nval;
-#ifdef DEBUG_OSSV
+#ifdef DEBUG_OSSV_VALUES
   warn("OSSV(0x%x) = iv(%d)", this, nval);
 #endif
 }
@@ -304,7 +312,7 @@ void OSSV::s(os_int32 nval)
 void OSSV::s(double nval)
 {
   morph(ossv_nv); u.nv = nval;
-#ifdef DEBUG_OSSV
+#ifdef DEBUG_OSSV_VALUES
   warn("OSSV(0x%x) = nv(%f)", this, nval);
 #endif
 }
@@ -314,7 +322,7 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)  // simple copy implementation
 {
 //  warn("OSSV::s - prior type = %d", _type);
   if (!morph(ossv_pv)) {
-#ifdef DEBUG_OSSV
+#ifdef DEBUG_OSSV_VALUES
     warn("OSSV::s(%s, %d): deleting string 0x%x", nval, nlen, u.pv.vptr);
 #endif
     delete [] ((char*)u.pv.vptr);   // probably wrong length
@@ -322,7 +330,7 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)  // simple copy implementation
   }
   u.pv.len = nlen;
   char *str = new(os_segment::of(this), os_typespec::get_char(), u.pv.len) char[u.pv.len];
-#ifdef DEBUG_OSSV
+#ifdef DEBUG_OSSV_VALUES
   warn("OSSV::s(%s, %d): alloc string 0x%x", nval, nlen, str);
 #endif
   memcpy(str, nval, u.pv.len);
@@ -367,12 +375,12 @@ void OSSV::new_hash(char *rep)
   morph(ossv_hv);
   if (strcmp(rep, "array")==0) {
     u.pv.vptr = new(os_segment::of(this), OSPV_hvarray::get_os_typespec()) OSPV_hvarray;
-#ifdef DEBUG_MEMORY
+#ifdef DEBUG_MEM_OSSVPV
     warn("OSSV::new_hash(): new OSPV_hvarray = 0x%x", u.pv.vptr);
 #endif
   } else if (strcmp(rep, "dict")==0) {
     u.pv.vptr = new(os_segment::of(this), OSPV_hvdict::get_os_typespec()) OSPV_hvdict;
-#ifdef DEBUG_MEMORY
+#ifdef DEBUG_MEM_OSSVPV
     warn("OSSV::new_hash(): new OSPV_hvdict = 0x%x", u.pv.vptr);
 #endif
   } else {
@@ -386,7 +394,7 @@ void OSSV::new_sack(char *rep)
   morph(ossv_cv);
   if (strcmp(rep, "array")==0) {
     u.pv.vptr = new(os_segment::of(this), OSPV_cvarray::get_os_typespec()) OSPV_cvarray;
-#ifdef DEBUG_MEMORY
+#ifdef DEBUG_MEM_OSSVPV
     warn("OSSV::new_sack(): new OSPV_cvarray = 0x%x", u.pv.vptr);
 #endif
   } else {
@@ -468,6 +476,8 @@ os_unsigned_int32 OSSV::as_pvn()
 // A hkey is smaller than a pointer to a string!
 // hkey assumes no strings with embedded nulls - problem? XXX
 
+char hkey::strrep[HKEY_MAXLEN+2];  // temporary space for string representation
+
 hkey::hkey()
 { undef(); }
 
@@ -493,18 +503,17 @@ hkey *hkey::operator=(const hkey &k1)
 hkey *hkey::operator=(char *k1)
 { hkey tmp(k1); *this = tmp; return this; }
 
-SV *hkey::as_sv()
-{
-  char buf[HKEY_MAXLEN+2];
-  memset(buf, 0, HKEY_MAXLEN+2);
-  memcpy(buf, str, HKEY_MAXLEN);
-  return sv_2mortal(newSVpv(buf, 0));
-}
-
 os_unsigned_int32 hkey::hash(const void *v1)
 {
   const hkey *s1 = (hkey*)v1;
   return *((os_unsigned_int32*) s1->str);
+}
+
+char *hkey::as_pv()
+{
+  memset(strrep, 0, HKEY_MAXLEN+2);
+  memcpy(strrep, str, HKEY_MAXLEN);
+  return strrep;
 }
 
 // just use memcmp? XXX
@@ -589,7 +598,7 @@ OSPV_cvarray::OSPV_cvarray()
 
 OSPV_cvarray::~OSPV_cvarray()
 {
-#ifdef DEBUG_MEMORY
+#ifdef DEBUG_MEM_OSSVPV
   warn("~OSPV_cvarray %x", this);
 #endif
   CLEAR();
@@ -640,7 +649,7 @@ SV *OSPV_cvarray::FIRST()
 
   cursor=first(0);
   if (cursor != -1) {
-    return cv[cursor].as_sv();
+    return ossv_2sv(&cv[cursor]);
   } else {
     return &sv_undef;
   }
@@ -651,7 +660,7 @@ SV *OSPV_cvarray::NEXT()
   cursor++;
   cursor = first(cursor);
   if (cursor != -1) {
-    return cv[cursor].as_sv();
+    return ossv_2sv(&cv[cursor]);
   } else {
     return &sv_undef;
   }
@@ -670,7 +679,7 @@ OSPV_hvarray::OSPV_hvarray()
 
 OSPV_hvarray::~OSPV_hvarray()
 {
-#ifdef DEBUG_MEMORY
+#ifdef DEBUG_MEM_OSSVPV
   warn("~OSPV_hvarray %x", this);
 #endif
   CLEAR();
@@ -692,7 +701,7 @@ SV *OSPV_hvarray::FETCHp(char *key)
   if (xx == -1) {
     return &sv_undef;
   } else {
-    return hv[xx].hv.as_sv();
+    return ossv_2sv(&hv[xx].hv);
   }
 }
 
@@ -704,7 +713,7 @@ SV *OSPV_hvarray::STOREp(char *key, SV *value)
     hv[hv.count()].hk = key;
   }
   hv[xx].hv = value;
-  return hv[xx].hv.as_sv();  // may not be valid if array grows... XXX
+  return ossv_2sv(&hv[xx].hv);  // may become invalid if array grows... XXX
 }
 
 void OSPV_hvarray::DELETE(char *key)
@@ -743,7 +752,7 @@ SV *OSPV_hvarray::FIRSTKEY()
   SV *out;
   cursor = first(0);
   if (cursor != -1) {
-    out = hv[cursor].hk.as_sv();
+    out = hkey_2sv(&hv[cursor].hk);
   } else {
     out = &sv_undef;
   }
@@ -756,7 +765,7 @@ SV *OSPV_hvarray::NEXTKEY(char *lastkey)
   cursor++;
   cursor = first(cursor);
   if (cursor != -1) {
-    out = hv[cursor].hk.as_sv();
+    out = hkey_2sv(&hv[cursor].hk);
   } else {
     out = &sv_undef;
   }
@@ -775,7 +784,7 @@ OSPV_hvdict::OSPV_hvdict()
 
 OSPV_hvdict::~OSPV_hvdict()
 {
-#ifdef DEBUG_MEMORY
+#ifdef DEBUG_MEM_OSSVPV
   warn("~OSPV_hvdict %x", this);
 #endif
   CLEAR();
@@ -784,8 +793,10 @@ OSPV_hvdict::~OSPV_hvdict()
 SV *OSPV_hvdict::FETCHp(char *key)
 {
   OSSV *ret = hv.pick(key);
-  //	warn("fetch %s => %s", key, ret? ret->as_pv() : "<0x0>");
-  return ret->as_sv();
+#ifdef DEBUG_HVDICT
+  warn("OSPV_hvdict::FETCH %s => %s", key, ret? ret->as_pv() : "<0x0>");
+#endif
+  return ossv_2sv(ret);
 }
 
 SV *OSPV_hvdict::STOREp(char *key, SV *nval)
@@ -801,6 +812,7 @@ SV *OSPV_hvdict::STOREp(char *key, SV *nval)
   if (!ossv) {
     insert=1;
     ossv = sv_2ossv(nval);
+    if (ossv) ossv->REF_inc();
   }
   if (!ossv) {
     ossv = new(WHERE, OSSV::get_os_typespec()) OSSV;
@@ -809,17 +821,22 @@ SV *OSPV_hvdict::STOREp(char *key, SV *nval)
 #endif
     *ossv = nval;
   }
-//	warn("insert %s %s", key, ossv->as_pv());
+  assert(ossv);
+#ifdef DEBUG_HVDICT
+  warn("OSPV_hvdict::INSERT(%s=%s)", key, ossv->as_pv());
+#endif
   if (insert) hv.insert(key, ossv);
 
-  return ossv->as_sv();
+  return ossv_2sv(ossv);
 }
 
 void OSPV_hvdict::DELETE(char *key)
 {
   OSSV *val = hv.pick(key);
   hv.remove_value(key);
-//  warn("OSPV_hvdict::DELETE(%s) deleting hash value 0x%x", key, val);
+#ifdef DEBUG_HVDICT
+  warn("OSPV_hvdict::DELETE(%s) deleting hash value 0x%x", key, val);
+#endif
   if (val) val->REF_dec();   //XXX val==0 ?
 }
 
@@ -829,7 +846,9 @@ void OSPV_hvdict::CLEAR()
     hkey *k1 = (hkey*) hv.retrieve_key(cs);
     OSSV *val = hv.pick(k1);
     hv.remove_value(*k1);
-//    warn("OSPV_hvdict::CLEAR() deleting hash value 0x%x", val);
+#ifdef DEBUG_HVDICT
+    warn("OSPV_hvdict::CLEAR() deleting hash value 0x%x", val);
+#endif
     if (val) val->REF_dec();
   }
 }
@@ -837,35 +856,58 @@ void OSPV_hvdict::CLEAR()
 int OSPV_hvdict::EXISTS(char *key)
 {
   int out = hv.pick(key) != 0;
-//	warn("exists %s => %d", key, RETVAL);
+#ifdef DEBUG_HVDICT
+  warn("OSPV_hvdict::exists %s => %d", key, out);
+#endif
   return out;
 }
 
 SV *OSPV_hvdict::FIRSTKEY()
 {
-  SV *out;
+  hkey *k1=0;
   if (cs.first()) {
-    hkey *k1 = (hkey*) hv.retrieve_key(cs);
+    k1 = (hkey*) hv.retrieve_key(cs);
     assert(k1);
-    out = k1->as_sv();
-  } else {
-    out = &sv_undef;
   }
-  return out;
+#ifdef DEBUG_HVDICT
+  warn("OSPV_hvdict::FIRSTKEY => %s", k1? k1->as_pv() : "undef");
+#endif
+  return hkey_2sv(k1);
 }
 
 SV *OSPV_hvdict::NEXTKEY(char *lastkey)
 {
-  SV *out;
+  hkey *k1=0;
   if (cs.next()) {
-    hkey *k1 = (hkey*) hv.retrieve_key(cs);
+    k1 = (hkey*) hv.retrieve_key(cs);
     assert(k1);
-    out = k1->as_sv();
-  } else {
-    out = &sv_undef;
   }
-  return out;
+#ifdef DEBUG_HVDICT
+  warn("OSPV_hvdict::NEXTKEY => %s", k1? k1->as_pv() : "undef");
+#endif
+  return hkey_2sv(k1);
 }
+
+//----------------------------- Constants
+
+static os_fetch_policy str_2fetch(char *str)
+{
+  if (strcmp(str, "segment")==0) return os_fetch_segment;
+  if (strcmp(str, "page")==0) return os_fetch_page;
+  if (strcmp(str, "stream")==0) return os_fetch_stream;
+  croak("str_2fetch: %s unrecognized", str);
+}
+
+static void osperl_exception_hook(tix_exception_p cause, os_int32 value,
+	os_char_p report)
+{
+  warn("ObjectStore: %s", report);
+  perl_eval_pv("&Carp::confess", TRUE);
+  exit(1);
+}
+
+static void setup_exception_hook()
+{ tix_exception::set_unhandled_exception_hook(osperl_exception_hook); }
 
 //----------------------------- ObjStore
 
@@ -876,6 +918,7 @@ BOOT:
   objectstore::set_thread_locking(0);
   os_collection::set_thread_locking(0);
   os_index_key(hkey, hkey::rank, hkey::hash);
+  setup_exception_hook();
 
 static char *
 ObjStore::schema_dir()
@@ -893,6 +936,18 @@ static void
 ObjStore::begin_read()
 	CODE:
 	os_transaction::begin(os_transaction::read_only);
+
+static void
+ObjStore::begin_abort()
+	CODE:
+	os_transaction::begin(os_transaction::abort_only);
+
+static int
+ObjStore::in_transaction()
+	CODE:
+	RETVAL = os_transaction::get_current() != 0;
+	OUTPUT:
+	RETVAL
 
 static void
 ObjStore::commit()
@@ -954,6 +1009,15 @@ os_database::is_open_read_only()
 int
 os_database::is_writable()
 
+void
+os_database::set_fetch_policy(policy, ...)
+	char *policy;
+	PROTOTYPE: $;$
+	CODE:
+	int bytes=4096;
+	if (items == 2) bytes = SvIV(ST(1));
+	THIS->set_fetch_policy(str_2fetch(policy), bytes);
+
 os_segment *
 os_database::get_segment(num)
 	int num
@@ -1003,7 +1067,7 @@ os_database::newSack(rep)
 	warn("os_database::newSack(%s): OSSV = 0x%x", rep, ossv);
 #endif
 	ossv->new_sack(rep);
-	ST(0) = ossv->as_sv();
+	ST(0) = ossv_2sv(ossv);
 
 #-----------------------------# Root
 
@@ -1035,11 +1099,7 @@ os_database_root::get_value()
 	CODE:
 	if (!THIS) XSRETURN_UNDEF;
 	OSSV *ossv = (OSSV*) THIS->get_value();  // check type! XXX
-	if (ossv) {
-	  ST(0) = ossv->as_sv();
-	} else {
-	  ST(0) = &sv_undef;
-	}
+	ST(0) = ossv_2sv(ossv);
 
 void
 os_database_root::set_value(sv)
@@ -1097,6 +1157,15 @@ os_segment::set_comment(info)
 char *
 os_segment::get_comment()
 
+void
+os_segment::set_fetch_policy(policy, ...)
+	char *policy;
+	PROTOTYPE: $;$
+	CODE:
+	int bytes=4096;
+	if (items == 2) bytes = SvIV(ST(1));
+	THIS->set_fetch_policy(str_2fetch(policy), bytes);
+
 static os_segment *
 os_segment::of(sv)
 	SV *sv
@@ -1132,7 +1201,7 @@ os_segment::newSack(rep)
 	warn("os_segment::newSack(%s): OSSV = 0x%x", rep, ossv);
 #endif
 	ossv->new_sack(rep);
-	ST(0) = ossv->as_sv();
+	ST(0) = ossv_2sv(ossv);
 
 #-----------------------------# HV
 

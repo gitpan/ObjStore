@@ -3,6 +3,29 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** Released 1.02
+
+- Improved make file.  Fixed blib.  Usage now looks like this:
+
+perl ./be [-nop] [-silent] [-verbose] <cmd>
+   checked      - verify that the package is complete
+   made         - run the compiler, toast the pop-tarts, etc.
+   installed    - copy files to final install area
+   uninstalled  - delete any files that were installed
+   cleaned      - delete all temporary files
+   manifest     - update the MANIFEST file
+   dist         - create a tar.gz distribution file
+
+- Fixed version numbering for Exporter.  1.2 => 1.02
+
+- Added ObjStore::peek($var) - like Data::Dumper except that it will work better
+on gigantic databases.  Only three elements are printed from large hashes,
+while small hashes are printed completely.  The meaning of 'large' can be
+customized (not yet).
+
+- Installs the PoweredByOS.gif and publishes the path.
+
+
 ** Released 1.00
 
 - The first release, written during a sixty day evaluation.

@@ -31,3 +31,45 @@ sub DELETE {
 sub POSH_ENTER { shift->hash; }
 
 1;
+
+=head1 NAME
+
+    ObjStore::HV::Database - a generic hash-oriented database
+
+=head1 SYNOPSIS
+
+  package MyDatabase;
+  use base 'ObjStore::HV::Database';
+
+  my $db = MyDatabase->new("/path/to/my/database", 'update', 0666);
+
+=head1 DESCRIPTION
+
+Often you want to treat a database as a hash of related information.
+Roots could be used, but there are a number of reasons to use this
+class instead of roots:
+
+=over 4
+
+=item * PERFORMANCE
+
+You have no control over the implementation of roots.  Performance is
+unknown and cannot be changed.  
+
+=item * FLEXIBILITY
+
+If you want to move the top-level hash down to a deeper level, you
+cannot easily do this with roots.
+
+=item * NON-STANDARD
+
+The standard way to create hash-oriented databases is with
+C<ObjStore::HV::Database>.
+
+=back
+
+=head1 SEE ALSO
+
+C<ObjStore>
+
+=cut

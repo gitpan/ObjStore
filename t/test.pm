@@ -13,14 +13,16 @@ require Exporter;
 #ObjStore::debug qw(txn);
 #$ObjStore::REGRESS = 1;
 
-$SIG{__WARN__} = sub {
-    my $m = $_[0];
-    if ($m !~ m/ line \s+ \d+ (\.)? $/x) {
-	warn $m;
-    } else {
-	print "# [WARNING] $_[0]"; #hide from Test::Harness
-    }
-};
+if (1) {
+    $SIG{__WARN__} = sub {
+	my $m = $_[0];
+	if ($m !~ m/ line \s+ \d+ (\.)? $/x) {
+	    warn $m;
+	} else {
+	    print "# [WARNING] $_[0]"; #hide from Test::Harness
+	}
+    };
+}
 
 sub test_db() { TMP_DBDIR . "/perltest" }
 

@@ -20,8 +20,8 @@ begin 'update', sub {
     $db->get_default_segment_size;
     $db->get_default_segment->set_comment("default segment");
     
-    my $empty = $db->create_segment();
-    ok($empty->database_of->get_id eq $db->get_id);
+    my $empty = $db->create_segment('1segment');
+    ok($empty->database_of->get_id, $db->get_id);
     for (qw(as_used read write)) { $empty->set_lock_whole_segment($_); }
     for (qw(segment page stream)) {
 	$empty->set_fetch_policy($_, 8192);
@@ -39,9 +39,8 @@ begin 'update', sub {
 	delete $john->{junk_in_seg};
     }
 
-    $seg = $db->create_segment();
-    $seg->set_comment("junk");
-    ok($seg->get_comment eq 'junk');
+    $seg = $db->create_segment('junk');
+    ok($seg->get_comment, 'junk');
 
     $john->{junk_seg} = $seg->get_number();
 
@@ -54,9 +53,9 @@ begin 'update', sub {
 	
     # segment is determined by OSSVPV, not from OSSV
     my $nseg = $h->segment_of;
-    ok($nseg->get_number() == $seg->get_number());
+    ok($nseg->get_number(), $seg->get_number());
     
     # double-check the obvious
     $nseg = $h->{nums}->segment_of;
-    ok($nseg->get_number() == $seg->get_number());
+    ok($nseg->get_number(), $seg->get_number());
 };

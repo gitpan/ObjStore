@@ -1,8 +1,6 @@
 #-*-perl-*-
 
 use ObjStore ':ALL';
-set_transaction_priority(0);
-set_max_retries(0);
 use lib "./t";
 use test;
 
@@ -10,6 +8,10 @@ use test;
 #open(STDERR, ">>/dev/null") or die "open: $@";
 
 &open_db;
+
+$ObjStore::TRANSACTION_PRIORITY = 0;
+set_max_retries(0);
+
 begin 'update', sub {
     my $left = $db->root('tripwire');
     ++ $left->{left};

@@ -43,6 +43,8 @@ void osp_bridge::release()
 { croak("osp_bridge::release()"); }
 void osp_bridge::invalidate()
 { croak("osp_bridge::invalidate()"); }
+int osp_bridge::invalid()
+{ croak("osp_bridge::invalid()"); return 1; }
 int osp_bridge::ready()
 { croak("osp_bridge::ready()"); return 0; }
 
@@ -240,8 +242,8 @@ void osp_txn::post_transaction()
 
 int osp_txn::can_update(os_database *db)
 {
-  return (os && !os->is_aborted() &&
-	  tt != os_transaction::read_only && db->is_writable());
+  return (os && !os->is_aborted() && tt != os_transaction::read_only && 
+	  db && db->is_writable());
 }
 
 int osp_txn::can_update(void *vptr)

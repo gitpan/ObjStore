@@ -7,6 +7,7 @@ struct osp_bridge {
   virtual void release();		// if perl REFCNT == 0
   virtual void invalidate();		// when transaction ends
   virtual int ready();			// can delete bridge now?
+  virtual int invalid();		// error to dereference?
 };
 
 struct osp_txn;

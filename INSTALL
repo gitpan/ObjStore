@@ -2,7 +2,8 @@
 
 Tested Configurations:
 
-   perl 5.004_04, 5.004_53-5.004_55
+   perl 5.004_04, 5.004_53-5.004_62
+     (In general, it doesn't matter how perl is compiled.)
 
 
    Solaris 2.5.1
@@ -16,6 +17,7 @@ Tested Configurations:
       email if you need help)
 
      Dec C++ Compiler / ObjectStore 5.0
+
 
 -------------------------------------------------------------------------
 

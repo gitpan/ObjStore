@@ -11,18 +11,17 @@ use test;
 my $sid;
 
 begin 'update', sub {
-    my $seg = $db->create_segment;
-    $seg->set_comment("tripwire");
+    my $seg = $db->create_segment('tripwire');
     $sid = $seg->get_number;
     $db->root("tripwire", [1,2,3,'Oops, tripped!']);
 
     my $r = $db->find_root('empty') || $db->create_root('empty');
     ok(!defined $r->get_value) or warn $r->get_value;
-    ok($r->get_name eq 'empty') or warn $r->get_name;
+    ok($r->get_name, 'empty');
     $r->set_value([0]);
-    ok($r->get_value->[0] == 0);
+    ok($r->get_value->[0], 0);
     $r->set_value([1]);
-    ok($r->get_value->[0] == 1);
+    ok($r->get_value->[0], 1);
     $r->destroy;
 };
 

@@ -1,3 +1,19 @@
+** 02-21-98 RELEASE 1.29
+
+- Complete, nesting, tied array support (5.004_58+).
+
+- Rewrote ObjStore::AppInstance to eliminate unnecessarily confusing
+data flow.  The new version is NOT backward compatible.
+
+- Fixed a bug that allowed bad pointers to appear in tree nodes and
+possibly other places.  Instances of this bug occurred rarely.
+
+- Fixed an uninitialized pointer that was causing exceptions to turn
+into BUS errors.  Added more regression tests.
+
+- Fixed a minor bug in ObjStore::Path::Ref.
+
+
 ** 02-07-98 RELEASE 1.28
 
 - Relaxed overly strict index behavior.  Fixed performance of add &

@@ -61,7 +61,11 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
     }
   } while (0);
 
-  if (br) return br;
+  if (br) {
+    // until exceptions are more reliable XXX
+    if (br->invalid()) croak("sv_2bridge: persistent data out of scope");
+    return br;
+  }
   if (!force) return 0;
   if (!seg) croak("sv_2bridge: expecting a persistent object");
   
@@ -859,6 +863,8 @@ ospv_bridge *OSSVPV::new_bridge()
 
 OSSV *OSSVPV::traverse(char *keyish)
 { NOTFOUND("traverse"); return 0; }
+OSSVPV *OSSVPV::traverse2(char *keyish)
+{ return 0; }
 void OSSVPV::XSHARE(int)
 { NOTFOUND("XSHARE"); }
 
@@ -906,7 +912,8 @@ int ospv_bridge::ready()
 { return can_delete && !pv; }
 void ospv_bridge::release()
 { unref(); can_delete = 1; }
-
+int ospv_bridge::invalid()
+{ return pv==0; }
 void ospv_bridge::invalidate()
 {
   // If transient, has lifetime outside of a transaction.  Let perl
@@ -922,6 +929,7 @@ void ospv_bridge::unref()
   pv=0;
 
   dOSP ; dTXN ;
+  assert(txn);
   DEBUG_bridge(warn("ospv_bridge 0x%x->unref(pv=0x%x) updt=%d",
 		    this, copy, txn->can_update(copy)));
   assert(copy);

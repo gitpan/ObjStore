@@ -239,6 +239,7 @@ struct OSSVPV : os_virtual_behavior {
   virtual int get_perl_type();
   // you must implement none or both of the following:
   virtual OSSV *traverse(char *keyish);
+  virtual OSSVPV *traverse2(char *keyish);
   virtual void XSHARE(int on);
 };
 
@@ -379,6 +380,7 @@ struct ospv_bridge : osp_bridge {
   virtual void release();
   virtual void invalidate();
   virtual int ready();
+  virtual int invalid();
   void unref();
   OSSVPV *ospv();
 

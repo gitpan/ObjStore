@@ -43,6 +43,8 @@ struct OSPV_fatindex2 : OSPV_Generic {
   virtual double _percent_filled();
   virtual int FETCHSIZE();
   virtual OSSVPV *new_cursor(os_segment *seg);
+  virtual OSSV *traverse(char *keyish);
+  virtual OSSVPV *traverse2(char *keyish);
 };
 
 struct OSPV_fatindex2_cs : OSPV_Cursor2 {

@@ -1,6 +1,6 @@
 # test all transaction types for -*-perl-*-
 use Test;
-BEGIN { plan tests => 18 }
+BEGIN { plan tests => 20 }
 
 use strict;
 use ObjStore ':ALL';
@@ -11,32 +11,34 @@ use test;
 #my $tsys = 'ObjStore::Transaction';
 sub txn() { ObjStore::Transaction::get_current() }
 
-ObjStore::fatal_exceptions(0);
-ObjStore::set_transaction_priority(0);
-
-ObjStore::set_readlock_timeout(ObjStore::get_readlock_timeout());
-ObjStore::set_writelock_timeout(ObjStore::get_writelock_timeout());
-
 &open_db;
+
+ObjStore::fatal_exceptions(0);
+$ObjStore::TRANSACTION_PRIORITY = 0;
+
+for ('read','write') {
+    my $t = 5.5;
+    lock_timeout($_, $t);
+    ok(lock_timeout($_), $t);
+}
 
 eval { &ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
 ok($@ =~ m/does not exist/) or warn $@;
 
 # make sure the tripwire is ready
 begin 'update', sub {
-    my $s = $db->create_segment;
-    $s->set_comment("tripwire");
+    my $s = $db->create_segment('tripwire');
     $db->root("tripwire", sub {new ObjStore::HV($s, 7)});
 };
 die if $@;
 
 begin 'update', sub {
     ok($db->is_writable);
-    ok(txn->get_type eq 'update') or warn txn->get_type;
+    ok(txn->get_type, 'update');
     ok(! txn->is_prepare_to_commit_invoked);
 
     my $john = $db->root('John');
-    ok(ObjStore::get_lock_status($john) eq 'write');
+    ok(ObjStore::get_lock_status($john), 'write');
     $john->{right} = 69;
     
     ok(! ObjStore::is_lock_contention);
@@ -49,7 +51,7 @@ die if $@;
 
 begin 'abort', sub {
     ok($db->is_writable);
-    ok(txn->get_type eq 'abort_only');
+    ok(txn->get_type, 'abort_only');
     my $john = $db->root('John');
     $john->{right} = 96;
 };
@@ -57,14 +59,14 @@ die if $@;
 
 begin('read', sub {
     ok(! $db->is_writable);
-    ok(txn->get_type eq 'read');
+    ok(txn->get_type(), 'read');
     my $john = $db->root('John');
-    ok(ObjStore::get_lock_status($john) eq 'read');
+    ok(ObjStore::get_lock_status($john), 'read');
 
     eval { $john->{'write'} = 0; };
     ok($@ =~ m/Attempt to write during a read-only/) or warn $@;
 
-    ok($john->{right} == 69);
+    ok($john->{right}, 69);
 });
 ok(! $@);
 
@@ -116,5 +118,5 @@ begin 'update', sub {
     } else { 1 }
 };
 warn $@ if $@;
-ok($attempt==3) or warn $attempt;
+ok($attempt,3);
 }

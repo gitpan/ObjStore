@@ -71,35 +71,22 @@ extern "C" XS(boot_ObjStore__REP__FatTree);
 MODULE = ObjStore	PACKAGE = ObjStore
 
 BOOT:
-  if (items < 3)
-    croak("ObjStore::boot(): too few arguments");
+  /*
+ "As a prerequisite, such extensions must not need to do anything in
+  their BOOT: section which needs to be done at runtime rather than
+  compile time." -- The perl compiler
+  */
   // Nuke the following lines if you are dynamic-linking
   newXS("ObjStore::REP::ODI::bootstrap", boot_ObjStore__REP__ODI, file);
   newXS("ObjStore::REP::Splash::bootstrap", boot_ObjStore__REP__Splash, file);
   newXS("ObjStore::REP::FatTree::bootstrap", boot_ObjStore__REP__FatTree, file);
   //
-  OSSV::verify_correct_compare();
 #ifdef _OS_CPP_EXCEPTIONS
-  // Must switch perl to use ANSI C++ exceptions...
+  // Must tell perl to use ANSI C++ exceptions!
   perl_require_pv("ExtUtils::ExCxx");
 #endif
   //
-  SV* me = perl_get_sv("0", FALSE);  //fetch $0
-  assert(me);
-  objectstore::set_client_name(SvPV(me, na));
-  objectstore::initialize();		// should delay boot for flexibility? XXX
-  objectstore::set_auto_open_mode(objectstore::auto_open_disable);
-  objectstore::set_incremental_schema_installation(0);    //otherwise is buggy
-#ifdef USE_THREADS
-  assert(ST(2));
-  if (!SvIOK(ST(2)))
-    croak("ObjStore::boot(): invalid thread specific key");
-  osp_thr::info_key = SvIV(ST(2));
-  objectstore::set_thread_locking(1);
-  //collections are left without protection...!
-#else
-  objectstore::set_thread_locking(0);
-#endif
+  OSSV::verify_correct_compare();
   newXSproto("ObjStore::translate", XS_ObjStore_translate, file, "$$");
   HV *szof = perl_get_hv("ObjStore::sizeof", TRUE);
   hv_store(szof, "OSSV", 4, newSViv(sizeof(OSSV)), 0);
@@ -162,6 +149,36 @@ os_version()
 	PPCODE:
 	// (rad perl style version number... :-)
 	XSRETURN_NV(objectstore::release_major() + objectstore::release_minor()/100 + objectstore::release_maintenance()/10000);
+
+void
+set_client_name(name)
+	char *name;
+	CODE:
+	objectstore::set_client_name(name);
+
+void
+initialize()
+	CODE:
+{
+	objectstore::initialize(); //support reinit? XXX
+	SV* isv = perl_get_sv("ObjStore::INITIALIZED", FALSE);
+	sv_inc(isv);
+	objectstore::set_auto_open_mode(objectstore::auto_open_disable);
+	objectstore::set_incremental_schema_installation(0);    //otherwise buggy
+#ifdef USE_THREADS
+	croak("ObjStore::initialize(): threads not supported yet");
+//	osp_thr::info_key = SvIV(ST(2));
+	objectstore::set_thread_locking(1);
+	//collections are left without protection...!
+#else
+	objectstore::set_thread_locking(0);
+#endif
+}
+
+void
+shutdown()
+	CODE:
+	objectstore::shutdown();
 
 void
 network_servers_available()
@@ -450,31 +467,27 @@ get_lock_status(ospv)
 	OUTPUT:
 	RETVAL
 
-int
-get_readlock_timeout()
-	CODE:
-	RETVAL = objectstore::get_readlock_timeout();
-	OUTPUT:
-	RETVAL
-
-int
-get_writelock_timeout()
-	CODE:
-	RETVAL = objectstore::get_writelock_timeout();
-	OUTPUT:
-	RETVAL
-
 void
-set_readlock_timeout(tm)
-	int tm;
-	CODE:
-	objectstore::set_readlock_timeout(tm);
-
-void
-set_writelock_timeout(tm)
-	int tm;
-	CODE:
-	objectstore::set_writelock_timeout(tm);
+lock_timeout(rw,...)
+	char *rw;
+	PROTOTYPE: $;$
+	PPCODE:
+	// ODI went COMPLETELY OVERBOARD optimizing this API...  :-)
+	int is_read=-1;
+	if (strEQ(rw,"read")) is_read=1;
+	else if (strEQ(rw,"write")) is_read=0;
+	if (is_read==-1) croak("lock_timeout: read or write?");
+	if (items == 1) {
+	  int tm = (is_read ?
+		objectstore::get_readlock_timeout() :
+		objectstore::get_writelock_timeout());
+	  if (tm == -1) { XSRETURN_UNDEF; } 
+	  else { XPUSHs(sv_2mortal(newSVnv(tm/(double)1000))); }
+	} else {
+	  int tm = SvOK(ST(1))? SvNV(ST(1))*1000 : -1;
+	  if (is_read) objectstore::set_readlock_timeout(tm);
+	  else         objectstore::set_writelock_timeout(tm);
+	}
 
 #-----------------------------# Server
 
@@ -1037,10 +1050,19 @@ OSSVPV::POSH_CD(keyish)
 	PPCODE:
 	PUTBACK;
 	STRLEN len;
+	SV *ret=0;
 	OSSV *sv = THIS->traverse(keyish);
-	if (!sv) croak("OSSVPV(%p=%s)->traverse('%s') failed", 
+	if (!sv) {
+	  OSSVPV *pv = THIS->traverse2(keyish);
+	  if (pv) {
+	    ret = osp->ospv_2sv(pv);
+	  } else {
+	    croak("OSSVPV(%p=%s)->traverse('%s') failed", 
 			THIS, THIS->os_class(&len), keyish);
-	SV *ret = osp->ossv_2sv(sv);
+	  }
+	} else {
+	  ret = osp->ossv_2sv(sv);
+	}
 	SPAGAIN;
 	XPUSHs(ret);
 

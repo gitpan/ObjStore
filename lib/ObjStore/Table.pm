@@ -13,8 +13,7 @@ sub new {
     my ($class, $where, $size) = @_;
     croak "$class\->new(where, size)" if @_ != 3;
     my $o = $class->SUPER::new($where);
-    my $seg = $o->database_of->create_segment;
-    $seg->set_comment("table cluster");
+    my $seg = $o->database_of->create_segment("table cluster");
     $o->{array} = new ObjStore::AV($seg, $size);
     $o->{indices} = {};
     $o;

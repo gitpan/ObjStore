@@ -10,39 +10,21 @@ following in the body of your message:
 
 + IDEAS +
 
-The perl compiler requires: "As a prerequisite, such extensions must
-not need to do anything in their BOOT: section which needs to be done
-at runtime rather than compile time."
-
-ObjStore::AV->tail-f 
-
-permutation magic for AVHV
-  ObjStore::Index::_(un)protect
-
-translate('transient', $persistent)
-
 configure unique index duplicate row behavior?
 
-typemap
-  do large strings without copying?
-  SV set magic?
-  CLEAR seems broken with tied hashes:
-    verify and submit bug reports (or fix the code!)
-  there are still some mysterious problems
-
 transactions
+  keep only one transaction stack
   begin 'update', $string;
-  add hooks for eval 'setup' & 'unwind' handler to perl?
   begin('update!',...): force switch to update?
-  dynamic transactions?
 
 posh
   'cd - ': go back to prior directory
+  resolve cd paths per component
+  cd to startup directory
   autodetect @INC modifications and print help message
-  factor more!
-  style - raw, vanilla, Tk::Text, etc...?
-
-move ObjStore::subscribe back into ObjStore::Notification?
+  factor eval stuff more
+  display style?  web integration?  cgi-posh?
+  qt-posh?
 
 switch representations dynamically
   cursor syncronization: check os_typespec
@@ -53,8 +35,21 @@ switch representations dynamically
 
 + VAGUE POSSIBILITIES +
 
-asyncronous signals can cause perl to SEGV
-  (known bug)
+typemap
+  do large strings without copying?
+  SV set magic?
+  CLEAR seems broken with tied hashes:
+    verify and submit bug reports (or fix the code!)
+  there are still some mysterious problems
+
+permutation magic for AVHV
+  ObjStore::Index::_(un)protect
+
+translate('transient', $persistent)
+
+asyncronous signals can cause perl to SEGV (known perl bug)
+
+move ObjStore::subscribe back into ObjStore::Notification?
 
 optimize splash suite
   hash performance sucks
@@ -64,7 +59,7 @@ ObjStore::Index
   $t->select(['*'], sub { my $r = shift; ... }); ??why
 
 Table3
-  add_index should create a scratch cursor to speed fetch?
+  assign cursor focus to avoid malloc
 
 Threads!
   renovate thread specific stuff in ObjStore.xs
@@ -118,7 +113,6 @@ automatically spooge $ObjStore::RUN_TIME if @ISA changes?
 install HTML versions of the pod files & gif image
 
 notifications
-  batch notify
   notify should in/out the string length - #SE057480_O#
 
 change_schema_key:

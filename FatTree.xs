@@ -327,6 +327,20 @@ OSSVPV *OSPV_fatindex2::FETCHx(SV *key)
   return pv;
 }
 
+OSSV *OSPV_fatindex2::traverse(char *keyish) 
+{ return 0; }
+
+OSSVPV *OSPV_fatindex2::traverse2(char *keyish)
+{
+  if (!conf_slot) return 0;
+  unsigned long xx = atol(keyish);
+  dGCURSOR(&tv);
+  tc_moveto(&gl->tc, xx);
+  OSSVPV *pv=0;
+  dex2tc_fetch(&gl->tc, &pv);
+  return pv;
+}
+
 double OSPV_fatindex2::_percent_filled()
 { 
   SERIOUS("_percent_filled() is experimental");

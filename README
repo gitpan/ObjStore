@@ -48,6 +48,28 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 ##################
 
 
+** 03-13-98 RELEASE 1.31
+
+- Posh will move directly to a database specified on the command line.
+Also, the default is now mvcc mode.  Fixed a problem with persisting
+command history.
+
+- Changed the behavior ObjStore::AV::Set::exists(...) to be more
+consistent.
+
+- Fixed a problem in the is_evolved() method.
+
+- $ObjStore::TRANSACTION_PRIORITY is now a tied scalar.
+
+- Replaced (get|set)_(read|write)lock_timeout (yikes!) with a single
+perl-style lock_timeout API.
+
+- Reorganized the BOOT section to meet the requirements of the perl
+compiler.  ObjStore::shutdown is now called in an END block to insure
+proper clean up (abort pending transactions, etc.) and initialization
+is now delayed until run-time (vs. compile-time).
+
+
 ** 03-06-98 RELEASE 1.30
 
 - Instant, effortless event dispatching for network distributed perl
@@ -74,22 +96,6 @@ the 'help' method of all persistent objects.
 - Always adding -DDEBUGGING to CFLAGS is wrong.  Fixed.
 
 - posh now persists command history from prior sessions (5.004_58+).
-
-
-** 02-21-98 RELEASE 1.29
-
-- Complete, nesting, tied array support (5.004_58+).
-
-- Rewrote ObjStore::AppInstance to eliminate unnecessarily confusing
-data flow.  The new version is NOT backward compatible.
-
-- Fixed a bug that allowed bad pointers to appear in tree nodes and
-possibly other places.  Instances of this bug occurred rarely.
-
-- Fixed an uninitialized pointer that was causing exceptions to turn
-into BUS errors.  Added more regression tests.
-
-- Fixed a minor bug in ObjStore::Path::Ref.
 
 
 see ./INSTALL for hints on installation

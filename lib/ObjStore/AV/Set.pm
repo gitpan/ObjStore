@@ -6,7 +6,7 @@ use vars qw($VERSION);
 use Carp;
 use ObjStore;
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 sub add {
     my ($o, $e) = @_;
@@ -14,7 +14,7 @@ sub add {
     $e;
 }
 
-# intentionally different from FETCHSIZE
+# depreciate? XXX
 sub count {
     my ($o) = @_;
     my $c=0;
@@ -26,6 +26,11 @@ sub count {
 }
 
 sub exists {
+    my ($o,$e) = @_;
+    defined $o->where($e);
+}
+
+sub where {
     my ($o, $e) = @_;
     my $x;
     for (my $z=0; $z < $o->FETCHSIZE(); $z++) {
@@ -36,10 +41,12 @@ sub exists {
 }
 
 sub remove {
-    my ($ar, $e) = @_;
-    my $x = $ar->exists($e);
-    confess "$ar->remove($e): can't find element" if !defined $x;
-    $ar->[ $x ] = undef;
+    my ($o, $e) = @_;
+    for (my $z=0; $z < $o->FETCHSIZE(); $z++) {
+	while ($e == $o->[$z]) {
+	    $o->SPLICE($z,1);
+	}
+    }
     $e;
 }
 
@@ -55,6 +62,7 @@ sub map {
 }
 
 sub compress {
+    carp "this is no longer necessary";
     # compress table - use with add/remove
     my ($ar) = @_;
     my $data = $ar->FETCHSIZE() - 1;
@@ -78,20 +86,23 @@ __END__;
 
 =head1 NAME
 
-  ObjStore::AV::Set - simple set of objects using arrays
+  ObjStore::AV::Set - index-style interface with an array representation
 
 =head1 SYNOPSIS
 
-Like a linear-search index.
+  my $set = ObjStore::AV::Set->new($near, $size);
+
+  $set->add($myobject);
+
+  $set->remove($myobject);
 
 =head1 DESCRIPTION
 
-=head1 TODO
+Implements an API very similar to C<ObjStore::Index>, except with an
+array implementation.  Elements are unsorted.  C<add> is O(1)
+complexity while C<remove> always scans the entire set.  C<add> does
+not check for duplicates, but C<remove> does.
 
-=over 4
-
-=item * Documentation!
-
-=back
+This class may be useful as a primary index for C<ObjStore::Table3>.
 
 =cut

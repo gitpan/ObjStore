@@ -70,8 +70,8 @@ sub add {
     # inefficient stop-gap until tied arrays work
     my ($o, $e) = @_;
     my $ar = $o->array;
-    $ar->_Push($e);
-    $o->repair_indices($e, $ar->_count - 1);
+    $ar->PUSH($e);
+    $o->repair_indices($e, $ar->FETCHSIZE - 1);
     $e;
 }
 
@@ -80,7 +80,7 @@ sub remove {
     my ($o, $e) = @_;
     my $ar = $o->array;
     my $x;
-    for (my $z=0; $z < $ar->_count; $z++) {
+    for (my $z=0; $z < $ar->FETCHSIZE; $z++) {
 	my $e2 = $ar->[$z];
 	do { $x = $z; last } if $e2 == $e;
     }
@@ -97,9 +97,9 @@ sub compress {
     # compress table - use with add/remove
     my ($o) = @_;
     my $ar = $o->array;
-    my $data = $ar->_count - 1;
+    my $data = $ar->FETCHSIZE - 1;
     my $hole = 0;
-    while ($hole < $ar->_count) {
+    while ($hole < $ar->FETCHSIZE) {
 	next if defined $ar->[$hole];
 	while ($data > $hole) {
 	    next unless defined $ar->[$data];
@@ -111,7 +111,7 @@ sub compress {
 	} continue { --$data };
     } continue { ++$hole };
     
-    while ($ar->_count and !defined $ar->[$ar->_count - 1]) {
+    while ($ar->FETCHSIZE and !defined $ar->[$ar->FETCHSIZE - 1]) {
 	$ar->_Pop;
     }
 }
@@ -125,7 +125,7 @@ sub POSH_PEEK {
     $o->nl;
     $o->indent(sub {
 	my $ar = $val->array;
-	$o->o("array [".$ar->_count ."] of ");
+	$o->o("array [".$ar->FETCHSIZE ."] of ");
 	$o->peek_any($ar->[0]);
 	$o->nl;
 	my $table = $val->table;
@@ -355,7 +355,7 @@ sub build {
     return if $o->is_built;
     my $t = $o->table;
     my $arr = $t->array;
-    my $total = $arr->_count();
+    my $total = $arr->FETCHSIZE();
     my $xx = $o->{ $o->name } = new ObjStore::HV($o->index_segment,
 						 $total * .4 || 50);
     $o->{'map'} = $xx;
@@ -389,7 +389,7 @@ sub _is_corrupted {
     my $xx = $o->{'map'};
     my $a = $t->array;
     my $total=0;
-    for (my $z=0; $z < $a->_count; $z++) {
+    for (my $z=0; $z < $a->FETCHSIZE; $z++) {
 	my $rec = $a->[$z];
 	next if !defined $rec;
 	my $key = $o->fetch_key($rec);
@@ -402,8 +402,8 @@ sub _is_corrupted {
 	    ++$err;
 	}
     }
-    if ($total != $xx->_count) {
-	warn "$o->is_corrupted: array $total, but index has ".$xx->_count
+    if ($total != $xx->FETCHSIZE) {
+	warn "$o->is_corrupted: array $total, but index has ".$xx->FETCHSIZE
 	    if $vlev;
 	++$err;
     }
@@ -437,7 +437,7 @@ sub build {
     return if $o->is_built;
     my $tbl = $o->table();
     my $arr = $tbl->array();
-    my $total = $arr->_count();
+    my $total = $arr->FETCHSIZE();
     my $xx = $o->{ $o->name } = new ObjStore::HV($o->index_segment,
 						 $total * .2 || 50);
     $o->{'map'} = $xx;

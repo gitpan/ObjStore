@@ -2,19 +2,24 @@ ObjStore 1.19 (Haloween Edition)
 10-31-97
 
 
-* High performance relational engine using memory-mapped files.
+ObjStore is a perl interface to the ObjectStore high performance
+relational database engine.  ObjStore is able to achieve as yet
+unmatched performance numbers and unmatched ease of development.
 
-* Precomputes joins between multiple tables to reach over 20000
-complex inserts per minute (not using bcp!).
+* Directly-memory-access 64-bit channels to Sybase, Informix, or Oracle
+relational databases.
 
 * Terminate and stay resident SQL emulator written in perl.
 
-* Directly memory access 64-bit channels to Sybase, Informix, or Oracle
-relational databases.
+* Full-duplex nested transactions supported in native mode.
 
-* Full duplex nested transactions now supported in native mode.
+* Solid-state digital queries.
 
 * Automatic schema evolution.
+
+* Precomputes joins between an unlimited number of tables to reach
+bandwidths capable of causing radio interference.  (Detectable via
+blue hued glows in high spectrum telemetry.)
 
 * Internet ready.
 

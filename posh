@@ -3,20 +3,17 @@
 use strict;
 package Posh;
 use Carp;
-use vars qw($open_mode $start_dir $shell_escape);
+use vars qw($open_mode $shell_escape @direct);
 
-$open_mode = 'update';
+$open_mode = 'mvcc';
 $shell_escape = 1;
 
 for (my $arg=0; $arg < @ARGV; $arg++) {
     my $o = $ARGV[$arg];
-    if ($o =~ m/^-mvcc$/) {
+    if ($o =~ m/^-update$/) {
+	$open_mode = 'update';
+    } elsif ($o =~ m/^-mvcc$/) {
 	$open_mode = 'mvcc';
-    } elsif ($o =~ m/^-d (\S*) $/x) {
-	my $dir = $1;
-	$dir = $ARGV[++$arg]
-	    if !$dir;
-	$start_dir = $dir;
     } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
 	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
 	eval "require $m";
@@ -34,31 +31,35 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	    unshift(@INC, $dir);
 	} else {
 	    require FindBin;
-	    die "posh: confused; can't have both -I and -d"
-		if $start_dir;
 	    die "posh: can't find myself" if ! $FindBin::Bin;
 	    unshift(@INC, "$FindBin::Bin/$dir");
 	}
     } elsif ($o =~ m/^-noesc (ape)? $/x) {
 	$shell_escape = 0;
-    } elsif ($o =~ m/^-h$/) {
-	print q"
-Usage: posh [switches]
-  -ddirectory      chdir here at startup
-  -Idirectory      specify @INC directory (may be used more than once)
-  -mvcc            open databases in mvcc mode
-  -[mM]module..    executes `use/no module...' just like perl
-  -noescape        disables !shell escape
-  -v               print version number and patchlevel of posh
-
-";
-	exit;
+    } elsif ($o !~ m/^-/) {
+	@direct = $o;
+	push @direct, $ARGV[++$arg]
+	    if $ARGV[$arg+1] && $ARGV[$arg+1] !~ m/^-/;
+    } elsif ($o =~ m/^-panic$/) {
+	warn "posh: panic ignored (posh is unflappable)\n";
     } elsif ($o =~ m/^-v$/) {
 	require ObjStore;
 	print("posh $ObjStore::VERSION (Perl $] ".ObjStore::release_name().")\n");
 	exit;
+    } elsif ($o =~ m/^-h(elp)?$/) {
+	print q"
+Usage: posh [switches] [database [class]]
+  -Idirectory      specify @INC directory (may be used more than once)
+  -mvcc            open databases in mvcc mode
+  -[mM]module..    executes `use/no module...' (just like perl)
+  -noescape        disables !shell escape
+  -update          open databases in update mode
+  -v               print version number and patchlevel of posh (and exit)
+
+";
+	exit;
     } else {
-	warn "unknown option '$o'\n";
+	warn "unknown option '$o' (-h for usage)\n";
     }
 }
 
@@ -106,11 +107,22 @@ sub POSH_PEEK {
 sub enter {
     my ($o, $path) = @_;
     $o->init;
-    if ($Posh::start_dir) {
-	$o->{'cwd'} = $Posh::start_dir;
-	# be smarter XXX
+    if (@Posh::direct) {
 	$o->{db} = undef;
-	$o->{cursor} = new ObjStore::Path::Ref($o);
+	$o->{cursor} = ObjStore::Path::Ref->new($o);
+	my $db;
+	my ($dbname,$class) = @Posh::direct;
+	$dbname = cwd."/$dbname" if $dbname !~ m{^/};
+	if (-d $dbname) {
+	    $o->{'cwd'} = $dbname;
+	} else {
+	    $db = ObjStore::lookup($dbname);
+	    my $path = $db->get_pathname;
+	    $o->{db} = $path;
+	    $o->{'cwd'} = $path;
+	    $path =~ s| / [^/]* $||x;
+	    $o->{'cwd'} = $path;
+	}
     }
     chdir($o->{'cwd'}) or $o->{'cwd'} = cwd;
     if ($o->{db}) {
@@ -173,6 +185,9 @@ sub pre_eval {
     elsif ($view->{db}) {
 	$input::at = $view->fetch_db();
 	$input::db = $input::at;
+    } else {
+	$input::at = undef;
+	$input::db = undef;
     }
 }
 
@@ -377,13 +392,13 @@ Welcome to posh!
 
 Outside of databases:
    cd <dir>
-   cd <db> [class [inc]]  # enters <db> or $class->new("update", 0666)
+   cd <db> [class]     # enters <db> or $class->new("update", 0666)
    ls <dir>
    pwd
 
 Inside of databases:
    cd string           # interprets string according to $at->POSH_CD
-   cd $at->...         # your expression should evaluate to a ref
+   cd $at->...         # your expression should evaluate to a persistent ref
    cd ..               # what you expect
    ls
    peek                # ls but more
@@ -396,6 +411,10 @@ Change transaction mode:
    update
    abort_only
 ';
+    if ($at and $at->can('help')) {
+	my $h = $at->help;
+	print $h if $h;
+    }
     ();
 }
 
@@ -472,7 +491,7 @@ sub addhistory {
 	}
 	push @$o, $input;
     }
-    unshift @$o while @$o > 100;
+    do { shift @$o } while (@$o > 100);
 }
 
 package Posh;
@@ -494,7 +513,7 @@ sub new {
     $o->{app} = ObjStore::AppInstance->new('posh', $o->{user});
 
     ObjStore::set_max_retries(0);
-    ObjStore::set_transaction_priority(0x100); #don't conflict with real jobs
+    $ObjStore::TRANSACTION_PRIORITY = 0x100; #don't conflict with real jobs
     begin('update', sub {
 	      my $t = $o->{app}->top();
 

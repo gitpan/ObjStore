@@ -1,6 +1,6 @@
 =head1 NAME
 
-ObjStore::Internals - a few notes of the implementation
+ObjStore::Internals - a few notes on the implementation
 
 =head1 SYNOPSIS
 
@@ -34,7 +34,7 @@ more programmer friendly.
 
 =item *
 
-Transactions are perl-ified.
+Transactions are perlified.
 
 =item *
 
@@ -43,8 +43,11 @@ their own classes.  (Easier to import.)
 
 =item *
 
-Databases are always blessed according to your pleasure.  Above and
-beyond, C<lookup>, C<open>, and C<is_open> are augmented with
+Databases are always blessed according to your pleasure.
+
+=item * 
+
+C<lookup>, C<open>, C<is_open>, and C<lock_timeout> are augmented with
 multi-color, pop-tart style interfaces.
 
 =back
@@ -235,6 +238,12 @@ relocated when arrays need to grow.  C<OSSVPV>s are never relocated.
 
 =over 4
 
+=item * SIGNALS ARE UNRELIABLE
+
+Perl signal handlers are not bulletproof yet.  Since ObjectStore makes
+aggressive use of signals, failure is not uncommon.  Reliable signals
+will be available in perl 5.005.
+
 =item * MIXING WITH EVAL
 
 It is possible to use C<eval> within transactions, but B<you
@@ -252,6 +261,43 @@ exception that crashes perl.  This is due to the excellent but
 imperfect integration of C<ObjectStore> exceptions and perl
 exceptions.  I understand how to fix it, just haven't had time.  In
 general, you should global replace C<eval> to C<begin>.
+
+=item * ABORT MANUAL-OVERRIDE
+
+Since C<eval> does not imply a nested transaction, if you use C<eval>
+you can have situations where a transaction must be manually aborted.
+This situation actually turns up in C<posh>.  Perhaps it is best
+explained by example:
+
+  my $cmd = <$input>;
+
+  begin 'update', sub {
+    eval $cmd;
+    if ($@) {
+      ObjStore::Transaction::get_current()->abort(); #manual abort!
+      print $@;
+    }
+    undef $@;
+  };
+
+=item * CROSS DATABASE POINTERS
+
+This feature is highly depreciated and will likely be discontinued,
+but at the moment you can allow cross database B<pointers> with:
+
+  $db->_allow_external_pointers;    #never do this!
+
+But you should avoid this if at all possible.  Using real pointers
+will affect refcnts, even between two different databases.  Your
+refcnts will be wrong if you simply C<osrm> a random database.  This
+will cause some of your data to become permenently un-deletable.
+Currently, there is no way to safely delete un-deletable data.
+
+Instead, you can use references or cursors to refer to data in other
+databases.  References may use the C<os_reference_protected> class
+which is designed precisely to address this problem.  Refcnts will not
+be updated remotely, but you'll still be protected from accessing
+deleted objects or removed databases.  (Imagine the freedom. :-)
 
 =item * LEAKS TRANSIENT C<XPVRV>s
 

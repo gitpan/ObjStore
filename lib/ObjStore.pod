@@ -56,7 +56,7 @@ or MS Windows NT/95; send email)
 
 =head1 TUTORIAL
 
-The best way to get started is to win the tutorial.  See
+One way to get started is to win the tutorial.  See
 C<ObjStore::Tutorial> or, if you just can't wait, run the following
 code and start molding it right now:
 
@@ -111,7 +111,7 @@ be created appropriately!
 The following code snippet creates a persistent hash reference with an
 expected cardinality of ten elements.
 
-    my $h7 = new ObjStore::HV($store, 10);
+    my $h7 = ObjStore::HV->new($store, 10);
 
 An array representation is used for low cardinalities.  Arrays do not
 scale well, but they do afford a pleasingly compact representation.
@@ -125,8 +125,8 @@ construction:
 
 Or the equally effective, but unbearibly tedious:
 
-    my $h1 = $dict->{foo} ||= new ObjStore::HV($dict);
-    my $h2 = $h1->{fwaz} ||= new ObjStore::HV($h1);
+    my $h1 = $dict->{foo} ||= ObjStore::HV->new($dict);
+    my $h2 = $h1->{fwaz} ||= ObjStore::HV->new($h1);
     $h2->{1}='blort';
     $h2->{snorf}=3;
     $h1->{b}='ouph';
@@ -138,7 +138,7 @@ Perl saves us again!  (Relief.)
 The following code snippet creates a persistent array reference with
 an expected cardinality of ten elements.
 
-    my $a7 = new ObjStore::AV($store, 10);
+    my $a7 = ObjStore::AV->new($store, 10);
 
 Complete array support is available now, but you must must have at
 least perl 5.004_57.  If you don't, none of the usually array
@@ -312,53 +312,50 @@ classes when you can avoid it?
 
 =head2 The Theory of Lazy Evolution
 
-Data-sets are growing so large, it can be impossible to evolve the
-data all at once!  Lazy evolution is really the only way to scale up.
+When you practice lazy evolution, you avoid changing data layouts in
+favor of making queries smarter.  Since data usually out-bulks code,
+this is the correct trade.  And since there isn't a artificial split
+between the implementation language and some goofy database language,
+schema evolution is reduced to the same problem as source code
+compatibility.  (Database are essentially just a rich API.)
 
-The easiest way to evolve data is to rebuild it from scratch.
-Therefore, the first thing to consider is how to partition your data
-to avoid evolution altogether.  It is entirely unnecessary to store
-all data in a single database.  Databases interoperate and be used
-simultaniously.  In fact, the primary reason to keep data in the same
-database is to be able to use real pointers to connect objects
-together.  By splitting your data into logical chunks, you should be
-able to avoid evolution in most cases.
+Now, I'm not saying that data layouts never have to change.  When
+thinking about data, the first thing to consider is how to partition
+your data into manageable chunks.  Fortunately, databases interoperate
+and can be used simultaniously.  It is entirely unnecessary to store
+all data in one database.  By splitting your data into logical chunks,
+you should be able to minimize the impact of structural changes.
+(This is the same problem as designing good APIs.)
 
-Within a database, all changes can be sorted into three categories.
-The following examples will involve a hypothetical C<Spoon> class and
-it's associated instances.
+The way you split up your database generally depends on three things
+(wisdom gleened from developing a real-time trading system):
 
 =over 4
 
-=item * IMPLEMENTATION
+=item * LOCALITY OF REFERENCE
 
-Changing the implementation is easiest.  By using version numbers or
-careful coding, you should be able to add a new representations while
-at the same time maintaining backward compatibility (C<bless>
-automatically stores version numbers for you).  C<is_evolved> and
-C<evolve> methods should be used to upgrade the representation
-whenever it is deemed necessary.
+The less data you have, the faster you can access it.  Work towards
+perfect awareness of nothing.
 
-=item * INTERFACE
+=item * REAL-TIME WRITERS
 
-If you want to change the interface to class C<Spoon>, you have do a
-bit of planning.  All the C<Spoon>s in the database probably rely on
-themselves working as they have in the past.  Therefore, you need to
-copy the class and rename it to C<Spoon2>.  The evolution process can
-be triggered by C<bless> (see the section on customizing C<bless>).
+It is usually good design to create a separate database for each
+real-time writer.  Consumers of real-time data can open the database
+in mvcc mode (no waiting for read locks), which is a real advantage.
 
-=item * EVERYTHING ELSE
+=item * COUPLING TIGHTNESS
 
-Most Americans would agree that using chop-sticks is significantly
-different from using a spoon.  Naturally, the fuzzy case will require
-thought proportional to the triangulation between the old and new
-sport utility functions.  Fortunately, the upside is that your
-database can afford to be lazy.  It can learn to use chop-sticks one
-stick at a time.
+Loosely coupled data can easily (and should) be split into multiple
+databases.  (The most exciting data is tightly coupled.  Keep this
+data close together. :-)
 
 =back
 
-Also see the C<iscorrupt> method for integrity verification.
+That's about it.  The power and simplicity is hard to describe because
+there's just not much to it.  (Just the absolute minimum for
+correctness. :-)
+
+(For extra integrity verification, see the C<iscorrupt> method.)
 
 =head2 RDBMS Emulation
 
@@ -434,7 +431,7 @@ See C<ObjStore::HV::Database>, C<ObjStore::Table3::Database>
 
 =item * $open_mode = $db->is_open();
 
-=item * $s = $db->create_segment();
+=item * $s = $db->create_segment($comment);
 
 =item * $value = $db->root($root_name => sub{ $new_value });
 
@@ -542,7 +539,7 @@ blindingly fast.
 
 =item * $yes = $T->is_prepare_to_commit_completed();
 
-=item * ObjStore::set_transaction_priority($very_low);
+=item * $ObjStore::TRANSACTION_PRIORITY
 
 =item * ObjStore::set_max_retries($oops);
 
@@ -554,13 +551,14 @@ blindingly fast.
 
 =item * my $type = ObjStore::get_lock_status($ref);
 
-=item * my $tm = ObjStore::get_readlock_timeout();
+=item * my $tm = ObjStore::lock_timeout($rw);
 
-=item * my $tm = ObjStore::get_writelock_timeout();
+C<$rw> should be either 'read' or 'write'.  Return value of 1 == 1
+second.  Undef means there is no timeout;
 
-=item * ObjStore::set_readlock_timeout($tm);
+=item * ObjStore::lock_timeout($rw, $tm);
 
-=item * ObjStore::set_writelock_timeout($tm);
+Set lock timeouts.
 
 =back
 
@@ -718,8 +716,8 @@ setup/cleanup.  The more you do per transaction the better.
 
 =item * IS MUTABLE DATA MOSTLY SEPARATED FROM READ-ONLY DATA?
 
-Part of update transaction commit time is proportional to the number
-of pages with writes, not the amount of data written.
+Update transaction commit time is proportional to the amount of data
+written AND to the number of pages with modifications.
 
 =item * SEGMENTS
 
@@ -809,26 +807,6 @@ imperfect integration of C<ObjectStore> exceptions and perl
 exceptions.  I understand how to fix it, just haven't had time.  In
 general, you should global replace C<eval>s with C<begin>s.
 
-=item * ABORT MANUAL-OVERRIDE
-
-Since C<eval> does not imply a nested transaction, if you use C<eval>
-you can have situations where a transaction must be manually aborted.
-This situation actually turns up in C<posh>.  Perhaps it is best
-explained by example:
-
-  my $cmd = <$input>;
-
-  begin 'update', sub {
-    eval $cmd;
-    if ($@) {
-      ObjStore::Transaction::get_current()->abort(); #manual abort!
-      print $@;
-    }
-    undef $@;
-  };
-
-This might be a bug.  I'm not sure yet.
-
 =item * RELAXING EXCEPTION SEVERITY
 
 Transactions are always executed within an implicit C<eval>.  By
@@ -868,8 +846,8 @@ locks are released only at the top-level [OS 4-5.0.*].)
 Create hashes and arrays pre-sized to exactly the right number of
 slots:
 
-  new ObjStore::HV($near, { key => 'value' });  # 1 slot
-  new ObjStore::AV($near, [1..3]);              # 3 slots
+  ObjStore::HV->new($near, { key => 'value' });  # 1 slot
+  ObjStore::AV->new($near, [1..3]);              # 3 slots
 
 Or you can address the stargate directly:
 
@@ -910,6 +888,8 @@ Customize by providing your own implementation for these methods:
 
 =item * C<$o-E<gt>POSH_ENTER();>
 
+=item * C<$o->help();>
+
 =back
 
 There are lots of good examples throughout the standard C<ObjStore::>
@@ -941,24 +921,9 @@ open any databases:
 This mechanism is orthogonal to the C<AUTOLOAD> mechanism for
 autoloading functions.
 
-=head2 Cross Database POINTERS
+=head2 Where's the Hard Part?
 
-This feature is highly depreciated and will likely be discontinued,
-but at the moment you can allow cross database B<pointers> with:
-
-  $db->_allow_external_pointers;    #never do this!
-
-But you should avoid this if at all possible.  Using real pointers
-will affect refcnts, even between two different databases.  Your
-refcnts will be wrong if you simply C<osrm> a random database.  This
-will cause some of your data to become permenently un-deletable.
-Currently, there is no way to safely delete un-deletable data.
-
-Instead, you can use references or cursors to refer to data in other
-databases.  References may use the C<os_reference_protected> class
-which is designed precisely to address this problem.  Refcnts will not
-be updated remotely, but you'll still be protected from accessing
-deleted objects or removed databases.  (Imagine the freedom. :-)
+I don't know.  I haven't found it yet!
 
 =head1 DIRECTION
 
@@ -986,8 +951,9 @@ Support for bit vectors (Bit::Vector) and matrices (PDL)?
 C<CORBA> standardizes remote method invokaction.  C<ObjectStore>
 greatly reduces the need for remote method invokaction and also
 provides a simple but effective RPC mechanism (see
-C<ObjStore::Notification>).  The two technologies address different
-problems, but here is a rough comparison:
+C<ObjStore::Notification> and C<ObjStore::Process>).  The two
+technologies address different problems, but here is a rough
+comparison:
 
                       CORBA                     ObjectStore
  -------------------- ------------------------- -------------------------
@@ -1071,15 +1037,15 @@ All perl databases use the same flexible schema that can be examined
 and updated with generic tools.  This is the I<key> advantage of
 C<SQL>, now available in perl.  In addition, Perl / C<ObjectStore> is
 blatantly faster than C<SQL> / C<C++>.  (Not to mention that perl is a
-fun programming language while C<SQL> is at best a I<query language>
-and C<C++> is at best an I<engineering language>.)
+fun programming language while C<SQL> is at best a clunky I<query
+language> and C<C++> is at best an I<engineering language>.)
 
 =item * C<C++>
 
 Special purpose data types can be coded in C<C++> and dynamically
-linked into perl.  Since C<C++> will always be at least as fast as
-C<Java>, this gives perl an edge in the long run.  Perl is to C<C/C++>
-as C<C/C++> is to assembly language.
+linked into perl.  Since C<C++> will always be able to beat C<Java>
+benchmarks, this gives perl an edge in the long run.  Perl is to
+C<C/C++> as C<C/C++> is to assembly language.
 
 =item * JAVA
 
@@ -1092,18 +1058,21 @@ C<Java> has the buzz, but:
 Just like C<C++>, the lack of a universal generic schema limits use to
 single applications.  Without some sort of C<tie> mechanism, I can't
 imagine how this could be remedied.  (Even with C<tie>, it might
-already be too late.)
+already be too late.  Java was not conceived to evolve quite as
+rapidly as is perl.)
 
 =item *
 
-All C<Java> databases must serialize data to store it.  Until C<Java>
-supports memory-mapped persistent allocation, database operations will
-always be sluggish compared to C<C++>.
+All C<Java> databases must serialize data to store and retrieve it.
+Until C<Java> supports memory-mapped persistent allocation, database
+operations will always be sluggish compared to C<C++>.  Not even
+god-like compiler technology can completely cure poor language design.
 
 =item *
 
-Perl now integrates with C<Java> and the C<SwingSet / AWT> API.  (Of
-course, this is a moot point if you can use C<Qt> - http://www.troll.no/.)
+Perl integrates with C<Java> and the C<SwingSet / AWT> API.  (Of
+course, this is a moot point if you can use C<Qt> -
+http://www.troll.no/.)
 
 =back
 

@@ -11,11 +11,12 @@ use strict;
 use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $DEFAULT_OPEN_MODE $EXCEPTION %CLASSLOAD $CLASSLOAD
-	    $RUN_TIME $TRANSACTION_PRIORITY $OS_CACHE_DIR
-	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof
+	    $INITIALIZED $RUN_TIME $CLIENT_NAME $TRANSACTION_PRIORITY
+	    $OS_CACHE_DIR $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof
+	    $SAFE_EXCEPTIONS
 	    );
 
-$VERSION = '1.30';
+$VERSION = '1.31';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -29,20 +30,19 @@ require DynaLoader;
 {
     my @x_adv = qw(&peek &blessed &reftype &os_version &translate 
 		   &subscribe &unsubscribe &get_all_servers 
-		   &set_default_open_mode
+		   &set_default_open_mode &lock_timeout
 		   &get_lock_status &is_lock_contention 
 		  );
     my @x_tra = (qw(&fatal_exceptions &release_name
-		    &network_servers_available &set_transaction_priority
+		    &network_servers_available
 		    &get_max_retries &set_max_retries
 		    &get_page_size &return_all_pages 
-		    &get_readlock_timeout &get_writelock_timeout
-		    &set_readlock_timeout &set_writelock_timeout
 		    &abort_in_progress &get_n_databases
 		    &set_stargate &DEFAULT_STARGATE
 		    &PoweredByOS),
 		 # depreciated
 		 qw(&release_major &release_minor &release_maintenance
+		    &set_transaction_priority
 		   ));
     my @x_old = qw(&schema_dir);
     my @x_priv= qw($DEFAULT_OPEN_MODE %CLASSLOAD $CLASSLOAD $EXCEPTION
@@ -61,14 +61,14 @@ $EXCEPTION = sub {
     my $reason = shift;
     $reason = ObjStore::Transaction::SEGV_reason() if $reason eq 'SEGV';
     $reason ||= 'SEGV';
-    local $Carp::CarpLevel += 1;
+    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
     my $m = "ObjectStore: $reason\t";
     warn $m if $ObjStore::REGRESS;
 
     # Due to bugs in perl, confess can cause a SEGV if the signal
     # happens at the wrong time.  Threads will probably enable a
     # work-around or a fix.  Even a simple die doesn't always work.
-#    confess $m;
+    confess $m if !$ObjStore::SAFE_EXCEPTIONS;
     die $m;
 };
 
@@ -77,11 +77,25 @@ $SIG{SEGV} = \&$EXCEPTION
 
 eval { require Thread::Specific; };
 undef $@;
-bootstrap ObjStore($VERSION,
-		   'Thread::Specific'->can('key_create')?
-		   'Thread::Specific'->key_create() : 0);
+bootstrap ObjStore($VERSION);
 
-warn "You need at least ObjectStore 4.0.1!  How did you get this extension compiled?\n" if ObjStore::os_version() < 4.0001;
+#'Thread::Specific'->can('key_create')? 'Thread::Specific'->key_create() : 0
+
+END {
+#    debug(qw(bridge txn));
+    if ($INITIALIZED) {
+	while (my $t = ObjStore::Transaction::get_current()) {
+	    $t->abort();
+	    $t->destroy();
+	}
+	ObjStore::shutdown();
+    }
+}
+# delay init with 'use ObjStore "no-init"' ?XXX
+set_client_name($CLIENT_NAME ||= $0);
+initialize();
+
+warn "You need at least ObjectStore 4.0.1!  How were you able to compile this extension?\n" if ObjStore::os_version() < 4.0001;
 
 require ObjStore::REP::ODI;
 require ObjStore::REP::Splash;
@@ -102,11 +116,11 @@ sub reftype ($);
 sub blessed ($);
 sub bless ($;$);
 
-$TRANSACTION_PRIORITY = 0x8000; #tied scalar? XXX
+tie $TRANSACTION_PRIORITY, 'ObjStore::Transaction::Priority';
+
 sub set_transaction_priority {
-    my ($pri) = @_;
-    $TRANSACTION_PRIORITY = $pri;
-    _set_transaction_priority($pri);
+    carp "just assign to \$TRANSACTION_PRIORITY directly";
+    $TRANSACTION_PRIORITY = shift;
 }
 
 sub PoweredByOS {
@@ -175,9 +189,6 @@ sub begin {
     } while ($do_retry);
     if (!defined wantarray) { () } else { wantarray ? @result : $result[0]; }
 }
-
-# For speed, you may assume that ONLY TRANSIENT DATA will be
-# transferred through the stargate.
 
 sub DEFAULT_STARGATE {
     my ($seg, $sv) = @_;
@@ -361,6 +372,25 @@ sub try_abort_only(&) {
 *rethrow_exceptions = \&fatal_exceptions; # depreciated
 *ObjStore::disable_class_auto_loading = \&disable_auto_class_loading; #silly me
 
+package ObjStore::Transaction::Priority;
+
+sub TIESCALAR {
+    my ($class) = @_;
+    my $p = 0x8000;
+    bless \$p, $class;
+}
+
+sub FETCH {
+    my ($o) = @_;
+    $$o;
+}
+
+sub STORE {
+    my ($o,$new) = @_;
+    ObjStore::_set_transaction_priority($new);
+    $$o = $new;
+}
+
 # Psuedo-class to animate persistent bless!  (Kudos to Devel::Symdump!)
 #
 package ObjStore::BRAHMA;
@@ -507,7 +537,7 @@ sub _is_evolved {
 	
 	no strict 'refs';
 	my $then = $bs->[4];
-	for (my ($c,$v) = each %$then) {
+	while (my ($c,$v) = each %$then) {
 	    return if ($ {"$c\::VERSION"} || '') gt $v;
 	}
 	1;
@@ -936,8 +966,8 @@ sub get_database {
 
 sub Receive {
     #debugging? XXX
-    my ($class) = @_;
-    while (my $note = ObjStore::Notification->receive(0)) {
+    my ($class, $max) = @_;
+    while (my $note = ObjStore::Notification->receive(0) and $max--) {
 	my $why = $note->why();
 	warn "Receive: $why\n" if $DEBUG_RECEIVE;
 	# open the database first?  probably too slow
@@ -1174,15 +1204,15 @@ sub map {
 
 #-------------- -------------- -------------- -------------- DEPRECIATED
 sub _count { 
-    carp "_count can be done directly" if $] >= 5.00457;
+    carp "_count should be done directly" if $] >= 5.00457;
     $_[0]->FETCHSIZE();
 }
 sub _Push { 
-    carp "_Push can be done directly" if $] >= 5.00457;
+    carp "_Push should be done directly" if $] >= 5.00457;
     shift->PUSH(@_) 
 }
 sub _Pop { 
-    carp "_Pop can be done directly" if $] >= 5.00457;
+    carp "_Pop should be done directly" if $] >= 5.00457;
     shift->POP(@_) 
 }
 

@@ -18,14 +18,16 @@ sub new {
 
 sub add {
     my ($o, $e) = @_;
-    $o->_Push($e);
+    $o->PUSH($e);
     $e;
 }
 
+# rename to size? XXX
 sub count {
     my ($o) = @_;
     my $c=0;
-    for (my $x=1; $x < $o->SUPER::count(); $x++) {
+    my $sz = $o->SUPER::FETCHSIZE();
+    for (my $x=1; $x < $sz; $x++) {
 	++$c if defined $o->[$x];
     }
     $c;
@@ -35,7 +37,7 @@ sub count {
 sub exists {
     my ($o, $e) = @_;
     my $x;
-    for (my $z=1; $z < $o->_count; $z++) {
+    for (my $z=1; $z < $o->FETCHSIZE(); $z++) {
 	my $e2 = $o->[$z];
 	do { $x = $z; last } if $e2 == $e;
     }
@@ -53,7 +55,7 @@ sub remove {
 sub map {
     my ($o, $sub) = @_;
     my @r;
-    for (my $x=1; $x < $o->_count; $x++) { 
+    for (my $x=1; $x < $o->FETCHSIZE(); $x++) { 
 	my $at = $o->[$x];
 	next if !defined $at;
 	push(@r, $sub->($at));
@@ -64,9 +66,9 @@ sub map {
 sub compress {
     # compress table - use with add/remove
     my ($ar) = @_;
-    my $data = $ar->_count - 1;
+    my $data = $ar->FETCHSIZE() - 1;
     my $hole = 1;
-    while ($hole < $ar->_count) {
+    while ($hole < $ar->FETCHSIZE()) {
 	next if defined $ar->[$hole];
 	while ($data > $hole) {
 	    next unless defined $ar->[$data];
@@ -75,8 +77,8 @@ sub compress {
 	} continue { --$data };
     } continue { ++$hole };
     
-    while ($ar->_count and !defined $ar->[$ar->_count - 1]) {
-	$ar->_Pop;
+    while ($ar->FETCHSIZE() and !defined $ar->[$ar->FETCHSIZE() - 1]) {
+	$ar->POP();
     }
 }
 

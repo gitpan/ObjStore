@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { todo tests=>19 }
+BEGIN { plan tests=>22 }
 
 use strict;
 use ObjStore ':ADV';
@@ -8,6 +8,9 @@ use lib './t';
 use test;
 ObjStore::fatal_exceptions(0);
 #ObjStore::debug qw/ index /;
+
+# This should be rewritten with more complete checking and better
+# factoring.
 
 package Toy;
 use base 'ObjStore::HV';
@@ -45,13 +48,36 @@ begin 'update', sub {
 	    $nums->add({num => $_});
 	    $nums->add({num => .5 * $_});
 	    $nums->add({num => -80000 + $_ * 40000 });
+	    $nums->add({typo => 20 * $_});
 	}
+	my $e = new ObjStore::HV($nums, { typo => 20 });
+	$nums->remove($e);
+	for (.0005, .5, $nums->[$nums->FETCHSIZE()-1]->{num}) {
+	    $e->{num} = $_;
+	    $nums->remove($e);
+	}
+
 	my @nums;
 	$nums->map(sub { push(@nums, shift->{num}) });
 	my @sorted = sort { $a <=> $b } @nums;
 	my $ok=1;
 	for (my $x=0; $x < @nums; $x++) { $ok=0, last if $nums[$x] != $sorted[$x] }
 	ok($ok);
+
+	my $c = $nums->new_cursor;
+	begin sub { $c->each('bogus'); };
+	ok($@ =~ m/integer/) or warn $@;
+	undef $@;
+
+	my $total=0;
+	while (my $n = $c->each(1)) {
+	    $total+= $n->{num};
+	}
+	ok($total == 200022.5);
+
+	begin sub { $c->store([]); };
+	ok($@ =~ m/(not\s+ | un) supported/x);
+	undef $@;
     };
 
     #---------------------
@@ -133,5 +159,7 @@ begin 'update', sub {
 
     begin sub {$nx->add(bless {name=>'Goldilocks'}, 'Toy'); };
     ok($@ =~ m'duplicate') or warn $@;
+
+    $nx->remove($nx->[0]); #hit coverage case
 };
 die if $@;

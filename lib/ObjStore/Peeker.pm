@@ -188,7 +188,7 @@ sub peek_any {
 sub peek_array {
     my ($o, $val, $name) = @_;
     my $blessed = blessed($val);
-    my $len = ($blessed and $val->can("_count"))? $val->_count : @$val;
+    my $len = ($blessed and $val->can("FETCHSIZE"))? $val->FETCHSIZE : @$val;
     $o->{coverage} += $len;
     my $big = $len > $o->{width};
     my $limit = $big? $o->{summary_width} : $len;

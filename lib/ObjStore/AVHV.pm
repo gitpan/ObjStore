@@ -139,7 +139,7 @@ sub _avhv_relayout {
     }
     
     #clear $o & copy @save back using new schema
-    for (my $x=0; $x < $o->_count; $x++) { $o->[$x] = undef }
+    for (my $x=0; $x < $o->FETCHSIZE(); $x++) { $o->[$x] = undef }
     for my $z (@save) { $o->[ $new->{$z->[0]} ] = $z->[1]; }
     $o->[0] = $new;
     ();

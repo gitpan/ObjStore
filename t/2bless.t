@@ -1,6 +1,6 @@
 # This is obviously -*-perl-*- don'tcha-think?
 use Test;
-BEGIN { todo tests => 24, failok => [8,20]; }
+BEGIN { plan tests => 24, todo => [8,20]; }
 
 package Winner;
 use vars qw($VERSION);

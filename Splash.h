@@ -30,14 +30,16 @@ struct OSPV_avarray : OSPV_Generic {
   virtual OSSV *avx(int xx);
   virtual OSSV *FETCH(SV *xx);
   virtual OSSV *STORE(SV *xx, SV *value);
-  virtual SV *Pop();
-//  virtual SV *Unshift();
-  virtual void Push(SV *);
+  virtual SV *POP();
+  virtual SV *SHIFT();
+  virtual void PUSH(SV **base, int items);
+  virtual void UNSHIFT(SV **base, int items);
+  virtual void SPLICE(int offset, int length, SV **base, int count);
   virtual void CLEAR();
-  virtual double _percent_filled();
-  virtual int _count();
+  virtual int FETCHSIZE();
   virtual OSSV *traverse(char *keyish);
   virtual void XSHARE(int on);
+  virtual double _percent_filled();
 };
 
 struct OSPV_avarray_cs : OSPV_Cursor {
@@ -70,7 +72,7 @@ struct OSPV_hvarray2 : OSPV_Generic {
   virtual SV *FIRST(ospv_bridge*);
   virtual SV *NEXT(ospv_bridge*);
   virtual double _percent_filled();
-  virtual int _count();
+  virtual int FETCHSIZE();
   virtual OSSV *traverse(char *keyish);
   virtual void XSHARE(int on);
 };

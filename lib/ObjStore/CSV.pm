@@ -182,6 +182,7 @@ sub parse_csv {
     my $to = ref $st->{to};
     while (defined(my $l = <$fh>)) {
 	++ $st->{line};
+	chomp($l);
 	my @l = split(m/$split/, $l);  #should handle quoted sep chars XXX
 	# strip quotes
 	for my $e (@l) {

@@ -14,7 +14,7 @@ if ($] < 5.00404) {
 print "\nPlease edit lib/ObjStore/Config.pm to change the following parameters:\n";
 print "  SCHEMA_DBDIR = ".&SCHEMA_DBDIR."\n";
 print "  TMP_DBDIR    = ".&TMP_DBDIR."\n";
-print "\n\n(If the build doesn't finish, try GNU make 3.76+)\n\n";
+print "\n";
 
 # Also see the ./hints directory!
 
@@ -56,6 +56,7 @@ osperl.h :: dex2tv.h avtv.h
 my $ccov=0;
 push(@PREREQ, 'Devel::CCov' => 0.06) if $ccov;
 my @CCOV = $ccov? 'ccov_registry.o':'';
+my $xsubpp = $ccov ? '' : '-nolinenumbers';
 
 #cruft for CCov...
 sub MY::c_o {
@@ -87,19 +88,19 @@ ccov_registry$(OBJ_EXT): .ccov-timestamp
 WriteMakefile
     (
      NAME         => 'ObjStore',
-     PREREQ_PM	  => { 'Tree::Fat' => 0.09, Test => 0.02,
+     PREREQ_PM	  => { 'Tree::Fat' => 1.01, Test => 0.08,
 		       @PREREQ },
      VERSION_FROM => 'lib/ObjStore.pm',
      OPTIMIZE     => '-O2',
      EXE_FILES  => [qw/ospeek posh osp_hack/],
      'LIBS'     => ["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losths"],
-     'DEFINE'   => "-DOSP_DEBUG -DDEBUGGING -DSCHEMADIR=$sdir -DHIDEMYMALLOC",
+     'DEFINE'   => "-DOSP_DEBUG -DDEBUGGING -DSCHEMADIR=$sdir",
      INC      => "-I. -I$OS_ROOTDIR/include",
      'OBJECT'	=> join(' ',reverse
 			"osperl-$schema_version-osschema.o", @CCOV,
 			qw[txn.o ObjStore.o osperl.o GENERIC.o dex2tv.o avtv.o
 			   tvcommon.o osp_hkey.o ODI.o Splash.o FatTree.o]),
-     'XSPROTOARG' => '-prototypes -nolinenumbers',
+     'XSPROTOARG' => '-prototypes '.$xsubpp,
      dist	=> {COMPRESS=>'gzip -9f', SUFFIX => 'gz'},
     );
 

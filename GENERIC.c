@@ -57,7 +57,7 @@ double OSPV_hvarray::_percent_filled()
   return used / (double) hv.size_allocated();
 }
 
-int OSPV_hvarray::_count()
+int OSPV_hvarray::FETCHSIZE()
 { return hv.count(); }
 
 char *OSPV_hvarray::os_class(STRLEN *len)
@@ -231,7 +231,7 @@ double OSPV_setarray::_percent_filled()
   return used / (double) cv.size_allocated();
 }
 
-int OSPV_setarray::_count()
+int OSPV_setarray::FETCHSIZE()
 { return cv.count(); }
 
 char *OSPV_setarray::os_class(STRLEN *len)
@@ -392,7 +392,7 @@ OSPV_sethash::OSPV_sethash(os_unsigned_int32 size)
 OSPV_sethash::~OSPV_sethash()
 { CLEAR(); }
 
-int OSPV_sethash::_count()
+int OSPV_sethash::FETCHSIZE()
 { return set.cardinality(); }
 
 char *OSPV_sethash::os_class(STRLEN *len)

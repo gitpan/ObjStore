@@ -70,6 +70,7 @@ posh
 splash.h
 t/0illuminate.t
 t/1av.t
+t/1avsplice.t
 t/1data.t
 t/1hv.t
 t/1hvbugs.t

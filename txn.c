@@ -155,6 +155,7 @@ osp_txn::osp_txn(os_transaction::transaction_type_enum _tt,
   dOSP ;
   osp->destroy_bridge();
 
+  report=0;
   os = os_transaction::begin(tt, scope_in);
   bridge_top = 0;
   got_os_exception = 0;

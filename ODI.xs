@@ -25,7 +25,7 @@ OSPV_hvdict::~OSPV_hvdict()
   }
 }
 
-int OSPV_hvdict::_count()
+int OSPV_hvdict::FETCHSIZE()
 { return hv.update_cardinality(); }
 
 char *OSPV_hvdict::os_class(STRLEN *len)

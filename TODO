@@ -10,22 +10,34 @@ following in the body of your message:
 
 + IDEAS +
 
-permutation magic for AVHV
+The perl compiler requires: "As a prerequisite, such extensions must
+not need to do anything in their BOOT: section which needs to be done
+at runtime rather than compile time."
 
-tied ARRAYS!
+permutation magic for AVHV
+  ObjStore::Index::_(un)protect
+
+translate('transient', $persistent)
+
+Table3
+  notion of a primary index?
+
+configure unique index duplicate row behavior?
 
 typemap
+  do strings without copying?
   SV set magic?
-  CLEAR & GIMME_V optimizations seem broken with tied hashes:
+  CLEAR seems broken with tied hashes:
     verify and submit bug reports (or fix the code!)
 
 transactions
-  add hooks for eval 'setup' & 'unwind' handler to perl
+  begin 'update', $string;
+  add hooks for eval 'setup' & 'unwind' handler to perl?
   begin('update!',...): force switch to update?
   dynamic transactions?
 
 posh
-  tkposh ?
+  qtposh ?
   autodetect @INC modifications and print help message
   factor more!
   persist command history!
@@ -37,11 +49,15 @@ switch representations dynamically
   lock representation... hm...
   generate 'new' methods at compile time
 
-test scripts
-  re-design t/1index.t
-
 
 + VAGUE POSSIBILITIES +
+
+optimize splash suite
+  hash performance sucks
+  arrays are inefficient
+
+ObjStore::Index
+  $t->select(['*'], sub { my $r = shift; ... }); ??why
 
 Table3
   add_index should create a scratch cursor to speed fetch?
@@ -58,7 +74,7 @@ get_database
   factor
   os_server::get_databases() ignores bless; yikes!
 
-per-database shared hash key strings?
+per-database shared hash key strings?  (for small hashes?)
 
 prune debugging stuff
 
@@ -113,6 +129,11 @@ Evolve the schema to eliminate this harmless annoyance:  The object at 0xdff3019
 
 + BIGGISH PROJECTS +
 
+optional pool allocation of numeric types
+  configurable block size
+  store offset in xiv!
+  think about performance
+
 Support for multiple application schemas (expected 1Q98)
   generic scalar object typemap
   XPVMG abstraction
@@ -120,8 +141,7 @@ Support for multiple application schemas (expected 1Q98)
   Bit::Vector
 
 Needed is a more flexible hash table that can serve to replace
-os_Dictionary and also be used as an ObjStore::Index.  Also, splash
-hash performance would be easy to improve.
+os_Dictionary and also be used as an ObjStore::Index.
 
 
 + CORE-PERL WISH LIST +

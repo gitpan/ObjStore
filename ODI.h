@@ -25,7 +25,7 @@ struct OSPV_hvdict : OSPV_Generic {
   virtual int EXISTS(char *key);
   virtual SV *FIRST(ospv_bridge*);
   virtual SV *NEXT(ospv_bridge*);
-  virtual int _count();
+  virtual int FETCHSIZE();
   virtual OSSV *traverse(char *keyish);
   virtual void XSHARE(int on);
 };

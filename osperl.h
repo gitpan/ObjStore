@@ -90,6 +90,10 @@ typedef void (*XS_t)(CV*);
 
 // OSSV has only 16 bits to store type information.  Yikes!
 
+// NOTE: It probably would have been slightly more efficient to make
+// 0=UNDEF instead of 1=UNDEF.  At the time I felt the extra checking
+// was worth it.
+
 #define OSVt_ERROR		0	// should never be zero
 #define OSVt_UNDEF		1
 #define OSVt_IV32		2
@@ -136,7 +140,6 @@ struct OSSV {
   //init
   OSSV();
   OSSV(SV *);
-  OSSV(OSSV *);
   OSSV(OSSVPV *);
   ~OSSV();
   OSSV *operator=(int);  //help C++ templates call undef (?) XXX
@@ -150,6 +153,7 @@ struct OSSV {
   int is_set();
   int istrue();
   int compare(OSSV*);
+  static void verify_correct_compare();
   char *type_2pv();
   static char *type_2pv(int);
   OSSVPV *get_ospv();
@@ -270,6 +274,7 @@ struct OSPV_Cursor2 : OSSVPV {
 //  virtual os_database *get_database();   //only for cross-database
 //  virtual int deleted();
   virtual OSSVPV *focus();
+  virtual char *rep_class(STRLEN *len);
   virtual void moveto(I32);
   virtual void step(I32 delta);
   virtual void keys();		// index might have multiple keys
@@ -290,7 +295,7 @@ struct OSPV_Cursor; //XXX
 struct OSPV_Container : OSSVPV {
   static os_typespec *get_os_typespec();
   virtual double _percent_filled();
-  virtual int _count();
+  virtual int FETCHSIZE();
   virtual void CLEAR();
   virtual OSSVPV *new_cursor(os_segment *seg);
 };
@@ -315,13 +320,13 @@ struct OSPV_Generic : OSPV_Container {
   virtual int EXISTS(char *key);
   virtual SV *FIRST(ospv_bridge*);
   virtual SV *NEXT(ospv_bridge*);
-  // array (preliminary)
+  // array
   virtual OSSV *avx(int xx);
-  virtual int _LENGTH();
-  virtual SV *Pop();    //these will change
-  virtual SV *Unshift();
-  virtual void Push(SV *);
-  virtual void Shift(SV *);
+  virtual SV *POP();
+  virtual SV *SHIFT();
+  virtual void PUSH(SV **base, int items);
+  virtual void UNSHIFT(SV **base, int items);
+  virtual void SPLICE(int offset, int length, SV **top, int count);
   // index
   virtual void add(OSSVPV *);
   virtual void remove(OSSVPV *);

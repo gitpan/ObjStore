@@ -2,6 +2,9 @@
 #include "osperl.h"
 #include "Splash.h"
 
+#undef MIN
+#define	MIN(a, b)	((a) < (b) ? (a) : (b))
+
 /* CCov: fatal SERIOUS */
 #define SERIOUS warn
 
@@ -91,7 +94,7 @@ OSPV_avarray::~OSPV_avarray()
 double OSPV_avarray::_percent_filled()
 { croak("OSPV_avarray::_percent_filled: not implemented"); return -1; }
 
-int OSPV_avarray::_count()
+int OSPV_avarray::FETCHSIZE()
 { return av.count(); }
 
 char *OSPV_avarray::os_class(STRLEN *len)
@@ -154,7 +157,7 @@ void OSPV_avarray::XSHARE(int on)
 OSSV *OSPV_avarray::STORE(SV *sv, SV *value)
 {
   int xx = SvIV(sv);
-  if (xx < 0) return 0;
+  assert(xx >= 0);
   DEBUG_array(warn("OSPV_avarray(0x%x)->STORE(%d)", this, xx));
   av[xx] = value;
   dTHR;
@@ -162,7 +165,7 @@ OSSV *OSPV_avarray::STORE(SV *sv, SV *value)
   return &av[xx];
 }
 
-SV *OSPV_avarray::Pop()
+SV *OSPV_avarray::POP()
 {	
   SV *ret = &sv_undef;
   int n= av.count()-1;
@@ -174,9 +177,8 @@ SV *OSPV_avarray::Pop()
   return ret;
 }
 
-/*
-SV *OSPV_avarray::Unshift()
-{
+SV *OSPV_avarray::SHIFT()
+{	
   SV *ret = &sv_undef;
   if (av.count()) {
     dOSP ;
@@ -185,10 +187,59 @@ SV *OSPV_avarray::Unshift()
   }
   return ret;
 }
-*/
 
-void OSPV_avarray::Push(SV *nval)
-{ av[av.count()] = nval; }
+void OSPV_avarray::PUSH(SV **base, int items)
+{
+  for (int xx=0; xx < items; xx++) {
+    av[av.count()] = base[xx];
+  }
+}
+
+void OSPV_avarray::UNSHIFT(SV **base, int items)
+{
+  av.insert(0, items);
+  for (int xx=0; xx < items; xx++) {
+    av[xx] = base[xx];
+  }
+}
+
+void OSPV_avarray::SPLICE(int offset, int length, SV **base, int count)
+{
+  if (length) {
+    if (GIMME_V == G_ARRAY) {
+      dOSP;
+      SV **sv = new SV*[length];
+      for (int xx=0; xx < length; xx++) {
+	sv[xx] = osp->ossv_2sv(&av[offset+xx]);
+      }
+      dSP;
+      EXTEND(SP, length);
+      for (xx=0; xx < length; xx++) PUSHs(sv[xx]);
+      PUTBACK;
+      delete sv;
+    } else if (GIMME_V == G_SCALAR) {
+      dOSP;
+      SV *ret = osp->ossv_2sv(&av[offset]);
+      dSP;
+      XPUSHs(ret);
+      PUTBACK;
+    }
+  }
+  int overlap = MIN(length,count);
+  if (overlap) {
+    for (int xx=offset; xx < offset+overlap; xx++) {
+      av[xx] = base[xx-offset];
+    }
+  }
+  if (length > count) {
+    while (length-- > count) av.compact(offset+count);
+  } else if (length < count) {
+    av.insert(offset + overlap, count - overlap);
+    for (; overlap < count; overlap++) {
+      av[offset + overlap] = base[overlap];
+    }
+  }
+}
 
 void OSPV_avarray::CLEAR()
 {
@@ -242,7 +293,7 @@ OSPV_hvarray2::~OSPV_hvarray2()
 double OSPV_hvarray2::_percent_filled()
 { croak("OSPV_hvarray2::_percent_filled: not implemented"); return -1; }
 
-int OSPV_hvarray2::_count()
+int OSPV_hvarray2::FETCHSIZE()
 { return hv.count(); }
 
 char *OSPV_hvarray2::os_class(STRLEN *len)

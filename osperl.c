@@ -205,9 +205,6 @@ OSSV::OSSV() : _type(OSVt_UNDEF)
 OSSV::OSSV(SV *nval) : _type(OSVt_UNDEF)
 { this->operator=(nval); }
 
-//OSSV::OSSV(OSSV *nval) : _type(OSVt_UNDEF)
-//{ *this = *nval; }
-
 OSSV::OSSV(OSSVPV *nval) : _type(OSVt_UNDEF)
 { s(nval); }
 
@@ -295,13 +292,13 @@ OSSV *OSSV::operator=(SV *nval)
 
 // Must preserve flags (like shared) that can easily become unset!
 OSSV *OSSV::operator=(const OSSV &nval)
-{ croak("OSSV::operator=(const OSSV &): use memcpy instead"); return 0; }
+{ croak("OSSV::operator=(const OSSV &): use memcpy/memmove instead"); return 0; }
 OSSV *OSSV::operator=(OSSV &nval)
-{ croak("OSSV::operator=(OSSV &): use memcpy instead"); return 0; }
+{ croak("OSSV::operator=(OSSV &): use memcpy/memmove instead"); return 0; }
 
 // DANGER! This is ONLY to assist in memcpy'ing OSSVs between arrays.
 void OSSV::FORCEUNDEF()
-{ _type = OSVt_UNDEF; }
+{ _type = OSVt_UNDEF; vptr=0; }  //vptr=0 seems to be necessary
 
 int OSSV::natural() const
 { return OSvTYPE(this); }
@@ -374,7 +371,6 @@ void OSSV::s(double nval)
   }
 }
 
-#define OSSV_NULL_TERMINATE 0  //memory cost is too high
 void OSSV::s(char *nval, os_unsigned_int32 nlen)
 {
   OSvTRYWRITE(this);
@@ -389,6 +385,7 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)
     delete [] ((char*)vptr);
     vptr = 0;
   }
+  int OSSV_NULL_TERMINATE = nlen > 16 ? 1 : 0;
   char *str = new(os_segment::of(this), os_typespec::get_char(),
 		  nlen+OSSV_NULL_TERMINATE) char[nlen+OSSV_NULL_TERMINATE];
   memcpy(str, nval, nlen+OSSV_NULL_TERMINATE);
@@ -465,7 +462,7 @@ int OSSV::istrue()
   case OSVt_IV32:   return OSvIV32(this) != 0;
   case OSVt_NV:     return OSvNV(this) != 0;
   case OSVt_PV:     return xiv != 0;
-  case OSVt_RV:     return 1;
+    //  case OSVt_RV:     return 1;
   case OSVt_IV16:   return OSvIV16(this) != 0;
   default:	    SERIOUS("istrue: unknown type"); return 0;
   }
@@ -528,15 +525,15 @@ int OSSV::compare(OSSV *that)
       case OSVt_IV16:  v2 = OSvIV16(that); break;
       default: croak("OSSV: %s not numerically comparible", type_2pv(t2));
       }
-      if (v1 == v2) return 0;
+      assert(v1 != v2); //type mixup should be impossible
       if (v1 < v2)
 	return -1;
       else 
 	return 1;
     } else {
-      if (t1 == OSVt_UNDEF) return -1;
-      if (t2 == OSVt_UNDEF) return 1;
-      if (t1 == OSVt_PV) {
+      if (t1 == OSVt_UNDEF) { return -1; }
+      else if (t2 == OSVt_UNDEF) { return 1; }
+      else if (t1 == OSVt_PV) {
 	croak("OSSV: cannot compare a string with %s", type_2pv(t2));
       } else {
 	croak("OSSV: cannot compare a string with %s", type_2pv(t1));
@@ -546,6 +543,65 @@ int OSSV::compare(OSSV *that)
 }
 
 /* CCov: off */
+
+void OSSV::verify_correct_compare()
+{
+  OSSV o1,o2;
+
+  assert(o1.compare(&o2) == 0);
+  assert(o1.istrue() == 0);
+  o1.s(4);
+  assert(o1.istrue());
+  o1.s(40000);
+  assert(o1.istrue());
+  o1.s(1.5);
+  assert(o1.istrue());
+  o1.s("test", 4);
+  assert(o1.istrue());
+
+  o1.set_undef();
+  o2.s("test", 4);
+  assert(o1.compare(&o2) < 0);
+  assert(o2.compare(&o1) > 0);
+  o2.s(1.5);
+  assert(o1.compare(&o2) < 0);
+  assert(o2.compare(&o1) > 0);
+
+  o1.s(.5);
+  o2.s(.5);
+  assert(o1.compare(&o2) == 0);
+  o2.s(1.5);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+
+  o1.s(1);
+  o2.s(2);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+  o2.s(40000);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+  o2.s(1.5);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+
+  o1.s(40000);
+  o2.s(50000);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+
+  o1.s("", 0);
+  o2.s("", 0);
+  assert(o1.compare(&o2) == 0);
+  o2.s("test", 4);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+  o1.s("abc", 3);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+  o1.s("abcd", 4);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+  o1.s("test", 4);
+  assert(o1.compare(&o2) == 0);
+  o2.s("test2", 5);
+  assert(o1.compare(&o2) < 0 && o2.compare(&o1) > 0);
+  
+  // there's nothing like 100% ...
+}
+
 char OSSV::strrep2[64];
 char *OSSV::type_2pv(int ty)  //debugging ONLY
 {
@@ -782,7 +838,7 @@ int OSSVPV::can_update(void *vptr)
 void OSSVPV::NOTFOUND(char *meth)
 {
   STRLEN len;
-  croak("OSSVPV(%p) '%s' method not found (os_class='%s' rep_class='%s')",
+  croak("OSSVPV(%p) '%s' method unsupported (os_class='%s' rep_class='%s')",
 	this, meth, os_class(&len), rep_class(&len));
 }
 
@@ -867,8 +923,8 @@ void ospv_bridge::unref()
 
 double OSPV_Container::_percent_filled()
 { NOTFOUND("_percent_filled"); return -1; }
-int OSPV_Container::_count()
-{ NOTFOUND("_count"); return 0; }
+int OSPV_Container::FETCHSIZE()
+{ NOTFOUND("FETCHSIZE"); return 0; }
 OSSVPV *OSPV_Container::new_cursor(os_segment *seg)
 { NOTFOUND("new_cursor"); return 0; }
 void OSPV_Container::CLEAR() { NOTFOUND("CLEAR"); }
@@ -885,13 +941,13 @@ OSSV *OSPV_Generic::STORE(SV *, SV *) { NOTFOUND("STORE"); return 0; }
 void OSPV_Generic::DELETE(char *) { NOTFOUND("DELETE"); }
 int OSPV_Generic::EXISTS(char *) { NOTFOUND("EXISTS"); return 0; }
 
-// array (preliminary)
+// array
 OSSV *OSPV_Generic::avx(int) { NOTFOUND("avx"); return 0; }
-int OSPV_Generic::_LENGTH() { NOTFOUND("_LENGTH"); return 0; }
-SV *OSPV_Generic::Pop() { NOTFOUND("Pop"); return 0; }
-SV *OSPV_Generic::Unshift() { NOTFOUND("Unshift"); return 0; }
-void OSPV_Generic::Push(SV *) { NOTFOUND("Push"); }
-void OSPV_Generic::Shift(SV *) { NOTFOUND("Shift"); }
+SV *OSPV_Generic::POP() { NOTFOUND("POP"); return 0; }
+SV *OSPV_Generic::SHIFT() { NOTFOUND("SHIFT"); return 0; }
+void OSPV_Generic::PUSH(SV **,int) { NOTFOUND("PUSH"); }
+void OSPV_Generic::UNSHIFT(SV **,int) { NOTFOUND("UNSHIFT"); }
+void OSPV_Generic::SPLICE(int, int, SV **, int) { NOTFOUND("SPLICE"); }
 
 // INDEX
 OSSVPV *OSPV_Generic::FETCHx(SV*) { NOTFOUND("FETCHx"); return 0; }
@@ -902,7 +958,7 @@ void OSPV_Generic::configure(SV **top, int items)
 
 OSSV *OSPV_Generic::path_2key(OSSVPV *obj, OSPV_Generic *path)
 {
-  int len = path->_count();
+  int len = path->FETCHSIZE();
   assert(len > 0);
   int pi = 0;
   while (1) {
@@ -927,13 +983,13 @@ OSSV *OSPV_Generic::path_2key(OSSVPV *obj, OSPV_Generic *path)
   }
 }
 
+// symantics are a little bizarre; ideas for improvement welcome
 void osp_pathexam::abort()
 {
   assert(mode == 's');
   for (int xx=0; xx < trailcnt; xx++) {
     trail[xx]->ROCNT_dec();
   }
-  failed=1;
 }
 
 void osp_pathexam::commit()
@@ -951,7 +1007,7 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
   mode = mode_in;
   assert(mode == 's' || mode == 'u');
 
-  int pathcnt = paths->_count();
+  int pathcnt = paths->FETCHSIZE();
   if (pathcnt < 1) croak("Index path unset");
   assert(pathcnt < INDEX_MAXKEYS);
 
@@ -962,7 +1018,7 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
     pcache[kx] = (OSPV_Generic*) paths->avx(kx)->get_ospv();
 
     OSPV_Generic *path = pcache[kx];
-    int len = path->_count();
+    int len = path->FETCHSIZE();
     assert(len > 0);
 
     int pstep = 0;
@@ -982,7 +1038,8 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
       OSSV *at = obj->traverse(tr);
       if (!at || !at->is_set()) {
 	//croak("Could not traverse field '%s'", tr);
-	abort();
+	failed=1;
+	if (mode == 's') abort();
 	return;
       }
 
@@ -1052,6 +1109,8 @@ OSSVPV *OSPV_Ref2_hard::focus()
 // CURSORS
 char *OSPV_Cursor2::os_class(STRLEN *len)
 { *len = 16; return "ObjStore::Cursor"; }
+char *OSPV_Cursor2::rep_class(STRLEN *len)
+{ return focus()->rep_class(len); }
 
 //override like REFS if cross-database allowed
 /*

@@ -1,6 +1,6 @@
 # test all transaction types for -*-perl-*-
 use Test;
-BEGIN { todo tests => 18 }
+BEGIN { plan tests => 18 }
 
 use strict;
 use ObjStore ':ALL';

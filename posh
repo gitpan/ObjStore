@@ -120,7 +120,7 @@ sub enter {
 	warn "** you will need to osrm it and re-run posh (known bug).\n";
 	begin sub {
 	    $o->fetch_db;
-	    $o->{cursor}->open() if $o->{cursor};
+	    $o->{cursor}->open($Posh::open_mode) if $o->{cursor};
 	};
 	if ($@) {
 	    warn "A non-serious error occured while re-entering '$o->{db}':\n$@\n";
@@ -167,7 +167,7 @@ sub pre_eval {
     my $view = shift;
     confess $view if !ref $view;
     $input::view = $view;
-    if ($view->{cursor}->_count) {
+    if ($view->{cursor}->FETCHSIZE()) {
 	$input::cursor = $view->{cursor};
 	$input::at = $view->{cursor}->focus;
 	$input::db = $input::at->database_of;
@@ -293,7 +293,7 @@ sub execute {
 			     !$at2->_is_persistent) {
 			warn "$at->POSH_ENTER() returned junk ($at2)\n";
 		    } else {
-			$cs->_Push($at2->new_ref($cs, 'unsafe'));
+			$cs->PUSH($at2->new_ref($cs, 'unsafe'));
 		    }
 		}
 	    }
@@ -313,12 +313,12 @@ sub execute {
 		print "# Type 'help' for help!\n";
 
 	    } elsif (@at == 1) {
-		while ($cs->depth) { $cs->_Pop }
+		while ($cs->depth) { $cs->POP() }
 		$db->close() if $db && $db->is_open;
 		$o->{db} = '';
 
 	    } elsif (@at == 2) {
-		while ($cs->depth) { $cs->_Pop }
+		while ($cs->depth) { $cs->POP() }
 
 	    } else {
 		my $ok=1;
@@ -331,7 +331,7 @@ sub execute {
 			print "posh: cannot cd into $at\n";
 			last;
 		    }
-		    $new->_Push($at->new_ref($new, 'unsafe'));
+		    $new->PUSH($at->new_ref($new, 'unsafe'));
 		}
 		$o->{cursor} = $new if $ok;
 	    }
@@ -341,7 +341,7 @@ sub execute {
 	} elsif ($input =~ m/^(ls|peek|raw)\s*(.*)$/s) {
 	    my $cmd = $1;
 	    my $path = $2;
-	    my @at = (length $path or !$cs->_count)? $o->resolve($path):$cs->focus;
+	    my @at = (length $path or !$cs->FETCHSIZE())? $o->resolve($path):$cs->focus;
 	    my $at = $at[$#at];
 	    $Peeker->reset();
 	    local $Peeker->{depth} = 10 if $cmd eq 'raw' || $cmd eq 'peek';
@@ -459,44 +459,41 @@ use strict;
 use Carp;
 use IO::Handle;
 use ObjStore ':ADV';
+use ObjStore::AppInstance;
 use vars qw($term @ORINC);
-use base 'ObjStore::AppInstance';
 
 @ORINC = @INC;
 
 sub new {
-    my ($class, @opts) = @_;
-    my $o = $class->SUPER::new('posh', pvars => [qw(ttype pref view)]);
-
-    croak "Odd number of parameters" if @opts & 1;
-    while (@opts) { $o->{pop @opts} = pop @opts }
+    my ($class) = @_;
+    my $o = bless {}, $class;
+#    my $o = $class->SUPER::new('posh', pvars => [qw(ttype view)]);
 
     $o->{user} ||= scalar(getpwuid($>));
+    $o->{app} = new ObjStore::AppInstance('posh', $o->{user});
 
-    ObjStore::set_transaction_priority(0x1000);
+    ObjStore::set_max_retries(0);
+    ObjStore::set_transaction_priority(0x100); #don't conflict with real jobs
     begin('update', sub {
-	$o->cache;
-	$o->{public}->segment_of->set_comment($o->{user});
-	$o->{state} = 'active';
-	$o->{ttype} ||= 'read';
-	$o->{ttype} = 'read' if $open_mode eq 'mvcc';
-	$o->{public}{user} ||= $o->{user};
-	$o->{pref} ||= {view=>0};
-	$o->{view} ||= [new Posh::View($o->{public})];
-	$o->{prompt} = $o->view->enter($o->wdb->get_pathname);
-	$o->uncache;
-    });
+	      my $t = $o->{app}->top();
+
+	      $t->{ttype} ||= 'read';
+	      $t->{ttype} = 'read' if $open_mode eq 'mvcc';
+	      $o->{ttype} = $t->{ttype};
+
+	      $t->{view} ||= new Posh::View($t);
+	      $o->{prompt} = $t->{view}->enter($o->{app}->get_pathname());
+
+	      if ($] >= 5.00458) {
+		  for my $typo (@{$t->{history}}) {
+		      next if !$typo;
+		      $term->addhistory($typo);
+		  }
+	      }
+	  });
     die if $@;
     $o;
 }
-
-sub view {
-    my ($o, $xx) = @_;
-    $xx = $o->{pref}{view} if !defined $xx;
-    $o->{view}[$xx];
-}
-
-sub sid { $_[0]->{user}; }
 
 sub run {
     my ($o) = @_;
@@ -538,12 +535,31 @@ sub run {
 	}
 
 	begin($ttype, sub{
-	    $o->cache;
-	    begin sub {	$o->view->execute($input) if $input; };
-	    warn $@ if $@;
-	    $o->{prompt} = $o->view->prompt if $ttype ne 'read';
-	    $term->addhistory($input) if (!$@ and !ref $input and $input =~ /\S/);
-	    $o->uncache($ttype ne 'read');
+		  my $top = $o->{app}->top();
+		  my $view = $top->{view};
+
+		  begin sub { $view->execute($input) if $input; };
+		  warn $@ if $@;
+		  $o->{prompt} = $view->prompt()
+		      if $ttype ne 'read';
+
+		  if (!$@ and !ref $input and $input =~ /\S/) {
+		      if ($] >= 5.00458 and $ttype eq 'update') {
+			  for (my $x=0; $x < @{$top->{history}}; $x++) {
+			      $$top{history}[$x] = undef
+				  if ($$top{history}[$x] and
+				      $$top{history}[$x] eq $input);
+			  }
+			  push(@{$top->{history}}, $input);
+			  unshift(@{$top->{history}}) 
+			      if @{$top->{history}} > 100;
+		      }
+		      $term->addhistory($input);
+		  }
+		  if ($ttype eq 'update') {
+		      $top->{ttype} = $ttype;
+		      $o->{app}->modified(1);
+		  }
 	});
 	die if $@;
     }

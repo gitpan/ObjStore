@@ -2,8 +2,8 @@
 
 use Test;
 BEGIN {
-    if ($] < 5.00450) { todo tests => 0; exit; }
-    else { todo tests => 7; }
+    if ($] < 5.00450) { plan tests => 0; exit; }
+    else { plan tests => 7; }
 }
 
 use lib "./t";

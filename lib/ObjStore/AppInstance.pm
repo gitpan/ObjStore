@@ -1,44 +1,31 @@
 package ObjStore::AppInstance;
 use strict;
-use ObjStore;
-use ObjStore::Config;
 use Carp;
-
-sub ROOT() { 'instances' }
+use ObjStore;
+require ObjStore::HV::Database;
+use vars qw($VERSION);
+$VERSION = '1.01';
 
 sub new {
-    my ($class, $app, @opts) = @_;
-    my $dbdir = $ENV{"\U${app}_DBDIR"} || TMP_DBDIR;
-    $dbdir =~ s,/+?$,,;
-    my $wdb = ObjStore::open("$dbdir/$app", 0, 0666);
-    my $o = bless { _wdb => $wdb, _app => $app, _cached => 0 }, $class;
-    $o->config(@opts);
-}
+    my ($class, $app, $skey) = @_;
+    croak "$class->new($app, session_key): session key missing"
+	if !$skey;
 
-sub wdb { $_[0]->{_wdb} }
-
-sub config {
-    my $o = shift @_;
-    croak "Odd number of args in $o->config()" if @_ & 1;
-    my %opts = @_;
-    while (my ($k,$v) = each %opts) {
-	if ($k eq 'pvars') {
-	    $o->{_pvars} = $v;
-	} else {
-	    croak("$o->config($k => $v) unknown parameter");
+    if ($app !~ m'/') {
+	my $dbdir = $ENV{"\U${app}_DBDIR"};
+	if (!$dbdir) {
+	    require ObjStore::Config;
+	    $dbdir = ObjStore::Config::TMP_DBDIR();
 	}
+	$app = "$dbdir/$app";
     }
-    $o;
+    my $wdb = ObjStore::HV::Database->new($app, 'update', 0666);
+
+    bless { 'wdb' => $wdb, 'skey' => $skey }, $class;
 }
 
-sub pvars {
-    my ($o) = @_;
-    @{$o->{_pvars}}, 'state', 'public';
-}
-
-sub sid {
-    my $o = shift;
-    die "$o->sid must be overridden";
+sub get_pathname {
+    shift->{wdb}->get_pathname();
 }
 
 sub now {
@@ -47,93 +34,74 @@ sub now {
     sprintf("%4d%02d%02d%02d%02d", $year, $mon, $mday, $hour, $min);
 }
 
-sub cache {
+sub top {
+    # fold back into ObjStore::HV?  'partition'?
     my ($o) = @_;
-    croak "Already cached" if $o->{_cached};
-
-    my $r = $o->wdb->root(ROOT, sub{new ObjStore::HV($o->wdb, 100)});
-
-    my @pvars = $o->pvars;
-    if (!exists $r->{$o->sid}) {
-	my $s = $o->wdb->create_segment($o->sid);
-	my $ses = $r->{$o->sid} = new ObjStore::HV($s, scalar(@pvars)+5);
-	$ses->{public} = {
-	    ctime => $o->now,
-	    segment => $s->get_number,
-	};
+    if ($o->{'ref'}) {
+	my $r = $o->{'ref'};
+	# deleted? XXX
+	return $r->focus();
     }
-    my $ses = $r->{$o->sid};
-    for my $k (@pvars) { $o->{$k} = $ses->{$k}; }
-    $o->{_cached} = 1;
+    my $h = $o->{wdb}->hash;
+    my $skey = $o->{'skey'};
+    if (! $h->{$skey}) {
+	my $s = $o->{wdb}->create_segment($skey);
+	my $i = ObjStore::HV->new($s, 30);
+	$i->{SELF} = $i;
+	$i->{ctime} = &now;
+	$h->{ $skey } = $i->new_ref($h, 'hard');
+    }
+    $o->{'ref'} = $h->{ $skey }->focus()->new_ref();
+    my $top = $o->{'ref'}->focus();
+    $top;
 }
 
-sub uncache {
-    my ($o, $modified) = @_;
-    croak "Already uncached" if !$o->{_cached};
-
-    my $txn = ObjStore::Transaction::get_current();
-    if ($txn and $txn->get_type ne 'read') {
-
-	$o->{public}{mtime} = $o->now if $modified;
-
-	# unhook persistent state
-	my $ses = $o->wdb->root(ROOT)->{$o->sid};
-	die "no session" if !$ses;
-	for my $k ($o->pvars) {
-	    $ses->{$k} = $o->{$k};
-	}
+sub global {
+    my ($o) = @_;
+    if ($o->{'gref'}) {
+	my $r = $o->{'gref'};
+	return $r->focus();
     }
-    for my $k ($o->pvars) { delete $o->{$k} if ref $o->{$k}; }
-    $o->{_cached} = 0;
+    my $gl = $o->{wdb}->root('global');
+    if (!$gl) {
+	my $s = $o->{wdb}->create_segment('GLOBAL');
+	$gl = $o->{wdb}->root('global', ObjStore::HV->new($s, 30));
+    }
+    $o->{'gref'} = $gl->new_ref();
+    $gl;
 }
 
-sub destroy {
+sub modified {
     my ($o) = @_;
-    $o->uncache if $o->{_cached};
-    delete $o->wdb->root(ROOT)->{$o->sid};  #need to slow down? XXX
+    my $t = $o->top;
+    $t->{mtime} = &now;
+}
+
+sub prune {
+    my ($o, $oldest) = @_;
+    # delete stuff older than $oldest XXX
 }
 
 1;
 
 =head1 NAME
 
-  ObjStore::AppInstance - A helper class for interactive ObjStore tools.
+  ObjStore::AppInstance - helper class for interactive tools
 
 =head1 SYNOPSIS
 
-  use base 'ObjStore::AppInstance';
+  use ObjStore::AppInstance;
 
-  sub new {
-    my ($class) = @_;
-    my $o = $class->SUPER::new('app-name', pvars => [qw(ttype pref view)]);
-    ...
-    $o
-  }
+  my $app = new ObjStore::AppInstance('posh', scalar(getpwuid($>)));
+
+  my $hash = $app->top();   # fetch the top level hash for this key
+
+  $app->modified();         # set the modification time
+
+  $app->prune($oldest);     # delete instances older than $oldest
 
 =head1 DESCRIPTION
 
-Sessions contain both transient and persistent data.
-
-The persistent data can only be accessed within a transaction but
-transient data is always available.
-
-=head1 METHODS
-
-=over 4
-
-=item * cache
-
-=item * uncache
-
-=item * destroy
-
-=back
-
-=head1 TODO
-
-Make it an ObjStore::Table.
-
-Identify sessions with hostname/pid or custom keys and garbage collect
-if unused for long enough.
+Documentation...
 
 =cut

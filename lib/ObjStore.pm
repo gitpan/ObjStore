@@ -15,10 +15,10 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof
 	    $NEWERROR);
 
-$VERSION = '1.28';
+$VERSION = '1.29';
 
 BEGIN {
-    $NEWERROR = 0;
+    $NEWERROR = 0; #failed experiment :-)
     if ($NEWERROR) {
 	require Error;
 	'Error'->import('0.1202');
@@ -558,7 +558,7 @@ sub _get_certified_blessing {  #XS? XXX
 
 sub isa2 { #recode in XS ? XXX
     my ($class, $isa) = @_;
-    for (my $x=0; $x < $isa->_count; $x++) {
+    for (my $x=0; $x < $isa->FETCHSIZE; $x++) {
 	my $z = $isa->[$x];
 	if (ref $z) { return 1 if isa2($class, $z); }
 	else { return 1 if $class eq $z; }
@@ -727,7 +727,7 @@ sub sync_INC {
     my $inc = $db->_private_root_data('INC');
     return if !$inc;
     # optimize with a hash XXX
-    for (my $x=0; $x < $inc->_count; $x++) {
+    for (my $x=0; $x < $inc->FETCHSIZE; $x++) {
 	my $dir = $inc->[$x];
 	my $ok=0;
 	for (@INC) { $ok=1 if $_ eq $dir }
@@ -936,6 +936,7 @@ sub _private_root_data {  #XS? XXX
 	my $s = $db->create_segment("_osperl_private");
 	$priv = 'ObjStore::HV'->new($s, 30);
 	$rt->set_value($priv);
+	$priv->{'VERSION'} = $ObjStore::VERSION; #document? XXX
     }
     if ($new) {
 	if (ref $new eq 'CODE') {
@@ -1163,7 +1164,7 @@ use vars qw($VERSION @ISA);
 $VERSION = '1.00';
 @ISA = qw(ObjStore::UNIVERSAL);
 
-sub count { $_[0]->focus->_count; }
+sub count { $_[0]->focus->FETCHSIZE; }
 
 sub clone_to {
     my ($r, $seg, $cloner) = @_;
@@ -1185,10 +1186,10 @@ sub new_cursor {
 sub clone_to {
     my ($o, $where) = @_;
     my $class = ref($o) || $o;
-    $class->new($where, $o->_count() || 1);
+    $class->new($where, $o->FETCHSIZE() || 1);
 }
 
-sub count { shift->_count; }  #goofy XXX
+sub count { shift->FETCHSIZE; }  #goofy XXX
 
 package ObjStore::AV;
 use Carp;
@@ -1223,7 +1224,7 @@ sub _iscorrupt {
     my ($o, $vlev) = @_;
     warn "$o->iscorrupt: checking...\n" if $vlev >= 3;
     my $err=0;
-    for (my $z=0; $z < $o->_count; $z++) {
+    for (my $z=0; $z < $o->FETCHSIZE; $z++) {
 	my $e = $o->[$z];
 	$err += $e->iscorrupt($vlev) if ObjStore::blessed($e);
     }
@@ -1233,11 +1234,23 @@ sub _iscorrupt {
 sub map {
     my ($o, $sub) = @_;
     my @r;
-    for (my $x=0; $x < $o->_count; $x++) { push(@r, $sub->($o->[$x])); }
+    for (my $x=0; $x < $o->FETCHSIZE; $x++) { push(@r, $sub->($o->[$x])); }
     @r;
 }
 
-sub FETCHSIZE { $_[0]->_count; }
+#-------------- -------------- -------------- -------------- DEPRECIATED
+sub _count { 
+    carp "_count can be done directly" if $] >= 5.00457;
+    $_[0]->FETCHSIZE();
+}
+sub _Push { 
+    carp "_Push can be done directly" if $] >= 5.00457;
+    shift->PUSH(@_) 
+}
+sub _Pop { 
+    carp "_Pop can be done directly" if $] >= 5.00457;
+    shift->POP(@_) 
+}
 
 package ObjStore::HV;
 use Carp;
@@ -1327,15 +1340,15 @@ sub new {
 sub map {
     my ($o, $sub) = @_;
     my @r;
-    for (my $x=0; $x < $o->_count; $x++) { push(@r, $sub->($o->[$x])); }
+    for (my $x=0; $x < $o->FETCHSIZE; $x++) { push(@r, $sub->($o->[$x])); }
     @r;
 }
 
 sub POSH_PEEK {
     my ($val, $o, $name) = @_;
-    $o->{coverage} += $val->_count;
-    my $big = $val->_count > $o->{width};
-    my $limit = $big? $o->{summary_width} : $val->_count;
+    $o->{coverage} += $val->FETCHSIZE;
+    my $big = $val->FETCHSIZE > $o->{width};
+    my $limit = $big? $o->{summary_width} : $val->FETCHSIZE;
 
     $o->o("$name ");
     $val->configure()->POSH_PEEK($o);
@@ -1354,11 +1367,14 @@ sub POSH_PEEK {
     $o->nl;
 }
 
-sub FETCHSIZE { $_[0]->_count; }
-
 sub _iscorrupt {0}  #write your own!
 
 #----------- ----------- ----------- ----------- ----------- -----------
+
+sub _count { 
+    carp "_count can be done directly" if $] >= 5.00457;
+    $_[0]->FETCHSIZE();
+}
 
 package ObjStore::Database::HV;
 sub new { die "ObjStore::Database::HV has been renamed to ObjStore::HV::Database" }

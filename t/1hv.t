@@ -1,6 +1,6 @@
 # This is -*-perl-*- !
 use Test;
-BEGIN { todo tests => 25, failok => [3,15] }
+BEGIN { plan tests => 25, todo => [3,15] }
 
 use strict;
 use ObjStore;

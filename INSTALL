@@ -22,8 +22,8 @@ Tested Configurations:
 - ./t/zpeek.t is very sensitive to the success of the other tests.
 
 - Keep running 'make test' until the database size matches.  It takes
-me three trials.  If it will not match, there is a serious refcnt
-problem.  Also see 'ossize -c'.
+me three trials.  If it will not match, there is probably a serious
+refcnt problem.  Also see 'ossize -c'.
 
 -------------------------------------------------------------------------
 

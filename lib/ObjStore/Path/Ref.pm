@@ -15,17 +15,17 @@ sub new {
 
 sub open {
     my ($o, $how) = @_;
-    my $cnt = $o->_count;
+    my $cnt = $o->FETCHSIZE();
     for (my $x=0; $x < $cnt; $x++) {
 	my $db = $o->[$x]->get_database();
-	$db->open($how);
+	$db->open($how) if !$db->is_open;
 	$o->[$x]->focus();  #must deref to check
     }
 }
 
 sub depth {
 #    carp "$o->depth is depreciated";
-    my ($o) = @_; $o->_count;
+    my ($o) = @_; $o->FETCHSIZE();
 }
 
 sub focus {

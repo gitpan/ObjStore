@@ -1,3 +1,17 @@
+** 01-24-98 RELEASE 1.26
+
+- Preliminary support for exceptions on Digital Unix AXP (and other
+platforms for which ODI exploits ANSI C++ exceptions).
+
+- Fat-Tree representation arrays.
+
+- The Fat-Tree code was re-factored and the memory layout changed.
+Unfortunately, any indices created with a prior version will need to
+be dropped (before upgrading) and re-built (after upgrading).  Either
+this or a schema evolution (yikes!) is necessary.  All other data
+should migrate without a hiccup.
+
+
 ** 01-18-98 RELEASE 1.25
 
 - Completed test coverage analysis of the C++ code (with the
@@ -38,8 +52,7 @@ root to a separate segment (so it's easier to study memory usage).
 
 ** 01-07-98 EMERGENCY RELEASE 1.23
 
-- Fixed refcnt problems in bless & indices.  From now on, make sure
-to check ossize as outlined in ./INSTALL.
+- Fixed refcnt problems in bless & indices.
 
 - Indices now set readonly locks *ONLY* on fields that are used as
 keys.

@@ -34,7 +34,7 @@ sub anyx {
     $t = $t->table;
     for my $i (values %$t) {
 	next unless ref $i && $i->isa('ObjStore::Index');
-	return $i if $i->_count;
+	return $i if $i->FETCHSIZE;
     }
     undef;
 }
@@ -151,6 +151,11 @@ A table is no more than a collection of indices (as opposed to a some
 sort of heavy-weight object).  Think of it like an event manager for
 indices.
 
+Be aware that index cursors may only be used by one thread at a time.
+Therefore, it is not particularly useful to store pre-created cursors
+in a database.  It's probably faster just to create them transiently
+when needed.
+
 =head2 API
 
 =over 4
@@ -176,9 +181,10 @@ Returns the index named $index_name.
 Returns the record resulting from looking up @keys in the index named
 $index_name.
 
-=item * $t->add_index($index)
+=item * $t->add_index($name, $index)
 
-Adds the index.
+Adds an index.  The index can be a closure if your not sure if it
+already exists.
 
 =item * $t->remove_index($index)
 
@@ -205,16 +211,18 @@ Returns the top-level hash.
 
 =head1 MIGRATION
 
-=head1 BUGS
-
-Usage is a bit more cumbersome than I would like.  The interface will
-change slightly as perl supports more overload-type features.
+Expand migration options?
 
 =head1 TODO
 
 =over 4
 
-=item * Expand migration options
+=item * Primary index?
+
+=item * INTERFACE
+
+The interface will evolve as perl supports more overload-type
+features.
 
 =back
 

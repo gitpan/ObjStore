@@ -1,6 +1,6 @@
 # Test broken -*-perl-*- refs
 use Test;
-BEGIN { todo tests => 21, failok => [20] }
+BEGIN { plan tests => 21, todo => [20] }
 
 use strict;
 use ObjStore;

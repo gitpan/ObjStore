@@ -45,7 +45,24 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 ##################
 
 
-** 02-08-98 RELEASE 1.28
+** 02-21-98 RELEASE 1.29
+
+- posh now persists command history from prior sessions (5.004_58+).
+Fixed a minor bug in ObjStore::Path::Ref.
+
+- Complete, nesting, tied array support (5.004_58+).
+
+- Rewrote ObjStore::AppInstance to eliminate unnecessarily confusing
+data flow.  The new version is NOT backward compatible.
+
+- Fixed a bug that allowed bad pointers to appear in tree nodes and
+possibly other places.  Instances of this bug occurred rarely.
+
+- Fixed an uninitialized pointer that was causing exceptions to turn
+into BUS errors.  Added more regression tests.
+
+
+** 02-07-98 RELEASE 1.28
 
 - Relaxed overly strict index behavior.  Fixed performance of add &
 remove for non-unique indices.  Fixed a serious bug when seeking
@@ -63,22 +80,6 @@ integration between eval and transactions).
 - Improved CSV module.
 
 - Try to create the cache directory on startup.  (See $OS_CACHE_DIR)
-
-- Next on the list: complete tied array support!
-
-
-** 01-24-98 RELEASE 1.26
-
-- Preliminary support for exceptions on Digital Unix AXP (and other
-platforms for which ODI exploits ANSI C++ exceptions).
-
-- Fat-Tree array representation.
-
-- The Fat-Tree code was re-factored and the memory layout changed.
-Unfortunately, any indices created with a prior version will need to
-be dropped (before upgrading) and re-built (after upgrading).  Either
-this or a schema evolution (yikes!) is necessary.  All other data
-should migrate without a hiccup.
 
 
 see ./INSTALL for hints on installation

@@ -1,6 +1,6 @@
 # imagine, -*-perl-*- does reports too!
 use Test;
-BEGIN { todo tests => 2 }
+BEGIN { plan tests => 2 }
 
 use strict;
 use ObjStore::CSV;

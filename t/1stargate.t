@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { todo test => 6 }
+BEGIN { plan test => 6 }
 
 use Carp;
 use ObjStore;

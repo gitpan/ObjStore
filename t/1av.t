@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { todo tests => 21, failok => [10] }
+BEGIN { plan tests => 37, todo => [18] }
 
 use ObjStore;
 use lib './t';
@@ -9,7 +9,7 @@ use test;
 ObjStore::fatal_exceptions(0);
 
 #use Devel::Peek qw(Dump SvREFCNT);
-#ObjStore::debug qw(refcnt bridge);
+#ObjStore::debug qw(refcnt bridge splash);
 
 &open_db;
 
@@ -17,10 +17,15 @@ sub testify {
     no strict 'refs';
     my ($j, $rep) = @_;
 
+    print "# $rep\n";
     my $a = &{"$rep\::new"}('ObjStore::AV', $j->segment_of, 7);
 
     ok($a->os_class eq 'ObjStore::AV');
     ok($a->rep_class eq $rep) or warn "$rep ne ".$a->rep_class;
+
+    ok(!defined $a->FETCH(-1));
+    ok(!defined $a->POP());
+    ok(!defined $a->SHIFT());
 
     for (1..2) {
 	$a->CLEAR;
@@ -32,9 +37,18 @@ sub testify {
     }
     ok($a->POSH_CD(2)->[0] == 2);
 
-    $a->_Push(69);
-    my $e = $a->_Pop;
+    ok($a->PUSH(69,[],1) == 3);
+    ok($a->FETCH($a->FETCHSIZE()-1) == 1);
+    for (1..2) { $a->POP; }
+    my $e = $a->POP;
     ok($e == 69) or warn $e;
+    
+    ok($a->UNSHIFT(1,2,[]) == 3);
+    ok($a->FETCH(0) == 1) or warn $a->FETCH(0);
+    $a->SHIFT;
+    $e = $a->SHIFT;
+    ok($e == 2) or warn $e;
+    $a->SHIFT;
     
     $a->const;
 
@@ -57,12 +71,12 @@ sub testify {
     }
 };
 
-begin 'update', sub {
-    my $john = $db->root('John');
-    $john or die "no db";
-    
-    for my $rep (keys %ObjStore::AV::REP) {
+for my $rep (keys %ObjStore::AV::REP) {
+    begin 'update', sub {
+	my $john = $db->root('John');
+	$john or die "no db";
+	
 	testify($john, $rep);
-    }
-};
-die if $@;
+    };
+    die if $@;
+}

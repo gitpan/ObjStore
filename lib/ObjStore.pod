@@ -213,8 +213,7 @@ through it, something could break, so don't.
 
 =head2 Indices
 
-SQL has this great facility called indices.  C<ObjStore> does too and
-they work in almost same manner!
+SQL has this fantastic facility called indices.  C<ObjStore> does too!
 
   my $nx = ObjStore::Index->new($near);
   $nx->configure(unique => 1, path=>"name");
@@ -243,12 +242,19 @@ Where the following invariants hold:
   $c->moveto($c->pos() + $delta) is $c->step($delta)
   $c->each($delta) is { $c->step($delta); $c->at(); }
 
+Be aware that index cursors may only be used by one thread at a time.
+Therefore, it is not particularly useful to store pre-created cursors
+in a database.  It's probably faster just to create them transiently
+when needed.
+
 To eliminate the possibility of indices becoming out-of-sync with
 actual data, keys are marked read-only as they are indexed.  (Another
 scheme for keeping indices up-to-date is to use os_backptr.  This
 scheme is not supported because it has considerable memory overhead
 (12-bytes per record!) and provides little benefit beyond our
-read-only scheme.)  For example,
+read-only scheme.)
+
+For example:
 
   my $category = { name => 'Bath Toy' };
   my $row = { name => 'Rubber Ducky', category => $category };
@@ -262,6 +268,12 @@ read-only scheme.)  For example,
 
 The first key is the category's name.  The second key is the row's
 name.
+
+Indices should not be used unless other data structures prove
+inadequate.  Hashes and arrays are easier in most cases.  Indices are
+best suited to very large datasets that must be searchable in a
+variety of ways.  If you can just iterate through every record,
+indices probably aren't worth the trouble.
 
 =head2 And Access Paths (Oh My!)
 
@@ -303,15 +315,14 @@ classes when you can avoid it?
 Data-sets are growing so large, it can be impossible to evolve the
 data all at once!  Lazy evolution is really the only way to scale up.
 
-The first thing to remember is that it isn't necessary to store all
-data for an application in a single database.  Various databases
-interoperate (relatively seemlessly) and be used simultaniously.  (The
-only reason to keep data in the same database is to use real pointers
-to connect objects together.)  So not only can you have multiple
-schemas in the same database, but you can divide your data into
-multiple databases (perhaps according to your object-oriented
-analysis).  Just this basic flexibility gives you plenty of levers
-with which to manage your data.
+The easiest way to evolve data is to rebuild it from scratch.
+Therefore, the first thing to consider is how to partition your data
+to avoid evolution altogether.  It is entirely unnecessary to store
+all data in a single database.  Databases interoperate and be used
+simultaniously.  In fact, the primary reason to keep data in the same
+database is to be able to use real pointers to connect objects
+together.  By splitting your data into logical chunks, you should be
+able to avoid evolution in most cases.
 
 Within a database, all changes can be sorted into three categories.
 The following examples will involve a hypothetical C<Spoon> class and
@@ -819,6 +830,9 @@ anything went wrong.
   });
   die if $@;    # Don't forget to remember!  Always check for errors!
 
+Is it recommended that any perl extensions explicitly check for
+errors, just in case exceptions are not automatically re-thrown.
+
 =item * DEADLOCK
 
 Top level transactions are automatically retried in the case of a
@@ -949,6 +963,26 @@ and matrices (PDL) ?
 
 =back
 
+=head2 How Does CORBA Fit In?
+
+C<CORBA> standardizes remote method invokaction.  C<ObjectStore>
+greatly reduces the need for remote method invokaction.  The two
+technologies address different problems, but here is a rough
+comparison:
+
+                      CORBA                     ObjectStore
+ -------------------- ------------------------- -------------------------
+ flow                 you follow the data       the data comes to you
+ network              important                 what network?
+ flexibility          brittle                   up to you
+ object-oriented      yes                       up to you
+ data copying         2-4 times                 0-2 times
+ complex data         no                        yes
+ custom types         no                        yes
+ binary portability   yes                       partially
+ reference counted    no (does not store data)  yes
+ multivendor          yes                       not yet
+
 =head2 Why Is Perl a Better Fit For Databases Than C<SQL>, C<C++>, or C<Java>?
 
   struct CXX_or_Java_style {
@@ -1049,7 +1083,8 @@ always be sluggish compared to C<C++>.
 
 =item *
 
-Perl now integrates with C<Java> and the C<SwingSet / AWT> API!
+Perl now integrates with C<Java> and the C<SwingSet / AWT> API.  (Of
+course, this is a moot point if you can use C<Qt> - http://www.troll.no/.)
 
 =back
 
@@ -1079,7 +1114,6 @@ general ease of use.
   dynamically loaded application schemas
   kernel-managed perl threads
   perl compiler
-  improved tie interfaces
 
 =head1 EXPORTS
 

@@ -2,7 +2,7 @@
 # output due to nulls.
 
 use Test;
-BEGIN { todo tests => 3 }
+BEGIN { plan tests => 3 }
 
 use Carp;
 use IO::File;

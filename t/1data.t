@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { todo tests => 8 }
+BEGIN { plan tests => 8 }
 
 use strict;
 use ObjStore ':ALL';
@@ -33,3 +33,6 @@ begin 'update', sub {
     $fatty->[0] = undef;
     ok(!defined $fatty->[0]);
 };
+
+
+

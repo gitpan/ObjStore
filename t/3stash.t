@@ -1,6 +1,6 @@
 # -*-perl-*- is going global, I tell ya!
 use Test;
-BEGIN { todo tests => 3 }
+BEGIN { plan tests => 3 }
 
 package MyGSpot;
 use ObjStore;

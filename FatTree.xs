@@ -3,6 +3,9 @@
 #include "FatTree.h"
 #include "XSthr.h"
 
+#undef MIN
+#define	MIN(a, b)	((a) < (b) ? (a) : (b))
+
 /* CCov: fatal SERIOUS */
 #define SERIOUS warn
 
@@ -36,9 +39,6 @@ OSPV_fattree_av::OSPV_fattree_av()
 OSPV_fattree_av::~OSPV_fattree_av()
 { avfree_tv(&ary); }
 
-int OSPV_fattree_av::_count()
-{ return TvFILL(&ary); }
-
 char *OSPV_fattree_av::os_class(STRLEN *len)
 { *len = 12; return "ObjStore::AV"; }
 
@@ -47,6 +47,21 @@ char *OSPV_fattree_av::rep_class(STRLEN *len)
 
 int OSPV_fattree_av::get_perl_type()
 { return SVt_PVAV; }
+
+void OSPV_fattree_av::XSHARE(int on)
+{
+  OSSV *ret;
+  dGCURSOR(&ary);
+  tc_moveto(&gl->tc, 0);
+  while (1) {
+    if (!avtc_fetch(&gl->tc, &ret)) break;
+    OSvXSHARED_set(ret, on);
+    tc_step(&gl->tc, 1);
+  }
+}
+
+int OSPV_fattree_av::FETCHSIZE()
+{ return TvFILL(&ary); }
 
 OSSV *OSPV_fattree_av::FETCH(SV *key)
 { return avx(SvIV(key)); }
@@ -67,22 +82,10 @@ OSSV *OSPV_fattree_av::traverse(char *keyish)
   return avx(atol(keyish));
 }
 
-void OSPV_fattree_av::XSHARE(int on)
-{
-  OSSV *ret;
-  dGCURSOR(&ary);
-  tc_moveto(&gl->tc, 0);
-  while (1) {
-    if (!avtc_fetch(&gl->tc, &ret)) break;
-    OSvXSHARED_set(ret, on);
-    tc_step(&gl->tc, 1);
-  }
-}
-
 OSSV *OSPV_fattree_av::STORE(SV *sv, SV *value)
 {
   int xx = SvIV(sv);
-  if (xx < 0) return 0;
+  assert(xx >= 0);
   dGCURSOR(&ary);
   tc_moveto(&gl->tc, xx);
   while (xx >= TvFILL(&ary)) {
@@ -93,9 +96,8 @@ OSSV *OSPV_fattree_av::STORE(SV *sv, SV *value)
   return 0;
 }
 
-SV *OSPV_fattree_av::Pop()
+SV *OSPV_fattree_av::POP()
 {	
-  if (!TvFILL(&ary)) return 0;
   OSSV *ret0;
   dGCURSOR(&ary);
   tc_moveto(&gl->tc, TvFILL(&ary)-1);
@@ -106,11 +108,86 @@ SV *OSPV_fattree_av::Pop()
   return ret;
 }
 
-void OSPV_fattree_av::Push(SV *nval)
+SV *OSPV_fattree_av::SHIFT()
+{
+  OSSV *ret0;
+  dGCURSOR(&ary);
+  tc_moveto(&gl->tc, 0);
+  if (!avtc_fetch(&gl->tc, &ret0)) return 0;
+  dOSP;
+  SV *ret = osp->ossv_2sv(ret0);
+  avtc_delete(&gl->tc);
+  return ret;
+}
+
+void OSPV_fattree_av::PUSH(SV **base, int items)
 {
   dGCURSOR(&ary);
-  tc_moveto(&gl->tc, TvFILL(&ary)+1);
-  avtc_insert(&gl->tc, nval);
+  for (int xx=0; xx < items; xx++) {
+    tc_moveto(&gl->tc, TvFILL(&ary)+1);
+    avtc_insert(&gl->tc, base[xx]);
+  }
+}
+
+void OSPV_fattree_av::UNSHIFT(SV **base, int items)
+{
+  dGCURSOR(&ary);
+  for (int xx=0; xx < items; xx++) {
+    tc_moveto(&gl->tc, xx);
+    avtc_insert(&gl->tc, base[xx]);
+  }
+}
+
+void OSPV_fattree_av::SPLICE(int offset, int length, SV **base, int count)
+{
+  dGCURSOR(&ary);
+  if (length) {
+    if (GIMME_V == G_ARRAY) {
+      dOSP;
+      dSP;
+      SV **sv = new SV*[length];
+      tc_moveto(&gl->tc, offset);
+      for (int xx=0; xx < length; xx++) {
+	OSSV *ret;
+	int ok = avtc_fetch(&gl->tc, &ret);
+	assert(ok);
+	sv[xx] = osp->ossv_2sv(ret);
+	tc_step(&gl->tc, 1);
+      }
+      EXTEND(SP, length);
+      for (xx=0; xx < length; xx++) PUSHs(sv[xx]);
+      PUTBACK;
+      delete sv;
+    } else if (GIMME_V == G_SCALAR) {
+      dOSP;
+      tc_moveto(&gl->tc, offset);
+      OSSV *tmp;
+      int ok = avtc_fetch(&gl->tc, &tmp);
+      assert(ok);
+      dSP;
+      SV *ret = osp->ossv_2sv(tmp);
+      XPUSHs(ret);
+      PUTBACK;
+    }
+  }
+  int overlap = MIN(length,count);
+  if (overlap) {
+    tc_moveto(&gl->tc, offset);
+    for (int xx=offset; xx < offset+overlap; xx++) {
+      avtc_store(&gl->tc, base[xx-offset]);
+      tc_step(&gl->tc, 1);
+    }
+  }
+  if (length > count) {
+    tc_moveto(&gl->tc, offset+count);
+    while (length-- > count) avtc_delete(&gl->tc);
+  } else if (length < count) {
+    tc_moveto(&gl->tc, offset+length);
+    for (; overlap < count; overlap++) {
+      avtc_insert(&gl->tc, base[overlap]);
+      tc_step(&gl->tc, 1);
+    }
+  }
 }
 
 void OSPV_fattree_av::CLEAR()
@@ -255,7 +332,7 @@ double OSPV_fatindex2::_percent_filled()
   SERIOUS("_percent_filled() is experimental");
   return TvFILL(&tv) / (double) (TvMAX(&tv) * dex2TnWIDTH);
 }
-int OSPV_fatindex2::_count()
+int OSPV_fatindex2::FETCHSIZE()
 { return TvFILL(&tv); }
 
 OSSVPV *OSPV_fatindex2::new_cursor(os_segment *seg)
@@ -293,7 +370,7 @@ void OSPV_fatindex2_cs::keys()
     SV *keys[DEXTV_MAXKEYS];
     OSPV_Generic *conf = (OSPV_Generic *) myfocus->conf_slot;
     OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
-    int keycnt = paths->_count();
+    int keycnt = paths->FETCHSIZE();
     for (int kx=0; kx < keycnt; kx++) {
       keys[kx] = osp->ossv_2sv(OSPV_Generic::path_2key(pv, (OSPV_Generic*) paths->avx(kx)->get_ospv()));
     }
@@ -311,7 +388,7 @@ int OSPV_fatindex2_cs::seek(SV **top, int items)
   OSPV_Generic *conf = (OSPV_Generic *) myfocus->conf_slot;
   OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
   osp_pathref exam;
-  exam.keycnt = paths->_count() < items-1 ? paths->_count() : items-1;
+  exam.keycnt = paths->FETCHSIZE() < items-1 ? paths->FETCHSIZE() : items-1;
   if (exam.keycnt <= 0) return 0;
   OSSV tmpkeys[DEXTV_MAXKEYS];
   //  OSSV *keys[DEXTV_MAXKEYS];

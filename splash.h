@@ -13,7 +13,7 @@
  * I'd like to thank Michael Golan <mg@Princeton.EDU> for his critiques
  * and clever suggestions. Some of which have actually been implemented
  *
- * 06-19-97 Pritikin:  Hacked for use with ObjectStore
+ * 19970619 JPRIT: hacked for use with ObjectStore
  */
 
 #define	INLINE	inline
@@ -72,7 +72,7 @@ public:
 
     void compact(const int i);
     void add(const T& n);
-    void add(const int i, const T& n);
+    void insert(int at, int slots);
     void erase(void){ cnt= 0; first= (allocated>>firstshift);}
 };
 
@@ -98,20 +98,6 @@ public:
 
     operator void*() { return count()?this:0; } // so it can be used in tests
     int isempty(void) const{ return !count(); } // for those that don''t like the above (hi michael)
-
-    T pop(void);
-
-    void push(const T& a1){ add(a1);}
-    void push(const SPList<T>& l);
-
-    T shift(void);
-    
-    int unshift(const T& ent){ add(0, ent); return count(); }
-    int unshift(const SPList<T>& l);
-
-    SPList<T> splice(int offset, int len, const SPList<T>& l);
-    SPList<T> splice(int offset, int len);
-    SPList<T> splice(int offset);
 };
 
 // ************************************************************
@@ -141,39 +127,6 @@ INLINE const T& SPListBase<T>::operator[](const int i) const
      return a[first+i];
 }
 
-/*
-template <class T>
-SPListBase<T>::SPListBase(const SPListBase<T>& n)
-{
-    allocated= n.allocated;
-    allocinc= n.allocinc;
-    cnt= n.cnt;
-    first= n.first;
-    os_segment *WHERE = os_segment::of(this);
-    a= new(WHERE, T::get_os_typespec(), allocated) T[allocated];
-    for(int i=0;i<cnt;i++) a[first+i]= n.a[first+i];
-    DEBUG_splash(warn("SPListBase(SPListBase&) a= %p, source= %p\n", a, n.a));
-
-}
-*/
-/*
-template <class T>
-SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n){
-//  cout << "SPListBase<T>::operator=()" << endl;
-    if(this == &n) return *this;
-    DEBUG_splash(warn("~operator=(SPListBase&) a= %p\n", a));
-    delete [] a; // get rid of old one
-    allocated= n.allocated;
-    allocinc= n.allocinc;
-    cnt= n.cnt;
-    first= n.first;
-    os_segment *WHERE = os_segment::of(this);
-    a= new(WHERE, T::get_os_typespec(), allocated) T[allocated];
-    for(int i=0;i<cnt;i++) a[first+i]= n.a[first+i];
-    DEBUG_splash(warn("operator=(SPListBase&) a= %p, source= %p\n", a, n.a));
-    return *this;
-}
-*/
 
 /* 
 ** increase size of array, default means array only needs
@@ -227,122 +180,40 @@ void SPListBase<T>::add(const T& n){
 }
 
 template <class T>
-void SPListBase<T>::add(const int ip, const T& n){
+void SPListBase<T>::insert(int ip, int slots)
+{
     assert(ip >= 0 && ip <= cnt);
-    if(ip == 0){ // just stick it on the bottom
-    	if(first <= 0) grow(); // make room at bottom for one more
-    	assert(first > 0);
-        first--;
-        a[first]= n;
-    }else{
-        if((first+cnt+1) >= allocated) grow(); // make room at top for one more
-        assert((first+cnt) < allocated && (first+ip) < allocated);
-        for(int i=cnt;i>ip;i--) // shuffle up
-	    a[first+i]= a[(first+i)-1];
-        a[first+ip]= n;
+    if((first+cnt+slots) >= allocated) grow(slots+1);
+    if (cnt-ip > 0) {
+      memmove(&a[first+ip+slots], &a[first+ip], sizeof(T)*(cnt-ip));
+      for (int xx=0; xx < slots; xx++) {
+	a[first+ip+xx].FORCEUNDEF();
+      }
     }
-    DEBUG_splash(warn("add(const int ip, const T& n): first= %d, cnt= %d, idx= %d, allocated= %d\n",
+    cnt += slots;
+
+    DEBUG_splash(warn("insert(ip=%d, slots=%d): first= %d, cnt= %d, idx= %d, allocated= %d\n", ip, slots,
 		      first, cnt, first+ip, allocated));
-    cnt++;
 }
 
 template <class T>
 void SPListBase<T>::compact(const int n){ // shuffle down starting at n
 int i;
     assert((n >= 0) && (n < cnt));
+    a[first+n].set_undef();
     if(n == 0) {
-      a[first].set_undef();
       first++;
     } else {
-      for(i=n;i<cnt-1;i++) {
-	a[first+i]= a[(first+i)+1];
+      if (cnt-1-n > 0) {
+	memmove(&a[first+n], &a[first+n+1], sizeof(T)*(cnt-1-n));
       }
-      a[cnt-2+first+1].set_undef();  //snark the last element
+      //for(i=n;i<cnt-1;i++) {
+	//a[first+i]= a[(first+i)+1];
+      //}
+      a[cnt-1+first].FORCEUNDEF();  //snark the last element
     }
     cnt--;
 }
 
-// ************************************************************
-// implementation of template functions for SPList
-// ************************************************************
-template <class T>
-T SPList<T>::pop(void)
-{
-T tmp;
-int n= count()-1;
-    if(n >= 0){
-	tmp= (*this)[n];
-	compact(n);
-    }
-    return tmp;
-}
-
-template <class T>
-T SPList<T>::shift(void)
-{
-T tmp= (*this)[0];
-    compact(0);
-    return tmp;
-}
-
-template <class T>
-void SPList<T>::push(const SPList<T>& l)
-{
-    for(int i=0;i<l.count();i++)
-	add(l[i]);
-}
-
-template <class T>
-int SPList<T>::unshift(const SPList<T>& l)
-{
-    for(int i=l.count()-1;i>=0;i--)
-	unshift(l[i]);
-    return count();
-}
-
-template <class T>
-SPList<T> SPList<T>::splice(int offset, int len, const SPList<T>& l)
-{
-SPList<T> r= splice(offset, len);
-
-    if(offset > count()) offset= count();
-    for(int i=0;i<l.count();i++){
-	add(offset+i, l[i]);	// insert into list
-    }
-    return r;
-}
-
-template <class T>
-SPList<T>  SPList<T>::splice(int offset, int len)
-{
-SPList<T> r;
-int i;
-
-    if(offset >= count()) return r;
-    for(i=offset;i<offset+len;i++){
-    	r.add((*this)[i]);
-    }
-
-    for(i=offset;i<offset+len;i++)
-	compact(offset);
-    return r;
-}
-
-template <class T>
-SPList<T>  SPList<T>::splice(int offset)
-{
-SPList<T> r;
-int i;
-
-    if(offset >= count()) return r;
-    for(i=offset;i<count();i++){
-	r.add((*this)[i]);
-    }
-
-    int n= count(); // count() will change so remember what it is
-    for(i=offset;i<n;i++)
-	compact(offset);
-    return r;
-}
 
 #endif

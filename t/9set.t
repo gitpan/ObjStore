@@ -1,6 +1,6 @@
 # set -*-perl-*-
 use Test;
-BEGIN { todo tests => 7 }
+BEGIN { plan tests => 7 }
 
 use strict;
 use ObjStore;

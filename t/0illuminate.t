@@ -5,7 +5,7 @@
 ######################### We start with some magic to print on failure...
 
 use Test;
-BEGIN { todo(tests => 5) }
+BEGIN { plan tests => 5 }
 END { ok($loaded);}
 
 use ObjStore;

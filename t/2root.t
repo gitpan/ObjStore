@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { todo tests => 10 }
+BEGIN { plan tests => 10 }
 
 use ObjStore;
 use lib './t';

@@ -93,6 +93,9 @@ integer.
 
   %ObjStore::sizeof XXX
 
+Since 32-bit integers and doubles are fairly common and should be
+stored densely, a pool allocation algorithm is planned.
+
 The ODI FAQ also states: I<In addition, there is an associated entry
 in the info segment for the segment in question for each allocation of
 the object. This is done in the tag table. The overhead is 16 bits
@@ -107,10 +110,10 @@ by alignment constraints.>
 If this seems like a lot of overhead, consider that it is not really
 possible to directly compare these numbers to RDBMS statistics.  (Part
 of the problem is that RDBMS vendors can't even give you these
-statistics.)  At least, note that relational data can be stored with
-much less duplication when moved to C<ObjectStore>.  (Definitely true
-if you write C++ extensions.)  Of course, the real test must always be
-to code up your problem and make experimental measurements.
+statistics.)  At least note that relational data can be stored with
+much less duplication when moved into C<ObjectStore>.  (Definitely
+true if you write C++ extensions.)  Of course, the real test must
+always be to code up your problem and make experimental measurements.
 
 =head2 Hard-Coded Limits
 

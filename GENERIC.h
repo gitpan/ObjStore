@@ -34,7 +34,7 @@ struct OSPV_hvarray : OSPV_Generic {
   virtual SV *FIRST(ospv_bridge*);
   virtual SV *NEXT(ospv_bridge*);
   virtual double _percent_filled();
-  virtual int _count();
+  virtual int FETCHSIZE();
   virtual OSSV *traverse(char *keyish);
   virtual void XSHARE(int on);
 };
@@ -65,7 +65,7 @@ struct OSPV_setarray : OSPV_Generic {
   virtual SV *NEXT(ospv_bridge*);
   virtual void CLEAR();
   virtual double _percent_filled();
-  virtual int _count();
+  virtual int FETCHSIZE();
 };
 
 struct OSPV_setarray_cs : OSPV_Cursor {
@@ -97,7 +97,7 @@ struct OSPV_sethash : OSPV_Generic {
   virtual SV *FIRST(ospv_bridge*);
   virtual SV *NEXT(ospv_bridge*);
   virtual void CLEAR();
-  virtual int _count();
+  virtual int FETCHSIZE();
 };
 
 struct OSPV_sethash_cs : OSPV_Cursor {

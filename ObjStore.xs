@@ -6,12 +6,15 @@ modify it under the same terms as Perl itself.
 
 #include "osperl.h"
 
-/* This is a new API that isn't widely supported yet.  We'll leave it
-out by default for now.  Conditional #ifdefs might work too.
+/*
 
 double
 get_unassigned_address_space()
 	CODE:
+	// Older versions of ObjectStore do not support this API.
+	// Please comment it out if this is your situation:
+	//
+	// RETVAL = 0;
 	RETVAL = objectstore::get_unassigned_address_space(); //64bit? XXX
 	OUTPUT:
 	RETVAL
@@ -75,6 +78,7 @@ BOOT:
   newXS("ObjStore::REP::Splash::bootstrap", boot_ObjStore__REP__Splash, file);
   newXS("ObjStore::REP::FatTree::bootstrap", boot_ObjStore__REP__FatTree, file);
   //
+  OSSV::verify_correct_compare();
 #ifdef _OS_CPP_EXCEPTIONS
   // Must switch perl to use ANSI C++ exceptions...
   perl_require_pv("ExtUtils::ExCxx");
@@ -156,7 +160,7 @@ release_name()
 void
 os_version()
 	PPCODE:
-	// rad perl style version number...
+	// (rad perl style version number... :-)
 	XSRETURN_NV(objectstore::release_major() + objectstore::release_minor()/100 + objectstore::release_maintenance()/10000);
 
 void
@@ -1051,9 +1055,6 @@ OSPV_Container::_percent_filled()
 	OUTPUT:
 	RETVAL
 
-int
-OSPV_Generic::_count()
-
 void
 OSPV_Container::_new_cursor(sv1)
 	SV *sv1;
@@ -1063,6 +1064,9 @@ OSPV_Container::_new_cursor(sv1)
 	SV *ret = osp->ospv_2sv(THIS->new_cursor(seg));
 	SPAGAIN;
 	XPUSHs(ret);
+
+int
+OSPV_Generic::FETCHSIZE()
 
 #-----------------------------# AV
 
@@ -1095,18 +1099,83 @@ void
 OSPV_Generic::CLEAR()
 
 void
-OSPV_Generic::_Pop()
+OSPV_Generic::POP()
 	PPCODE:
 	PUTBACK;
-	SV *ret = THIS->Pop();
+	SV *ret = THIS->POP();
 	SPAGAIN;
 	if (ret) XPUSHs(ret);
 
 void
-OSPV_Generic::_Push(nval)
-	SV *nval;
-	CODE:
-	THIS->Push(nval);
+OSPV_Generic::SHIFT()
+	PPCODE:
+	PUTBACK;
+	SV *ret = THIS->SHIFT();
+	SPAGAIN;
+	if (ret) XPUSHs(ret);
+
+void
+OSPV_Generic::PUSH(...)
+	PPCODE:
+	PUTBACK;
+	int size = items-1;
+	if (size > 0) {
+	  SV **copy = new SV*[size]; //optimize for < 32 XXX
+	  for (int xx=0; xx < size; xx++) {
+	    copy[xx] = sv_mortalcopy(ST(xx+1));
+	  }
+	  THIS->PUSH(copy, size);
+	  delete copy;
+	}
+	SPAGAIN;
+	XPUSHs(sv_2mortal(newSViv(size)));
+
+void
+OSPV_Generic::UNSHIFT(...)
+	PPCODE:
+	PUTBACK;
+	int size = items-1;
+	if (size > 0) {
+	  SV **copy = new SV*[size];
+	  for (int xx=0; xx < size; xx++) {
+	    copy[xx] = sv_mortalcopy(ST(xx+1));
+	  }
+	  THIS->UNSHIFT(copy, size);
+	  delete copy;
+	}
+	SPAGAIN;
+	XPUSHs(sv_2mortal(newSViv(size)));
+
+void
+OSPV_Generic::SPLICE(...)
+	PROTOTYPE: $$;$@
+	PPCODE:
+	PUTBACK;
+	int size = THIS->FETCHSIZE();
+	// mirror the logic in pp_splice
+	int offset = SvIV(ST(1));
+	if (offset < 0) offset += size;
+	if (offset < 0) croak("Modification of non-creatable array value attempted, subscript %d", offset);
+	if (offset > size) offset = size;
+	int length = items >= 3 ? SvIV(ST(2)) : size+1;
+	if (length < 0) length = 0;
+	int after = size - (offset + length);
+	if (after < 0) length += after;
+	int toadd = items - 3;
+	if (toadd < 0) toadd=0;
+	SV **copy;
+	if (toadd) {
+	  copy = new SV*[toadd];
+	  for (int xx=0; xx < toadd; xx++) {
+	    copy[xx] = sv_mortalcopy(ST(xx+3));
+	  }
+	}
+	//warn("SPLICE(off=%d,len=%d,@%d)", offset, length, toadd);
+	THIS->SPLICE(offset, length, copy, toadd);
+	if (toadd) {
+	  delete copy;
+	}
+	return;
 
 #-----------------------------# HV
 
@@ -1344,6 +1413,7 @@ MODULE = ObjStore	PACKAGE = ObjStore::Set
 void
 OSPV_Generic::add(...)
 	CODE:
+	/* CCov: off */
 	for (int xx=1; xx < items; xx++) THIS->set_add(ST(xx));
 
 int

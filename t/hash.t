@@ -1,3 +1,4 @@
+#-*-perl-*-
 BEGIN { $| = 1; $tx=1; print "1..4\n"; }
 
 sub ok { print "ok $tx\n"; $tx++; }

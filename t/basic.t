@@ -1,3 +1,4 @@
+# -*-perl-*-
 # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl test.pl'
 
@@ -9,7 +10,7 @@
 sub ok { print "ok $tx\n"; $tx++; }  # this is a dubious aide
 sub not_ok { print "not ok $tx\n"; $tx++; }
 
-BEGIN { $| = 1; $tx=1; print "1..7\n"; }
+BEGIN { $| = 1; $tx=1; print "1..8\n"; }
 END {not_ok unless $loaded;}
 use ObjStore;
 $loaded = 1;
@@ -30,12 +31,15 @@ ok; #1
 	my $john = $DB->root('John');
 
 	if (! $john) {
-	    my $hv = $DB->newHV('array');
-	    ref $hv eq 'ObjStore::HV' ? ok:not_ok;
+	    my $hv = new ObjStore::HV($DB, 'array');
 	    $john = $DB->root('John', $hv);
-	    tied(%$john)->Type eq 'HASH' or die $john;
-	} else {
-	    ok;
+	}
+
+	if (ref $john eq 'ObjStore::HV') {ok}
+	else {
+	    print "perl: " . join(" ", unpack("c*", 'ObjStore::HV')) . "\n";
+	    print "ObjStore: " . join(" ", unpack("c*", ref($john))) . "\n";
+	    not_ok;
 	}
 
 	## roots
@@ -47,12 +51,10 @@ ok; #1
 
 	for (1..10) { $john->{$_} = "String $_"; }
 
-	my $dict = $john->{dict} = $DB->newHV('dict');
+	my $dict = $john->{dict} = new ObjStore::HV($DB, 'dict');
 	for (1..10) { $dict->{$_} = $_ * 3.14159; }
 
 	## basic counter
-
-	tied(%$john)->Type eq 'HASH' or die $john;
 
 	my $cnt;
 	if (exists $john->{cnt}) {
@@ -61,12 +63,25 @@ ok; #1
 	    $cnt = 'aaa';
 	}
 	++$cnt;
+#	warn $cnt;
 	$john->{cnt} = $cnt;
-#	warn $john->{cnt};
+	$john->{cnt} eq $john->FETCH('cnt') or die "oops";
 
+	# null termination is stripped
+	my $pstr = pack('c4', 65, 66, 67, 0);
+	$john->{packed} = $pstr;
+	if ($john->{packed} eq $pstr) {
+	    print "ObjStore: " . join(" ", unpack("c*", $john->{packed})) . "\n";
+	    print "perl:     " . join(" ", unpack("c*", $pstr)) . "\n";
+	    not_ok;
+	} else {
+	    ok;
+	}
+
+	# should be exact
 	if ($john->{cnt} ne $cnt) {
-	    print "ObjStore: " . join(" ", unpack("c", $john->{cnt})) . "\n";
-	    print "perl:     " . join(" ", unpack("c", $cnt)) . "\n";
+	    print "ObjStore: " . join(" ", unpack("c*", $john->{cnt})) . "\n";
+	    print "perl:     " . join(" ", unpack("c*", $cnt)) . "\n";
 	    not_ok;
 	} else {
 	    ok;

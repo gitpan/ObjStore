@@ -21,9 +21,9 @@ use File::Copy;
 use File::Path;
 use Getopt::Long;
 
-use vars qw(@ISA $VERSION);
+use vars qw(@ISA $VERSION $DEBUG);
 @ISA = qw(Maker::Target);
-$VERSION = 2.00;
+$VERSION = 2.05;
 
 sub new {
     my ($class, %CNF) = @_;
@@ -164,7 +164,21 @@ sub pm_2version {
     croak "Couldn't retrieve \$VERSION from $file" if !$ok;
 }
 
+sub cwd_2version {
+    my ($o, $dotdot) = @_;
+    my @dir = split(m|/|, cwd);
+    $o->{version} = $dir[$#dir-$dotdot];
+}
+
 sub x {
+    my $ret = z(@_);
+    $ret == 0 or do {
+	print "*** Exit $ret\n";
+	exit;
+    }
+}
+
+sub z {
     my ($o, @cmd) = @_;
     confess '$o->x(@cmd)' if !ref $o;
 
@@ -175,6 +189,7 @@ sub x {
 	} else {
 	    rmtree(\@cmd, $o->{verbose});
 	}
+	0;
 
     } elsif ($cmd[0] eq 'mkdir') {
 	shift @cmd;
@@ -183,6 +198,7 @@ sub x {
 	} else {
 	    mkpath(\@cmd, $o->{verbose});
 	}
+	0;
 
     } elsif ($cmd[0] eq 'cp') {
 	die "cp f1 f2" if @cmd != 3;
@@ -191,6 +207,16 @@ sub x {
 	    copy($cmd[1], $cmd[2]) or die "copy $cmd[1] $cmd[2]: $!";
 	    chmod(0777, $cmd[2]) if -x $cmd[1];  # copy doesn't do this..?
 	}
+	0;
+
+    } elsif ($cmd[0] eq 'chmod') {
+	shift @cmd;
+	my $mode = shift @cmd;
+	printf("chmod 0%o %s\n", $mode, join(' ', @cmd)) if $o->{verbose};
+	for my $f (@cmd) {
+	    (chmod($mode, $f)==1) or die "chmod $mode $f: $!";
+	}
+	0;
 
     } elsif ($cmd[0] eq 'mv') {
 	die "mv f1 f2" if @cmd != 3;
@@ -198,18 +224,19 @@ sub x {
 	if (!$o->{nop}) {
 	    rename($cmd[1], $cmd[2]) or die "rename $cmd[1] $cmd[2]: $!";
 	}
+	0;
 
     } else {
 	print join(" ", @cmd)."\n" if $o->{verbose};
 	if (!$o->{nop}) {
-	    system(@cmd);
-	    my ($kill, $exit) = ($? & 255, $? >> 8);
-	    if ($kill) {
-		die "*** Break $kill\n";
+	    my $rc = 0xffff & system(@cmd);
+	    if ($rc & 0xff) {
+		print "*** Break";
+		print " (core dumped)" if $rc & 0x80;
+		print " with signal ".($rc>>8)."\n";
+		exit;
 	    }
-	    if ($exit) {
-		die "*** Exit $exit\n";
-	    }
+	    $rc >> 8;
 	}
     }
 }
@@ -231,10 +258,11 @@ sub alias {
 sub load_argv_flags {
     my ($o) = @_;
     my %opts;
-    GetOptions(\%opts, 'nop', 'silent', 'verbose') or $o->top_go('usage');
+    GetOptions(\%opts, 'nop', 'silent', 'verbose', 'debug') or $o->top_go('usage');
     $o->{nop} = 1 if $opts{'nop'};
     $o->{verbose} = 0 if $opts{'silent'};
     $o->{verbose}++ if $opts{'verbose'};
+    $DEBUG++ if $opts{'debug'};
 }
 
 sub top_go {
@@ -304,7 +332,7 @@ sub a {
 
 sub go {
     my ($o, $in, $tag) = @_;
-#    warn ' 'x$in . ref($o) . ' ' . $o->tag . ':';
+    warn ' 'x$in . ref($o) . ' ' . $o->tag . ':' if $Maker::Package::DEBUG;
     $in++;
     my $hit=0;
     for (my $p=0; $p < @{$o->{units}}; $p++) {
@@ -359,7 +387,7 @@ use vars qw(@ISA);
     # sequential execution
 sub go {
     my ($o, $in, $tag) = @_;
-#    warn ' 'x$in . ref($o) . ' ' . $o->tag . ':';
+    warn ' 'x$in . ref($o) . ' ' . $o->tag . ':' if $Maker::Package::DEBUG;
     $in++;
     for (my $p=$#{$o->{units}}; $p >= 0; $p--) {
 	my $v = $o->{units}[$p];
@@ -436,12 +464,12 @@ sub hit { #??
 }
 sub go {
     my ($o, $in, $tag) = @_;
-#    warn ' 'x$in . "|".$o->tag . "| =? |$tag|";
+    warn ' 'x$in . "|".$o->tag . "| =? |$tag|" if $Maker::Package::DEBUG;
     0;
 }
 sub run {
     my $o = shift;
-#    warn "* $o->{'tag'}";
+    warn "* $o->{'tag'}" if $Maker::Package::DEBUG;
     &{$o->{code}};
 }
 

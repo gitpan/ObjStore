@@ -1,0 +1,25 @@
+SUBJECT:	Building shared libraries using ObjectStore on Sol
+PLATFORM:	Solaris
+PRODUCT:        ObjectStore C++
+VERSION:        4.x
+OBJECTSTORE: 	
+DATE:		1996-12-23
+EXPIRES:	1997-12-31
+KEYWORDS:	solaris, shared library
+QUESTION:
+
+ Can you show me an example of how to use ObjectStore 4.x from 
+within a shared library on Solaris?
+ANSWER:
+
+The following uuencoded, compressed, tarred file contains such an 
+example. The README.txt file contains directions and tips.
+Please note the following:
+1. Use -G -pic options on the object files you need to include in the
+shared library.
+2. If you are using templates then include all the template object files
+in the shared library.
+3. You may either build libschemas for each library and then have a 
+single schema source file for the application or if you have just one
+library you may incorporate the schema source file in this library itself (look at details in the readme file).
+

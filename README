@@ -5,12 +5,12 @@ modify it under the same terms as Perl itself.
 
 Name           DSLI  Description                                  Info
 -----------    ----  -------------------------------------------- -----
-ObjStore       bm+O  ObjectStore DBMS Interface                   JPRIT
+ObjStore       Rm+O  ObjectStore DBMS Interface                   JPRIT
 
-Easy, flexible, lightning-fast persistent via ObjectStore.  Stores
+Easy, flexible, lightning-fast persistent via ObjectStore DBMS.  Stores
 scalars, hashes, and references without flattening.  Perl databases
 can be accessed from C++ and/or Java.  Inversely, persistent C++ 
-objects can be added back into Perl!
+objects can be added to Perl!
            << This is the relational database killer app! >>
 
 
@@ -24,25 +24,61 @@ see ./TODO for list of things to do
 see ./CHANGES for a historical perspective
 
 
+### FUTURE PLANS ###
+
+Preliminary design of Verity full text indexing interface below.  Should
+the index membership be kept in each member or not?  Leaning towards 'no'.
+
+$Txt->index($indexHandle, $userPointer)
+	$indexHandle - the specific Verity index object
+	$userPointer - returned together with the match score after a search
+
+  This can be called multiple times for different indexes.  The OSSV will
+  keep track of the indexes to which it has been added?
+
+$Txt->reindex;                   # called if string is changed
+$Txt->unindex([$indexHandle]);   # called upon destruction
+
+
 ### RECENT CHANGES ###
 
 
-** 07-05-97 Released 1.06 
+** 08-06-97 Released 1.09
 
-- Improved peek.  Now peek from the command line - 'ospeek <database>'!
+- At our site we are now using osperl for about 2GB worth of data!
 
-- Database::get_all_roots Root::get_name
+- Now built to a shared library!!  Anyone up for Apache/Perl/ObjectStore?
 
-- Fixes...
+- New, Improved Documentation.
+
+- Persistent blessings now fully tested and working.
+
+- ObjectStore transactions and exceptions now fully integrated into
+Perl.  Cursors have been removed from persistent data; read_only
+transactions now properly supported.  Read_only transactions are
+blazingly fast!
+
+- Regularized allocators.  Specify cardinality when creating containers.
+  new ObjStore::$type($near, $card);  Customize representation selector.
+
+- Regularized peristent typing in preparation for extensibility.
+
+- Peek rewrite with ideas from Data::Dumper.  Peek on circular data
+structures.  Peek reports percent utilization to the delight of the
+accountants everywhere.
+
+- Unions removed from the schema.  This major fix makes it possible to
+evolve databases in the event of future schema enhancements.
+
+- Reference counts are now 32bits wide and check for overflow.
+
+- Static functions (e.g. ObjStore::Segment::of) are now called with ::
+instead of -> for greater efficiency.
+
+- Plus hundreds of fixes...
 
 
-** 07-03-97 Released 1.05
+** 08-02-97 Released 1.08
 
-- ObjectStore exceptions trigger a dump of the perl call stack.
-
-- Peek on sacks.
-
-- Bug fixes.
-
-- $store->set_fetch_policy(os_fetch_policy, os_int32)
+- Release canidate for 1.09.
 

@@ -1,18 +1,23 @@
+# This is -*-perl-*- !
+
+use strict;
+use vars qw($tx);
+use ObjStore;
+
 BEGIN { $| = 1; $tx=1; print "1..5\n"; }
 
 sub ok { print "ok $tx\n"; $tx++; }
 sub not_ok { print "not ok $tx\n"; $tx++; }
 
-use ObjStore;
-
-$DB = ObjStore::Database->open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
+my $DB = ObjStore::Database->open(ObjStore->schema_dir . "/perltest.db", 0, 0666);
 
 sub chk1 {
     my ($john, $rep) = @_;
 
     my $ok=1;
     
-    my $ah = $john->{$rep} = $DB->newHV($rep);
+    my $ah = $john->{$rep} = new ObjStore::HV($DB, $rep);
+    die $ah if !$ah;
     for (1..8) {
       $ah->{$_} = 1;
       my @ks = keys %$ah;
@@ -22,7 +27,10 @@ sub chk1 {
     my @k = sort keys %$ah;
     @k == 8 or warn "$rep cursors are broken = @k";
     for (my $x=1; $x <= 8; $x++) {
-	$k[$x-1] == $x or do { $ok=0; warn "$k[$x-1] != $x"; }
+	if ($k[$x-1] != $x) {
+	    $ok=0;
+	    warn "$k[$x-1] != $x";
+	}
     }
     $ok? ok : not_ok;
     
@@ -30,7 +38,10 @@ sub chk1 {
     @k = sort keys %$ah;
     for (my $x=0; $x < @k; $x++) {
 	my $right = ($x >= 2? $x+2 : $x+1);
-	$k[$x] == $right or do { $ok=0; warn "$k[$x] != $right"; }
+	if ($k[$x] != $right) {
+	    $ok=0;
+	    warn "$k[$x] != $right";
+	}
     }
     $ok? ok : not_ok;
 }

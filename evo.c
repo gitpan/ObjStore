@@ -16,6 +16,7 @@ void usage()
     exit(0);
 }
 
+/*
 void show_members(const os_class_type &c)
 {
   os_List<const os_member*> mems(c.get_members());
@@ -50,7 +51,7 @@ void ossv_transform(void *new_obj)
 
   const os_member_variable *mvar;
 
-  /* fix union */
+  // fix union
   int ty;
   mvar = c.find_member_variable("_type");
   if (!mvar) { printf("_type not found\n"); exit(1); }
@@ -84,9 +85,10 @@ void ossvpv_transform(void *new_obj)
   void *old_obj = old_typed_obj;
   const os_class_type &c = old_typed_obj.get_type();
 
-  /* copy refs */
+  // copy refs
   os_fetch(old_obj, *c.find_member("refs"), ((OSSVPV*)new_obj)->refs);
 }
+*/
 
 int main(int argc, char **argv, char **)
 {
@@ -114,9 +116,6 @@ int main(int argc, char **argv, char **)
   if (argc < arg+1) usage();
   target = strdup(argv[arg]);
 
-  printf("Not yet.\n");
-  exit(1);
-
   printf("evolving %s...\n", target);
 
   objectstore::initialize();
@@ -125,8 +124,11 @@ int main(int argc, char **argv, char **)
   os_collection::initialize();
   OS_ESTABLISH_FAULT_HANDLER;
 
-  os_schema_evolution::augment_post_evol_transformers(os_transformer_binding("OSSV", ossv_transform));
-  os_schema_evolution::augment_post_evol_transformers(os_transformer_binding("OSSVPV", ossvpv_transform));
+  // force instantiation
+  new(os_database::get_transient_database(), OSPV_hvdict::get_os_typespec()) OSPV_hvdict;
+
+//  os_schema_evolution::augment_post_evol_transformers(os_transformer_binding("OSSV", ossv_transform));
+//  os_schema_evolution::augment_post_evol_transformers(os_transformer_binding("OSSVPV", ossvpv_transform));
 
   /* initiate evolution */
   if (nuke_work) os_dbutil::remove(workdb);

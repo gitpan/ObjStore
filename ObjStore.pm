@@ -4,261 +4,290 @@
 package ObjStore;
 require 5.004;
 use strict;
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $Exception);
 
-$VERSION = 1.06;
-
-=head1 NAME
-
-ObjStore - Perl extension for ObjectStore ODMS
-
-=head1 SYNOPSIS
-
-  use ObjStore;
-
-  $osdir = ObjStore->schema_dir;
-  my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
-
-  try_update {
-      my $top = $DB->root('whiteboard');
-      if ($top) {
-	  print "Very impressive.  I see you are already an expert.\n";
-	  exit;
-      }
-      $top = $DB->root('whiteboard', $DB->newHV('dict'));
-      for (my $x=1; $x < 1000000000; $x++) {
-	  $top->{$x} = {
-	      id => $x,
-	      m1 => "I will not talk in ObjectStore/Perl class.",
-	      m2 => "I will study the documentation before asking questions.",
-	  };
-      }
-  };
-  print "[Abort] $@\n" if $@;
-
-=head1 DESCRIPTION
-
-The new SQL of the late 1990s.  The end of relational databases.
-
-=head1 OBJECTSTORE PHILOSOPHY
-
-ObjectStore is outrageously powerful and sophisticated.  It actually
-does way too much for the average get-the-job-done programmer.  The
-theme of this interface for ObjectStore is simplicity and easy of use.
-The performance of raw ObjectStore is so good that even with a gunky
-Perl layer, benchmarks will find relational databases left on the
-bookshelf.
-
-Specifically, the interface is optimized for flexibility, then memory
-performance, then speed.  If you really want speed, wait till Perl5
-gets access to pthreads.  Or see the TODO list about dynamic linking
-additional C++ objects.
-
-=head1 TRANSACTIONS
-
-1. You cannot access or modify persistent data outside of a transaction.
-
-    {
-	my $var;
-	try_update {
-	    $var = $DB->root('top');
-	};
-	$var->{foo} = 2;      # $var usage causes ObjStore exception
-    }
-
-2. It is impractical to use read_only transactions because collections
-include embedded cursors.  You cannot iterate over collections without
-modifying the cursors in the database.  This should be construed as a
-bug in the Perl core.  As a work-around, read transactions are
-implemented with the abort_only transaction mode.  This mode allows
-you to modify the database but will not commit the changes.  However,
-you should not assume that read transactions will always be
-implemented with abort_only.
-
-=head1 REFERENCE COUNTING
-
-It is not practical to simply make perl types persistent.  Values in
-the database have different requirements than transient values and
-require a custom solution.
-
-1. All data allocated in the database is reference counted separately
-from transient data.
-
-2. You cannot take a reference to a persistent scalar value.  Is there
-a good reason to allow this?
-
-=head1 CONTAINERS
-
-There are a few considerations when creating a container: which
-segment, which symantics, and which implementation.
-
-=head2 HASHES
-
-    my $h1 = $store->newTiedHV('array');
-    $h1->{abc} = 3;
-
-    my $h2 = $store->newTiedHV('dict');
-    $h2->{def} = 3;
-
-Array implementations have one caveat: if they need to resize, any
-transient references you might have around will become pointers to
-random memory.  This case actually doesn''t come up very often.  To
-mess up, you need to go through these contortions:
-
-    my $top = $DB->newTiedHV('array');
-    my $dict = $top->{dict} = $DB->newHV('dict');
-    for (1..14) { $top->{$_} = $_; }   # force resize of $top
-
-    $dict->{foo} = 'bar';              # $dict points to random OOPS!
-
-    $dict = $top->{dict};              # now $dict OK
-    $dict->{foo} = 'bar';              # OK
-
-=head2 SACKS
-
-    $store->newSack('array');
-
-Sacks are sequential access containers.  They support the following 
-methods:
-
-    void $sack->a($element);
-    void $sack->r($element);
-    int  $sack->contains($element);
-    SV*  $sack->first();
-    SV*  $sack->next();
-    void $sack->bless('classname');
-
-Not very feature-ful, are they?  You''d think you would get a big
-efficiency win!  In fact, they are only a little better than
-hashes.  Sacks are really just a stop-gap until Larry and friends
-figure out how to do tied arrays.
-
-=head1 AUTHOR
-
-Joshua Pritikin, pritikin@mindspring.com
-
-=head1 SEE ALSO
-
-Perl documentation, ObjectStore documentation
-
-=cut
+$VERSION = 1.09;
 
 use Carp;
 use Config;
-use UNIVERSAL qw(isa);
 
 require Exporter;
-@ISA         = qw(Exporter);
-@EXPORT      = qw(&try_update &try_read);
-@EXPORT_OK   = qw(&peek &PoweredByOS);
-%EXPORT_TAGS = (ALL =>
-		[qw(try_update try_read peek PoweredByOS)]);
+require DynaLoader;
+@ISA         = qw(Exporter DynaLoader);
+@EXPORT      = qw(&bless &try_read &try_abort_only &try_update);
+@EXPORT_OK   = qw(&peek &reftype &gateway &PoweredByOS 
+		  &_PRIVATE_ROOT &DEFAULT_GATEWAY);
+%EXPORT_TAGS = (ALL => [@EXPORT, @EXPORT_OK]);
 
-bootstrap ObjStore;
+bootstrap ObjStore $VERSION;
+
+sub reftype ($);
+sub bless ($;$);
 
 sub PoweredByOS { "$Config{sitelib}/PoweredByOS.gif"; }
 
-# try_update { complex transaction }
-# print "[Abort] $@\n" if $@;
+sub _PRIVATE_ROOT { "_osperl_private"; }
 
-sub try_update(&) {
-    my ($fun) = @_;
-    ObjStore->begin_update();
-    eval {
-#	local $SIG{'__DIE__'};
-	&$fun;
-    };
-    if ($@) {
-	ObjStore->abort;
+$Exception = sub {
+    my $reason = shift;
+    local($Carp::CarpLevel) = 1;
+    confess "ObjectStore: $reason\t";
+};
+
+sub DEFAULT_GATEWAY {
+    my ($seg, $sv) = @_;
+    if (reftype $sv eq 'HASH') {
+	my $hv = new ObjStore::HV($seg);
+	while (my($hk,$v) = each %$sv) {
+	    $hv->STORE($hk, $v);
+	}
+	my $class = ref $sv;
+	if ($class ne 'HASH') { ObjStore::bless $hv, $class; }
+	else { $hv; }
     } else {
-	ObjStore->commit;
+	croak("ObjStore::DEFAULT_GATEWAY: Don't know how to translate $sv");
     }
-}
+};
+gateway(\&DEFAULT_GATEWAY);
 
-sub try_read(&) {
-    my ($fun) = @_;
-    ObjStore->begin_abort;
-    eval {
-#	local $SIG{'__DIE__'};
-	&$fun;
-    };
-    ObjStore->abort;
+# Bless should be members of UNIVERSAL so it
+# could be overridden in a reasonable way.
+
+sub bless ($;$) {
+    my ($ref, $class) = @_;
+    $class = caller if !defined $class;
+    if ($class->isa('ObjStore::UNIVERSAL') and
+	ref($ref) and
+	ref($ref) ne reftype($ref) and
+	$ref->isa('ObjStore::UNIVERSAL')) {
+
+	my $DB = ObjStore::Database::of($ref);
+	my $root = $DB->_get_private_root;
+	$root->{Brahma} = new ObjStore::HV($DB, 100) if !defined $root->{Brahma};
+	my $bhava = $root->{Brahma};
+	$bhava->{$class} = $class if !defined $bhava->{$class};
+        ObjStore::UNIVERSAL::_bless($ref, $bhava->at($class));
+    }
+    CORE::bless $ref, $class;
 }
 
 sub peek {
-    croak "peek([lv,] value)" if @_ > 2;
-    my ($lv, $h);
-    if (@_ == 1) {
-	$lv=0; $h = shift;
-    } else {
-	($lv, $h) = @_;
+    my $pk = new ObjStore::Peeker;
+    $pk->Peek(@_);
+}
+
+package ObjStore::Peeker;
+use strict;
+use Carp;
+use vars qw($LinePrefix $LineIndent $LineSep $SummaryWidth $MaxWidth $MaxDepth
+	    $To $All);
+
+$LinePrefix='';
+$LineIndent='  ';
+$LineSep="\n";
+$SummaryWidth=3;
+$MaxWidth=20;
+$MaxDepth=20;
+$To='string';
+$All=0;
+
+sub new {
+    my ($class, %cnf) = @_;
+    my $o = bless {
+	prefix => $LinePrefix,
+	indent => $LineIndent,
+	sep => $LineSep,
+	summary_width => $SummaryWidth,
+	width => 20,
+	depth => 20,
+	level => 0,
+	seen => {},
+	to => $To,
+	all => $All,
+	output => '',
+	has_sep => 0,
+	has_prefix => 0,
+	pct_unused => [],
+    }, $class;
+    while (my ($k,$v) = each %cnf) { $o->{$k} = $v; }
+    $o;
+}
+
+sub Peek {
+    my $o = shift;
+    for my $top (@_) { $o->_peek($top); }
+    $o->{output};
+}
+
+sub PercentUnused {
+    my ($o) = @_;
+    my $count=0;
+    my $sum=0;
+    for my $h (@{$o->{pct_unused}}) {
+	$count += $h->{card};
+	$sum += $h->{card} * $h->{unused};
     }
-    if (!ref $h) { return ' 'x$lv . peek_scalar($h). "\n";  }
-    my $s = '';
-    my $class = ref $h;
-    if ($class eq 'HASH') {
+    $count = -1 if $count == 0;
+    ($sum, $count);
+}
+
+sub prefix {
+    my ($o) = @_;
+    return if $o->{has_prefix};
+    $o->o($o->{prefix}, $o->{indent} x $o->{level});
+    $o->{has_prefix}=1;
+}
+
+sub nl {
+    my ($o) = @_;
+    return if $o->{has_sep};
+    $o->o($o->{sep});
+    $o->{has_sep}=1;
+}
+
+sub o {
+    my $o = shift;
+    $o->{has_sep}=0;
+    $o->{has_prefix}=0;
+    my $t = ref $o->{to};
+    if (!$t and $o->{to} eq 'string') {
+	$o->{output} .= join('', @_);
+    } elsif ($t eq 'CODE') {
+	$o->{to}->(@_);
+    } elsif ($t->isa('IO::Handle') or $t->isa('FileHandle')) {
+	$o->{to}->print(join('',@_));
+    } else {
+	die "ObjStore::Peeker: Don't know how to write to $o->{to}";
+    }
+}
+
+sub _peek {
+    my ($o, $val) = @_;
+    my $type = ObjStore::reftype $val;
+    my $class = ref $val;
+
+    # Since persistent blessing might be turned off...
+    $class = $val->_ref if ($class and $class->isa('ObjStore::UNIVERSAL'));
+
+    if (!$class) {
+	if (!defined $val) {
+	    $o->o('undef,');
+	} elsif ($val =~ /^-?[1-9]\d{0,8}$/) {
+	    $o->o("$val,");
+	} else {
+	    $val =~ s/([\\\'])/\\$1/g;
+	    $o->o("'$val',");
+	}
+	return;
+    }
+
+    # Stringification returns the transient address,
+    # we want the persistent address!
+    my $name;
+    $name = $val->persistent_name if $val->can('persistent_name');
+    $name = "$val" if !$name;
+
+    if ($o->{level} > $o->{depth} or $o->{seen}{$name}) {
+	if ($type eq 'HASH') {
+	    $o->o("{ ... }");
+	} elsif ($type eq 'ARRAY') {
+	    $o->o("[ ... ]");
+	} elsif ($class->isa('ObjStore::Set')) {
+	    $o->o("[ ... ]");
+	} else {
+	    $o->o("$class ...");
+	}
+	return;
+    }
+    $o->{seen}{$name}=1;
+
+    if ($val->can('cardinality') and $val->can('percent_unused')) {
+	push(@{$o->{pct_unused}}, {card=>$val->cardinality,
+				   unused=>$val->percent_unused});
+    }
+
+    $o->prefix;
+    if ($class eq 'ObjStore::Database') {
+	for my $r ($val->get_all_roots) {
+	    next if (!$o->{all} and $r->get_name eq ObjStore::_PRIVATE_ROOT);
+
+	    $o->prefix;
+	    ++$o->{level};
+	    $o->o("$r ",$r->get_name," = ");
+	    $o->{has_prefix}=1;
+	    $o->_peek($r->get_value);
+	    --$o->{level};
+	    $o->nl;
+	}
+    } elsif ($class->isa('ObjStore::Set')) {
 	my @S;
 	my $x=0;
-	while (my($k,$v) = each %$h) {
-	    last if $x++ > 21;
+	for (my $v=$val->first; $v; $v=$val->next) {
+	    last if $x++ > $o->{width}+1;
+	    push(@S, $v);
+	}
+	my $big = @S > $o->{width};
+	my $limit = $big ? $o->{summary_width}-1 : @S;
+
+	$o->o($name . " [");
+	$o->nl;
+	++$o->{level};
+	for (my $v=$val->first; $v; $v=$val->next) {
+	    last if $limit-- <= 0;
+	    $o->prefix;
+	    $o->_peek($v);
+	    $o->nl;
+	}
+	if ($big) {
+	    $o->prefix;
+	    $o->o("...");
+	    $o->nl;
+	}
+	--$o->{level};
+	$o->prefix;
+	$o->o("],");
+	$o->nl;
+    } elsif ($type eq 'HASH') {
+	my @S;
+	my $x=0;
+	while (my($k,$v) = each %$val) {
+	    last if $x++ > $o->{width}+1;
 	    push(@S, [$k,$v]);
 	}
 	@S = sort { $a->[0] cmp $b->[0] } @S;
 	my $big = @S > 20;
-	my $limit = $big ? 2 : $#S;
-	$s .= "$class {\n";
+	my $limit = $big ? $o->{summary_width}-1 : $#S;
+
+	$o->o($name . " {");
+	$o->nl;
+	++$o->{level};
 	for $x (0..$limit) {
 	    my ($k,$v) = @{$S[$x]};
 
-	    if (ref $v) {
-		$s .= ' 'x$lv . "$k ".peek($lv+2, $v);
-	    } else {
-		$s .= ' 'x$lv . "$k => ".peek_scalar($v).",\n";
-	    }
+	    $o->prefix;
+	    $o->o("$k => ");
+	    $o->{has_prefix}=1;
+	    $o->_peek($v);
+	    $o->nl;
 	}
-	$s .= ' 'x$lv . "...\n" if $big;
-	$s .= ' 'x$lv . "},\n";
-    } elsif (isa($class, 'ObjStore::CV')) {
-	my @S;
-	my $x=0;
-	for (my $v=$h->first; $v; $v=$h->next) {
-	    last if $x++ > 21;
-	    push(@S, $v);
+	if ($big) {
+	    $o->prefix;
+	    $o->o("...");
+	    $o->nl;
 	}
-	my $big = @S > 20;
-	my $limit = $big ? 2 : @S;
-	$s .= "$class {\n";
-	for (my $v=$h->first; $v; $v=$h->next) {
-	    last if $limit-- <= 0;
-
-	    if (ref $v) {
-		$s .= ' 'x$lv . peek($lv+2, $v);
-	    } else {
-		$s .= ' 'x$lv . peek_scalar($v).",\n";
-	    }
-	}
-	$s .= ' 'x$lv . "...\n" if $big;
-	$s .= ' 'x$lv . "},\n";
+	--$o->{level};
+	$o->prefix;
+	$o->o("},");
+	$o->nl;
+    } elsif ($type eq 'ARRAY') {
+	croak "Peek doesn't do arrays yet";
     } else {
-	die "Unknown class '$class'";
-    }
-    $s;
-}
-
-sub peek_scalar {
-    my ($val) = @_;
-
-    if (!defined $val) {
-	'undef';
-    } elsif ($val =~ /^-?[1-9]\d{0,8}$/) {
-	$val;
-    } else {
-	$val =~ s/([\\\'])/\\$1/g;
-	'\'' . $val .  '\'';
+	die "Unknown type '$type'";
     }
 }
 
 package ObjStore::Database;
+use Carp;
 
 sub root {
     my ($o, $roottag, $nval) = @_;
@@ -274,81 +303,92 @@ sub destroy_root {
     $root->destroy if $root
 }
 
-sub newTiedHV {  #factor
-    my ($db, $rep) = @_;
-    my $hvobj = $db->newHV($rep);
-    my %h;
-    tie %h, 'ObjStore::HV', $hvobj;
-    \%h;
+sub _get_private_root {
+    my ($DB) = @_;
+    my $private = $DB->root(ObjStore::_PRIVATE_ROOT);
+    if (!$private) {
+	$private = $DB->root(ObjStore::_PRIVATE_ROOT, new ObjStore::HV($DB, 100));
+	$private->{VERSION} = 1.0;
+    }
+    $private;
 }
+
+sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
+sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
+sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
 
 package ObjStore::Segment;
+use Carp;
 
-sub newTiedHV {
-    my ($seg, $rep) = @_;
-    my $hvobj = $seg->newHV($rep);
-    my %h;
-    tie %h, 'ObjStore::HV', $hvobj;
-    \%h;
-}
+sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
+sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
+sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
+
+package ObjStore::UNIVERSAL;
+
+#XS: sub new($area, $rep, $card)
 
 package ObjStore::HV;
-use Carp;
+use vars qw(@ISA $PICK_REP);
+@ISA=qw(ObjStore::UNIVERSAL);
 
-sub TIEHASH {
-    my ($class, $o) = @_;
-    croak "Expecting ObjStore::HV" if ref $o ne 'ObjStore::HV';
-    bless $o, $class;
-}
-
-sub STORE {
-    my ($o, $k, $nval) = @_;
-    if (!ref $nval) {
-	$o->_STORE($k, $nval);
-    } elsif (ref $nval eq 'HASH') {
-	if (tied %$nval) {
-	    $o->_STORE($k, tied %$nval);
+$PICK_REP = sub {
+    my ($loc, $rep) = @_;
+    my $seg = ObjStore::Segment::of($loc);
+    if (!defined $rep) {
+      ObjStore::UNIVERSAL::new($seg, 'ObjStore::HV::Array', 7);
+    } elsif ($rep =~ /\d+/) {
+	if ($rep < 20) {
+	    ObjStore::UNIVERSAL::new($seg, 'ObjStore::HV::Array', $rep);
 	} else {
-	    my $seg = ObjStore::Segment->of($o);
-	    my $hv = $seg->newHV('array');         # allow customization XXX
-	    while (my($hk,$v) = each %$nval) {
-		$hv->STORE($hk, $v);
-	    }
-	    $o->_STORE($k, $hv);
+	  ObjStore::UNIVERSAL::new($seg, 'ObjStore::HV::Dict', $rep);
 	}
-    } elsif (ref($nval) =~ /^ObjStore\:/) {
-	$o->_STORE($k, $nval);
+    } elsif ($rep eq 'array') {
+	ObjStore::UNIVERSAL::new($seg, 'ObjStore::HV::Array', 10);
+    } elsif ($rep eq 'dict') {
+	ObjStore::UNIVERSAL::new($seg, 'ObjStore::HV::Dict', 107);
     } else {
-	croak "Don't know how to store $nval";
+	croak("ObjStore::HV::PICK_REP: rep '$rep' unknown");
     }
+};
+
+sub new {
+    my ($class, $loc, $rep) = @_;
+    my $o = $PICK_REP->($loc, $rep);
+    ObjStore::bless($o, $class) if $class ne 'ObjStore::HV';
+    $o;
 }
 
-sub bless {
-    my ($o, $class) = @_;
-    $o->set_classname($class);
-    my %h;
-    tie %h, $class, $o;
-    my $h = \%h;
-    CORE::bless($h, $class);
-}
-
-package ObjStore::CV;
-use UNIVERSAL qw(isa);
+package ObjStore::Set;
+use vars qw(@ISA $PICK_REP);
+@ISA=qw(ObjStore::UNIVERSAL);
 use Carp;
 
-sub bless {
-    my ($o, $class) = @_;
-    isa($class, 'ObjStore::CV') or croak "$class is not an ObjStore::CV";
-    $o->set_classname($class);
-    CORE::bless($o, $class);
-}
-
-sub contains {
-    my ($o, $e) = @_;
-    for (my $x=$o->first; $x; $x=$o->next) {
-	return 1 if $e eq $x;
+$PICK_REP = sub {
+    my ($loc, $rep) = @_;
+    my $seg = ObjStore::Segment::of($loc);
+    if (!defined $rep) {
+      ObjStore::UNIVERSAL::new($seg, 'ObjStore::Set::Array', 7);
+    } elsif ($rep =~ /\d+/) {
+	if ($rep < 20) {
+	  ObjStore::UNIVERSAL::new($seg, 'ObjStore::Set::Array', $rep);
+	} else {
+	  ObjStore::UNIVERSAL::new($seg, 'ObjStore::Set::Hash', $rep);
+	}
+    } elsif ($rep eq 'array') {
+      ObjStore::UNIVERSAL::new($seg, 'ObjStore::Set::Array', 10);
+    } elsif ($rep eq 'hash') {
+      ObjStore::UNIVERSAL::new($seg, 'ObjStore::Set::Hash', 107);
+    } else {
+	croak("ObjStore::Set::PICK_REP: rep '$rep' unknown");
     }
-    0;
+};
+
+sub new {
+    my ($class, $loc, $rep) = @_;
+    my $o = $PICK_REP->($loc, $rep);
+    ObjStore::bless($o, $class) if $class ne 'ObjStore::Set';
+    $o;
 }
 
 1;

@@ -1,7 +1,7 @@
 #!/usr/local/bin/perl -w
 
-use Data::Dumper;
 use lib '.';
+#use lib '/home/joshua/Maker-2.05';
 use Config;
 require Maker::Package;
 require Maker::Rules;
@@ -24,34 +24,52 @@ See $SchemaDir in ./be.
     # Specify a good directory for the application schema:
     my $SchemaDir = '/opt/os/joshua';
     
+    my $linkage = 'dyn';  #'dyn' or 'static'
+
     $pk->default_targets('osperl', 'ospeek');
 
     { # osperl
 	my $inst = {
-	    bin => [ 'osperl' ],
 	    script => [ 'ospeek' ],
 	    man3 => [ 'ObjStore.3' ],
 	    lib => [ 'ObjStore.pm', 'PoweredByOS.gif' ]};
+
+	if ($linkage eq 'dyn') {
+	    $inst->{arch} = ['auto/ObjStore/', 'auto/ObjStore/ObjStore.so'];
+	}
+	else { $inst->{bin} = ['osperl']; }
 	
 	my $r = Maker::Rules->new($pk, 'perl-module');
+	$r->opt(1);
+#	$r->flags('ossg', '-padc', '-arch','set1');
+	$r->flags('ld-dl', '-ztext');   # SunPro specific?
 	$pk->a(new Maker::Seq($r->blib($inst), 
 			      new Maker::Phase('parallel',
-					       $r->embed_perl('ObjStore'),
-					       $r->objstore($SchemaDir, 'osperl-3',
+					       ($linkage eq 'static' ?
+						($r->cxx('perlmain.c'),
+						 $r->embed_perl('ObjStore')) :
+						()),
+					       $r->objstore($SchemaDir, 'osperl-04',
 							    ['collections']),
+					       $r->cxx('osperl.c'),
+					       $r->cxx('hv_builtin.c'),
+					       $r->cxx('set_builtin.c'),
 					       $r->xs('ObjStore.xs'),
-					       $r->cxx('osperl.c')
 					       ),
-			      $r->link('cxx', './blib/bin/osperl'),
-			      $r->pod2man('ObjStore.pm', 3),
+			      ($linkage eq 'dyn'?
+			       $r->dlink('cxx', './blib/arch/auto/ObjStore/ObjStore.so') :
+			       $r->link('cxx', './blib/bin/osperl')),
+			      $r->pod2man('ObjStore.pod', 3),
+			      $r->pod2html('ObjStore.pod'),
 			      $r->populate_blib($inst),
 			      new Maker::Unit('osperl', sub {}),
 			      ),
 	       new Maker::Seq($r->blib($inst),
-			      $r->HashBang('osperl', 'ospeek'),
+			      $r->HashBang($linkage eq 'dyn'? 'perl' : 'osperl',
+					   'ospeek'),
 			      new Maker::Unit('ospeek', sub {}),
 			      ),
-	       $r->test_harness('./blib/bin/osperl'),
+	       $r->test_harness($linkage eq 'dyn'? 'perl' : 'osperl'),
 	       $r->install($inst),
 	       $r->uninstall($inst),
 	       );
@@ -66,17 +84,18 @@ See $SchemaDir in ./be.
 
 	$pk->a(new Maker::Seq($r->blib($inst),
 			      new Maker::Phase('parallel',
-					       $r->objstore($SchemaDir, 'ospevo-1', [qw(evolution queries mop dbutil collections)]),
+					       $r->objstore($SchemaDir, 'ospevo-01', [qw(evolution queries mop dbutil collections)]),
 					       $r->cxx('evo.c'),
+					       $r->embed_perl(),
+					       $r->cxx('osperl.c'),
 					       ),
 			      $r->link('cxx', 'ospevo'),
 			      new Maker::Unit('ospevo', sub{}),
 			      ),
-	       $r->install($inst),
-	       $r->uninstall($inst),
+#	       $r->install($inst),
+#	       $r->uninstall($inst),
 	       );
     }
-#    print Dumper($pk);
     $pk->load_argv_flags;
     $pk->top_go(@ARGV);
 }

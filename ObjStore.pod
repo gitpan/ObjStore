@@ -1,0 +1,327 @@
+=head1 NAME
+
+ObjStore - Perl extension for ObjectStore ODMS
+
+=head1 SYNOPSIS
+
+    use ObjStore;
+
+    my $osdir = ObjStore->schema_dir;
+    my $DB = ObjStore::Database->open($osdir . "/perltest.db", 0, 0666);
+
+    try_update {
+        my $top = $DB->root('whiteboard');
+        if (!$top) {
+            $top = $DB->root('whiteboard', new ObjStore::HV($DB, 10**8));
+            for (my $x=1; $x < 10**9; $x++) {
+	        $top->{$x} = {
+	            id => $x,
+	            m1 => "I will not talk in ObjectStore/Perl class.",
+	            m2 => "I will study the documentation before asking questions.",
+	        };
+            }
+        } else {
+	    die "Very impressive.  I see you are already an expert.\n";
+        }
+    };
+    print "[Abort] $@\n" if $@;
+
+=head1 DESCRIPTION
+
+The evolution of SQL into the new age; the sunset of relational
+databases.
+
+ObjectStore is the leading object-oriented database.  It is produced
+by Object Design http://www.odi.com (NASDAQ: ODIS).  The database uses
+the virtual memory mechanism to make persistent data available in the
+most efficient manner possible.  Object Design's Persistent Storage
+Engine has been licensed by Microsoft, Netscape, and Symantic for
+inclusion in their Java development environments.
+
+Prior to this joining of forces, ObjectStore was too radical a design
+decision for many applications.  And Perl5 did not have a simple way
+of storing complex data persistently.
+
+Now there is an easy way to store data, I<even if there is no fixed
+schema.  What if the schema is data dependent?> Here-in reveals a simple
+solution.
+
+=head1 OBJECTSTORE PHILOSOPHY
+
+ObjectStore is outrageously powerful, sophisticated, even
+over-engineered.  It does way too much for the average
+get-the-job-done programmer.  The theme of this interface for
+ObjectStore is simplicity and easy of use.  I<If it's not fun, why
+bother?> Life is suppose to be fun and exciting, all the time!  And the
+performance of raw ObjectStore is so good that even with a gunky Perl
+layer, benchmarks will show that relational databases can be safely
+left on the bookshelf where they belong.
+
+Specifically, this module is optimized for flexibility, then memory
+performance, then speed.  If you really want speed, wait till Perl5
+gets kernel threads.  Or see the TODO list about dynamic linking your
+own custom C++ objects.
+
+=head1 TRANSACTIONS
+
+ObjectStore transactions and exceptions are seemlessly integrated into
+Perl.
+
+    try_update {
+        $top = $DB->root('top');
+        $top->{abc} = 3;
+        die "abc will never change!";       # aborts the transaction
+    };
+    print $@ if $@;
+
+Perl's C<eval> mechanism is used to catch all exceptions be they from
+Perl or ObjectStore.  There are three types of transactions:
+C<try_read>, C<try_abort_only>, and C<try_update>.  Each execute the
+given block within an implicit C<eval>.  After a transaction, be sure
+to check the value of C<$@> to see if anything went wrong.  For example,
+
+    {
+	my $var;
+	try_read {
+	    $var = $DB->root('top');
+	};
+	warn $var->{abc};	# $var access triggers exception
+    }
+    die if $@;			# exception rethrown to top-level
+
+Needless to say, you cannot access or modify persistent data outside
+of a transaction.
+
+=head1 OBJECTS (CONTAINERS)
+
+=over 4
+
+=item * SEGMENTS
+
+Databases are composed of segments.  Segments dynamically resize from
+around 32k to as big as you want.  You should split your data into
+lots segments when it makes sense.  Segments are a good thing.
+
+When you create a container you must specify the segment in which it
+is to be allocated.  All containers are created via the form C<'new
+ObjStore::$type($store, $cardinality)'>.  You may pass any persistent
+object in place of $store and the new container will be created in the
+same segment as the $store object!
+
+=item * BLESS
+
+The ObjStore module overloads C<'bless'>.  Once you create a
+container, you may C<bless> it in your own package.  The blessing is
+persistent.  I<The church now has serious competition.>
+
+=back
+
+=head2 SETS
+
+The following code snippet creates a set with an expected cardinality
+of ten elements.
+
+    my $set = new ObjStore::Set($store, 10);
+
+Sets are simple collections.  They do not allow duplicates.  The
+following methods are supported:
+
+    $set->a($obj);
+    $set->r($obj);
+    $yes = $set->contains($obj);
+    for (my $obj = $set->first; $obj; $obj = $set->next) {
+	# do something with $obj
+    }
+
+Changing the membership of a set while iterating over the members
+has undefined results.
+
+=head2 ARRAYS
+
+Arrays will be available as soon as Larry and friends fix the TIEARRAY
+interface.  (See perltie(3) or http://www.perl.org more info.)
+
+=head2 HASHES
+
+The following code snippet creates a hash reference tied to a
+persistent hash container with an expected cardinality of ten
+elements.
+
+    my $h1 = new ObjStore::HV($store, 10);
+
+An array representation is used for low cardinalities.  Arrays do not
+scale well, but they do afford a compact representation.
+ObjectStore's C<os_Dictionary> is used for large cardinalities.
+
+Hashes are created implicitly during assignment.  Implicitly created
+hashes assume an expected cardinality of around ten and are created in
+the same segment as the enclosing hash.
+
+    $dict->{foo} = { a=> { 1=>2, 2=>3 }, b=>4 };
+
+This tidy single line is short-hand for the unbearibly tedious:
+
+    my $h1 = $dict->{foo} = new ObjStore::HV($dict);
+    my $h2 = $h1->{a} = new ObjStore::HV($h1);
+    $h2->{1}=2;
+    $h2->{2}=3;
+    $h1->{b}=4;
+
+Perl saves us again!  Relief.
+
+=head1 PERSISTENT REPRESENTATION
+
+It is not practical to simply make perl data persistent.  For one
+thing, there are horrendous technical problems.  But more importantly,
+values in the database have different requirements than transient
+values.  An upscale New York style get-up is required.
+
+=over 4
+
+=item * MEMORY
+
+Memory usage is much more important in a database than in transient
+memory.  When databases can be as large or larger than ten million
+megabytes, a few percent difference in compactness can mean a lot.
+
+=item * REFERENCE COUNTING
+
+Persistent data is reference counted separately from transient data.
+This implies that when a persistent object becomes unreferenced it is
+deleted immediately, even if there are still transient references to
+it.
+
+=back
+
+=head1 VENTURE BEYOND
+
+Here is an outline of how to go extension crazy.
+
+C<ObjStore::UNIVERSAL> is the base class for all persistent types.
+
+In general, you cannot access scalars from Perl.  So this base class
+is only for objects or collections.  The C<'at'> method can be used to
+access scalars.  They are blessed into the C<'ObjStore::Raw'> package
+but there are no methods to access them except from C++.
+
+C<ObjStore::Set> is the base class for sets.
+
+C<ObjStore::HV> is the base class for tied hashes.
+
+C<ObjStore::AV> is the base class for tied arrays.
+
+When an ObjectStore exception occurs, C<$ObjStore::Exception> is called
+with the message from ObjectStore.  You can replace the default with
+your own function.
+
+Each subclass of C<ObjStore::UNIVERSAL> has a C<$PICK_REP> coderef.  It
+takes a location and a representation, calls C<ObjStore::UNIVERSAL::new>,
+and returns a persistent object of the appropriate configuration.  If
+you'd like, you can replace the default function with your own!
+
+How does the ObjStore module know how to translate nested transient
+structures into nested persistent structures?  C<ObjStore::DEFAULT_GATEWAY>
+determines the representation.  You can replace it with your own by
+using C<my $oldgw = ObjStore::gateway($coderef)>.
+
+You can add your own C++ representations for each of Set, AV, and HV.
+If you want to know the specifics, look at the code for the standard
+built-in representations (C<*_builtin.c>).
+
+You can add new types of objects that inherit from C<ObjStore::UNIVERSAL>.
+Suppose you want persistent bit vectors or persistent optimized matrics?
+These would not be hard to add.  Especially once Object Design figures out
+how to support multiple application schemas within the same executable.
+
+Definitly send email to the mailing list if you get new persistent
+types working!
+
+=head1 FUTURE PLANS
+
+=over 4
+
+=item * Text objects implemented using osmmtype and subclassed from
+IO::Handle.  Support for the Verity Text Object Manager.
+
+=item * Support for notification, database access control, and any
+other interesting ObjectStore APIs.
+
+=item * Java integration.
+
+=back
+
+=head1 QUIRKS & MISFEATURES
+
+=over 4
+
+=item * BLOATED NUMERICS
+
+Numbers (integers and doubles) are stored in a separately allocated
+memory blocks.  This is probably not as efficient as a union, but
+unions are nearly impossible to manage in ObjectStore.
+
+=item * STRING CAVEAT
+
+The length of string values are not stored in the database.  Since
+lengths are calculated at each access, lengthy strings should be
+stored in a text object.  Text objects will be available in a future
+release.
+
+=item * TROMPED KEYWORDS
+
+The ObjStore version of C<bless> replaces the built-in and is imported
+by default.
+
+=item * CURSED OBJECTS
+
+The strings used to record the blessed nature of persistent objects
+are allocated in a private hash in the default segment of a database
+(See C<'ospeek -all'>).  If you accidentally mess up or change any of
+these strings, your objects will be cursed.  You will need to re-bless
+each to fix broken pointers.
+
+=item * REFERENCE CAVEAT
+
+Object reference counts are 32 bits wide, but OSSV (scalars) reference
+counts are only 16 bits.  This does not restrict developers from
+creating zillions of references to a single hash (a hash is not a
+scalar), but it can cause some confusion in arcane cases.  [Give
+example and work-around.]
+
+=item * HOW TO LEAK PERSISTENT MEMORY
+
+You can fill up your database with unrecoverable memory blocks!  Here
+are the steps: Start a transaction.  Create a persistent container,
+I<but don't hook it onto anything.> Complete the transaction.  Very
+good!  You will never be able to recover the memory.  You can even
+do similar things in transient memory and hose your machine.
+
+Please use try_abort_only or if you must, this work-around:
+
+    my $top = $DB->root('top');
+    my $junk = new ObjStore::HV($top);
+    $top->{_z} = $junk;
+    delete $top->{_z};
+
+It is possible to write a garbage collector for ObjectStore
+databases.  Any takers?
+
+=back
+
+=head1 AUTHOR
+
+Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
+
+This package is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.  Perl-ObjectStore is
+available on any CPAN mirror site.  See http://www.perl.org
+
+Portions of the collection code snapped from I<splash>, Jim Morris's
+friendly C++ library ftp://ftp.wolfman.com/users/morris/public/splash .
+
+=head1 SEE ALSO
+
+Examples in the t/ directory, sack.pl, Perl5, ObjectStore, I<and fortunately not SQL!>
+
+=cut
+

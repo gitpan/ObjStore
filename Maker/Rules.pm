@@ -7,6 +7,12 @@
 
 package Maker::Rules;
 use strict;
+require Exporter;
+use vars qw(@ISA @EXPORT);
+@ISA    = qw(Exporter);
+@EXPORT = qw(&newer);
+
+require Maker::Package;
 use Carp;
 use Cwd;
 use Config;
@@ -18,13 +24,18 @@ sub new {
     croak "Maker::Rules->new(pkg[, hint])" if (@_ < 2 or @_ > 3);
     my ($class, $pkg, $hint) = @_;
     my $o = bless { pkg=>$pkg }, $class;
-    $o->set_defaults($hint) if $hint;
+    $o->set_defaults($hint);
     $o;
 }
 
 sub x { 
     my $o = shift;
     $o->{pkg}->x(@_);
+}
+
+sub z { 
+    my $o = shift;
+    $o->{pkg}->z(@_);
 }
 
 sub clean {
@@ -43,24 +54,32 @@ for my $k (qw(nop verbose version)) {
     die $@ if $@;
 }
 
+sub set_install_dirs {
+    my ($o, $map) = @_;
+    $o->{install_dirs} = $map;
+}
+
 sub set_defaults {
     my ($o, $hint) = @_;
 
     $o->{hint} = $hint;
 
-    $o->exe(perl => 'perl');
+    $o->flags('cc-dl', $Config{cccdlflags});
+    $o->flags('ld-dl', $Config{lddlflags});
+
+    $o->exe(perl => "$Config{bin}/perl");
     $o->exe(xsubpp => "$Config{privlibexp}/ExtUtils/xsubpp");
     $o->flags('xsubpp', "-typemap", "$Config{privlibexp}/ExtUtils/typemap");
 
-    if ($hint eq 'perl-module') {
-	$o->{install_dirs} = {
+    if ($hint and $hint eq 'perl-module') {
+	$o->set_install_dirs({
 	    'bin' => ["./blib/bin", $Config{installbin}, $Config{bin}],
 	    'man1' => ["./blib/man/man1", $Config{installman1dir}],
 	    'man3' => ["./blib/man/man3", $Config{installman3dir}],
 	    'script' => ["./blib/bin", $Config{installscript}, $Config{script}],
 	    'arch' => ["./blib/arch", $Config{installsitearch}],
 	    'lib' => ["./blib/lib", $Config{installsitelib}],
-	};
+	});
 	$o->spotless('./blib');
     }
 
@@ -69,6 +88,7 @@ sub set_defaults {
     if ($Config{archname} eq 'sun4-solaris') {
 	# assume SunPro 4.0
 	$o->exe('cxx', 'CC');
+	$o->flags('cxx-dl', '-KPIC', '-G');
 	$o->spotless('Templates.DB');
 
 	# special phase
@@ -84,10 +104,22 @@ sub src {
     for my $f (@_) {
 	if ($f =~ /\.o$/) {
 	    push(@{$o->{src}{o}}, $f);
+	} elsif ($f =~ /\.a$/) {
+	    push(@{$o->{src}{a}}, $f);
 	} else {
 	    die "unknown source type '$f'";
 	}
     }
+}
+
+sub get_src {
+    my $o = shift;
+    my @z;
+    for (@_) {
+	my $a = $o->{'src'}{$_};
+	push(@z, @$a) if $a;
+    }
+    @z;
 }
 
 sub exe {
@@ -97,7 +129,7 @@ sub exe {
     if (defined $o->{exe}{$exe}) {
 	$o->{exe}{$exe};
     } else {
-	croak "Exe $exe unknown";
+	undef;
     }
 }
 
@@ -105,7 +137,11 @@ sub exe {
 sub flags {
     confess '$o->flags(exe[, -flag, ...])' if @_ < 2;
     my ($o, $exe, @add) = @_;
-    push(@{$o->{flags}{$exe}}, @add) if @add > 0;
+    # optimize XXX
+  ADD: for my $new (@add) {
+      for (@{$o->{flags}{$exe}}) { last ADD if $_ eq $new; }
+      push(@{$o->{flags}{$exe}}, $new);
+    }
     return () if !defined $o->{flags}{$exe};
     @{$o->{flags}{$exe}};
 }
@@ -115,8 +151,22 @@ sub pod2man {
     my $stem = $pod;
     $stem =~ s/\.[^.]+$//;
     $o->clean("$stem.$section");
-    new Maker::Unit(sub {
-	$o->x("pod2man $pod > $stem.$section");
+    new Maker::Unit("$stem.$section", sub {
+	if (newer("$stem.$section", $pod)) {
+	    $o->x("pod2man $pod > $stem.$section");
+	}
+    });
+}
+
+sub pod2html {
+    my ($o, $pod, $section) = @_;
+    my $stem = $pod;
+    $stem =~ s/\.[^.]+$//;
+    $o->clean("$stem.html", "pod2html-dircache", "pod2html-itemcache");
+    new Maker::Unit("$stem.html", sub {
+	if (newer("$stem.html", $pod)) {
+	    $o->x("pod2html $pod > $stem.html");
+	}
     });
 }
 
@@ -132,9 +182,10 @@ sub _make_install_dirs {
 	}
 	$o->x('mkdir', @ds);
     });
-};
+}
 
 sub _populate_install {
+    croak "_populate_install(o,real,map)" if @_ != 3;
     my ($o, $real, $map) = @_;
     new Maker::Unit(sub {
 	my $Dest = $o->{install_dirs};
@@ -151,9 +202,21 @@ sub _populate_install {
 		    }
 		} else {
 		    if (!$real) {
-			$o->x('cp', $f, "$blib/$f") if -e $f;
+			if (-e $f and newer("$blib/$f", $f)) {
+			    $o->x('cp', $f, "$blib/$f");
+			}
 		    } else {
-			$o->x('cp', "$blib/$f", "$rdir/$f");
+			if (-e "$blib/$f") {
+			    if (newer("$rdir/$f", "$blib/$f")) {
+				$o->x('cp', "$blib/$f", "$rdir/$f");
+			    }
+			} elsif (-e $f) {
+			    if (newer("$rdir/$f", $f)) {
+				$o->x('cp', $f, "$rdir/$f");
+			    }
+			} else {
+			    confess "$f missing";
+			}
 		    }
 		}
 	    }
@@ -173,9 +236,9 @@ sub populate_blib {
 
 sub install {
     my ($o, $map) = @_;
-    if ($map->{bin}) {
+    if ($map->{bin} and defined $o->{install_dirs}{bin}[2]) {
 	for my $b (@{$map->{bin}}) {
-	    $o->exe($b, "$o->{install_dirs}{bin}[2]/$b");
+	    $o->exe($b, "$o->{install_dirs}{bin}[2]/$b") if !$o->exe($b);
 	}
     }
     new Maker::Seq($o->_make_install_dirs(1, $map),
@@ -199,8 +262,8 @@ sub opt {
     my ($o, $opt) = @_;
     if ($opt) {
 	# -DNDEBUG to turn off assert
-	$o->flags('cc', '-O');
-	$o->flags('cxx', '-O');
+	$o->flags('cc', '-O', '-DNDEBUG');
+	$o->flags('cxx', '-O', '-DNDEBUG');
     } else {
 	$o->flags('cc', '-g');
 	$o->flags('cxx', '-g');
@@ -240,20 +303,22 @@ sub objstore {
 		defined $OS_FEATURE->{$_}{ldb};
 	}
     }
-    $o->flags('ld', "-los", "-losths");
+    $o->flags('ld', "-los", "-losths", "-lC");
     
-    $o->clean("$tag-osschema.c");
+    $o->clean("$tag-osschema.c", "neutralize-$tag");
     $o->spotless(sub {
 	$o->x("osrm -f $o->{osdbdir}/$tag.adb");
     });
 
     new Maker::Seq(new Maker::Unit("ossg $tag", sub {
-	if (newer("$tag-osschema.c", "$tag-schema.c")) {
-
+	my $adb = "$o->{osdbdir}/$tag.adb";
+	if ($o->z("ostest", "-s", $adb) or
+	    newer("$tag-osschema.c", "$tag-schema.c")) {
+	    
 	    my @inc = grep(/^-I/, $o->flags('cxx'));
-	    $o->x("ossg", @inc, '-asdb', "$o->{osdbdir}/$tag.adb",
-		  '-assf', "$tag-osschema.c", "$tag-schema.c",
-		  $o->flags('LDB'));
+	    $o->x("ossg", @inc, '-DOSSG=1', '-showw', '-nout', "neutralize-$tag",
+		  '-asdb', $adb, '-assf', "$tag-osschema.c",
+		  "$tag-schema.c", $o->flags('ossg'), $o->flags('LDB'));
 	}
      }),
 		   $o->cxx("$tag-osschema.c"));
@@ -286,7 +351,7 @@ sub cxx {
 sub embed_perl {
     my ($o, @mod) = @_;
 
-    my $xsi = 'perlxsi';
+    my $xsi = 'perlxsi-'.join('', map { substr($_, 0, 3) } @mod);
     $o->clean("$xsi.o");
 
     $o->flags('cxx', "-I$Config{archlibexp}/CORE");
@@ -311,6 +376,9 @@ sub xs {
     my ($o, $f) = @_;
     $f =~ s/\.xs$//;
     $o->clean("$f.c");
+    $o->flags('cxx', "-I$Config{archlibexp}/CORE");
+    my $ver = $o->version;
+    $o->flags('cxx', "-DXS_VERSION=\"$ver\"");
     new Maker::Seq("xs $f", new Maker::Unit("$f.c -> $f.xs", sub {
 	if (newer("$f.c", "$f.xs", "typemap")) {
 	    $o->x(join(' ', $o->exe('perl'), $o->exe('xsubpp'), '-C++', '-prototypes',
@@ -352,20 +420,37 @@ sub HashBang {
     });
 }
 
+sub dlink {
+    my ($o, $ldname, $out) = @_;
+
+    $o->flags('cc', $o->flags('cc-dl'));
+    $o->flags('cxx', $o->flags('cxx-dl'));
+    new Maker::Unit(sub {
+	my $ld = $o->exe($ldname);
+	my $dir = $out;
+	$dir =~ s|\/[^/]*$||;
+	$o->x('mkdir', $dir);
+	my @src = $o->get_src('o','a');
+	if (newer($out, @src)) {
+	    $o->x($ld, $o->flags('ld-dl'), @src, "-o", $out, $o->flags('ld'));
+	    $o->x('chmod', 0755, $out);
+	}
+    });
+}
+
 sub link {
     my ($o, $ld, $out) = @_;
-
-    if ($out =~ /^lib/) {
-	# -G shared library
-	# -pic
-	die "not implemented";
-    } else {
-	$o->clean($out);
-	new Maker::Unit(sub {
-	    my $ld = $o->exe($ld);
-	    $o->x($ld, @{$o->{'src'}{o}}, "-o", $out, $o->flags('ld'));
-	});
-    }
+    my $name = $out;
+    $name =~ s|^.*/([^/]+)$|$1|;
+    $o->exe($name, $out);
+    $o->clean($out);
+    new Maker::Unit(sub {
+	my $ld = $o->exe($ld);
+	my @src = $o->get_src('o','a');
+	if (newer($out, @src)) {
+	    $o->x($ld, @src, "-o", $out, $o->flags('ld'));
+	}
+    });
 }
 
 # cache stat results XXX
@@ -385,13 +470,17 @@ require Test::Harness;
 sub test_harness {
     my ($o, $perl) = @_;
     new Maker::Unit('_test', sub {
-	$^X = $perl ? $perl : $o->exe('perl');
-	my @tests = grep(!/\~$/, sort glob('t/*'));
-	if ($o->nop) {
-	    for (@tests) { print "$^X -Mblib $_\n"; }
-	} else {
-	  Test::Harness::runtests(@tests);
-	}
+	if (!$perl) { $perl = $o->exe('perl'); }
+	else { $perl = $o->exe($perl); }
+	my $map = $o->{install_dirs};
+	print "PERL_DL_NONLAZY=1\n";
+	$ENV{PERL_DL_NONLAZY}=1;
+#	$ENV{PERL_DL_DEBUG}=1;
+	$o->z($perl, "-I$map->{arch}[0]", "-I$map->{lib}[0]", "-I$Config{archlib}",
+	      "-I$Config{privlib}", "-e",
+	      'use Test::Harness qw(&runtests $verbose); $verbose=0; runtests @ARGV;',
+	      grep(!/\~$/, sort glob('t/*.t')));
+
     });
 }
 

@@ -30,19 +30,19 @@
 // ************************************************************
 
 template<class T>
-class SPListBase
+class SPListBase : public os_virtual_behavior
 {
 private:
     enum{ALLOCINC=20};
     T *a;
     int cnt;
     int first;
-    int allocated;
     int allocinc;
     int firstshift;
     void grow(int amnt= 0, int newcnt= -1);
 
 protected:
+    int allocated;
     void compact(const int i);
 
 public:
@@ -89,7 +89,7 @@ public:
 // ************************************************************
 
 template <class T>
-class SPList: private SPListBase<T>
+class SPList: public SPListBase<T>
 {
 public:
     SPList(int sz= 10, int fs=1): SPListBase<T>(sz, fs){}
@@ -102,13 +102,14 @@ public:
     // add perl-like synonyms
     void reset(void){ erase(); }
     int scalar(void) const { return count(); }
+    int size_allocated(void) const { return allocated; }
 
     operator void*() { return count()?this:0; } // so it can be used in tests
     int isempty(void) const{ return !count(); } // for those that don''t like the above (hi michael)
 
     T pop(void);
 
-    void push(const T& a){ add(a);}
+    void push(const T& a1){ add(a1);}
     void push(const SPList<T>& l);
 
     T shift(void);

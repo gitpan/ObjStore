@@ -1,3 +1,7 @@
+# -*-perl-*-
+# Also a good test for reference counting because you can't
+# delete a segment that contains any data.
+
 BEGIN { $| = 1; $tx=1; print "1..3\n"; }
 
 sub ok { print "ok $tx\n"; $tx++; }
@@ -11,7 +15,7 @@ use ObjStore;
     
     my $junk = {
 	'nums' => { 1..50 },
-	'strs' => { qw(a b c d e f g h) },
+	'strs' => { qw(a b  c d  e f  g h), i => { a => 1 } },
     };
 
     try_update {
@@ -19,33 +23,35 @@ use ObjStore;
 	$john ? ok : not_ok;
 
 	my $seg;
-	if (!defined $john->{h1}) {
-	    $seg = $DB->create_segment();
-	    $john->{h1} = $seg->newHV('array');
-	    $john->{seg} = $seg->get_number();
-	} else {
-	    $seg = $DB->get_segment($john->{seg});
-	}
-	for (keys %$junk) { $john->{h1}{$_} = $junk->{$_}; }
+	{
+	    if (!defined $john->{h1}) {
+		$seg = $DB->create_segment();
+		$john->{h1} = new ObjStore::HV($seg, 10);
+		$john->{seg} = $seg->get_number();
+	    } else {
+		$seg = $DB->get_segment($john->{seg});
+	    }
 
-	# segment is from OSSVPV, not from OSSV
-	my $nseg = ObjStore::Segment->of(tied %{$john->{h1}});
-        if ($nseg->get_number() == $seg->get_number()) {
-	    ok;
-	} else {
-	    not_ok;
-	}
+	    # fill up the segment with junk to test refcnts
+	    my $h = $john->{h1};
+	    for (keys %$junk) { $h->{$_} = $junk->{$_}; }
 
-	# easy double-check
-	$nseg = ObjStore::Segment->of(tied %{$john->{h1}{nums}});
-        if ($nseg->get_number() == $seg->get_number()) {
-	    ok;
-	} else {
-	    not_ok;
-	}
+	    my $bob = new ObjStore::HV($h, 200);
+	    my $dict = new ObjStore::HV($h, 200);
+	    $h->{dict} = $dict;
+	    for (1..300) { $dict->{$_} = $bob; }
 
-	delete $john->{h1};
-	$seg->destroy;
+	    # segment is determined by OSSVPV, not from OSSV
+	    my $nseg = ObjStore::Segment::of(tied %{$john->{h1}});
+	    $nseg->get_number() == $seg->get_number()? ok : not_ok;
+	    
+	    # double-check the obvious
+	    $nseg = ObjStore::Segment::of(tied %{$john->{h1}{nums}});
+	    $nseg->get_number() == $seg->get_number()? ok : not_ok;
+	    
+	    delete $john->{h1};		# refcnts should go to zero
+	}
+	$seg->destroy;			# must be empty
     };
     print "[Abort] $@\n" if $@;
 }

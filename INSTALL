@@ -7,12 +7,12 @@ modify it under the same terms as Perl itself.
 
 
 Tested Systems:
-   sun4-solaris / SunPro 4.0 C++ / ObjectStore 4.0.1 or better
+   sun4-solaris / SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 4.0.1, 4.0.2, 5.0.0
 
 
 The build process is a bit radical and needs some hand-holding.
 
-1. perl ./be helpful
+1. 'perl ./be help'
 
 2. Make any necessary changes and run 'perl ./be'.
 
@@ -22,5 +22,5 @@ The build process is a bit radical and needs some hand-holding.
 4. 'perl ./be installed'
 
 
-If you suceed at building on a system that is not listed in above,
-please send a message to the mailing list announcing your success!
+If you succeed on a system that is not listed in above, please send
+a note to perl-objectstore@parallax.co.uk announcing your success!

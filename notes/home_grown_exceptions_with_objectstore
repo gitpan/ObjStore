@@ -1,0 +1,239 @@
+To: s-faq
+Subject: Using home grown exceptions with ObjectStore.
+--text follows this line--
+
+
+
+SUBJECT:	Using home grown exceptions with ObjectStore.
+
+PRODUCT:	ObjectStore
+
+PLATFORM:	All
+
+LANGUAGE:	C++
+
+VERSION:	3.1 and 4.0
+
+DATE:		3/15/95
+
+EXPIRATION:	Unknown
+
+KEYWORDS:	longjmp, setjmp, exception, TIX
+
+
+
+QUESTION:
+
+We want to have our own exception handling system.  Also,we want to be
+able to longjmp out of transactions and other ObjectStore code
+blocks. Can we do this? How can we mix our exceptions with the TIX
+exception handling mechanism in ObjectStore?
+
+
+ANSWER:
+
+If you are using a compiler that supports ANSI C++ exceptions and
+ObjectStore supports the integration of C++ exceptions on this
+platform, you should move your exception handling system to use ANSI
+exceptions. As of this writing this includes:
+
+- ObjectStore 3.0.2x for Windows NT/32s using Visual C++ 2.0
+- ObjectStore 3.1 for OS/2 using CSet++ 2.1
+
+After you have moved to ANSI exceptions you can freely mix
+ObjectStore TIX exceptions with your exceptions. However, you
+must still use TIX to handle ObjectStore exceptions. This
+will be the case until all compilers we support have implemented
+ANSI exceptions.
+
+If your compiler supports ANSI C++ exceptions, and you are unclear
+if ObjectStore supports their use on this platform, contact Object
+Design technical support.
+
+If you are using a compiler that does not support ANSI exceptions and
+you have your exception handling mechanism built on top of longjmp,
+here is how to integrate it with ObjectStore. In release 4.0 you may
+see an additional API. However, as of this writing this is the only
+planned API for release 4.0.
+
+First you must be using ObjectStore 3.1 or 4.X: 
+
+1) Create a tix_handler object on the stack where you want to longjmp
+or throw to giving it some made up exception as the argument to its
+constructor.
+
+2) Before you longjmp or throw call the _unwind_part_1() method on this
+object.
+
+3) Afterwards, call the _unwind_part_2() method.
+
+If you want ObjectStore to call an api of yours before it throws
+an exception, use the static tix_exception method:
+
+tix_exception::set_unhandled_exception_hook(unhandledexcept);
+
+The regiestered call back function (unhandledexcept) will get called
+prior to ObjectStore throwing an exception for which no TIX exception
+handler exists.
+
+Included is a sample program that eliminates the use of TIX all
+together.
+
+The included code tries to resolve a reference with no transaction
+active. This generates an ObjectStore exception for which there is no
+exception handler.
+
+Prior to doing this:
+-A setjmp handler was placed on the stack. 
+-A tix_handler object is created on the stack.
+-An unhandled exception hook was registered by 
+    tix_exception::set_unhandled_exception_hook(unhandledexcept);
+
+The function unhandledexcept gets called when an ObjectStore exception
+is raised. From with in the unhandled exception hook function we call
+unwind_part_1 on the tix_handler object.  After the lngjmp we call
+unwind_part2 on the tix_handler object.
+
+ObjectStore has now been cleaned up appropriately.
+
+
+
+--------------------------------------------------------------------
+
+/*********************************************************************************/
+/* Copyright (c) 1991 - 1994 Object Design, Inc.  All rights reserved.           */
+/*                                                                               */
+/* Object Design, Inc. Confidential Restricted material.  This work contains     */
+/* confidential trade secrets of Object Design, Inc.  Use, examination,          */
+/* copying, transfer and/or disclosure to others are prohibited, except with     */
+/* the express written agreement of Object Design, Inc.                          */
+/*                                                                               */ 
+/* "ODI IS DELIVERING THIS PROGRAM(S) TO CUSTOMER "AS IS," AND ODI DISCLAIMS ALL */
+/* WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF    */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND AVAILABILITY OF        */
+/* SUPPORT."                                                                     */
+/*********************************************************************************/
+
+#include <ostore/ostore.hh>
+
+DEFINE_EXCEPTION(my_exception,"This is the exception",0);
+#include <ostore/ostore.hh>
+#include <setjmp.h>
+#include <signal.h>
+
+void testdb();
+void tryitagain();
+
+
+
+
+main(int , char **)
+{
+
+    objectstore::initialize();
+
+    // Call unhandledexcept if an exception gets raised.
+
+    tix_exception::set_unhandled_exception_hook(unhandledexcept); 
+    
+    testdb();
+    return 0;
+}
+
+
+
+tix_handler *global_handler;
+
+os_transaction *start_trans()
+{
+    /*
+     * Start a transaction and set the global vars so that we can
+     * do the necessary undo\'s if an exception should occur
+     */
+
+    
+    os_transaction *tr = os_transaction::begin(os_transaction::update);
+
+    /* from odi, code to setup vars at transaction start */
+		
+
+
+    /* end from odi */
+
+    printf("Transaction %x started\n", tr);
+    return tr;
+}
+
+
+os_reference_protected *ref;
+os_database *db;
+os_transaction *tr;
+
+jmp_buf env;
+
+
+void testdb()
+{
+    db = os_database::create("test.db", 0666, 1);
+
+    tr = start_trans();
+    
+    int *obj = new(db,os_typespec::get_int()) int;
+
+    *obj = 385;
+    
+    db->create_root("myroot")->set_value(obj);
+
+    os_reference_protected *ref = new os_reference_protected(obj);
+
+    
+    os_transaction::commit(tr);
+
+    tix_handler un_wind_to_here(&my_exception);
+    global_handler = &un_wind_to_here;
+
+
+
+
+    if (setjmp(env) == 0) {	
+
+        /* this will generate an exception since there is no transaction */
+  	ref->resolve(); 
+	   
+    }
+    /* now try again */
+    global_handler->_unwind_part_2();
+
+    tryitagain();
+}
+
+void tryitagain()
+{
+    db->close();
+
+    
+    db = os_database::open("test.db", 0, 0666);
+
+    tr = start_trans();
+    printf("About to get root value\n");
+
+
+    os_database_root::find("myroot",db)->get_value();
+
+    printf("root find worked\n");
+    
+    os_transaction::commit(tr);
+
+}
+
+
+
+void unhandledexcept(tix_exception *err, os_int32 val, char *report)
+{
+
+    global_handler->_unwind_part_1(err, val, report);
+    longjmp(env,1);
+    
+}
+
+FAQ_reference: home_grown_exceptions_with_objectstore

@@ -3,6 +3,26 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 07-05-97 Released 1.06 
+
+- Improved peek.  Now peek from the command line - 'ospeek <database>'!
+
+- Database::get_all_roots Root::get_name
+
+- Fixes...
+
+
+** 07-03-97 Released 1.05
+
+- ObjectStore exceptions trigger a dump of the perl call stack.
+
+- Peek on sacks.
+
+- Bug fixes.
+
+- $store->set_fetch_policy(os_fetch_policy, os_int32)
+
+
 ** Released 1.03
 
 - Investigated schema evolution.  Will provide a database evolver

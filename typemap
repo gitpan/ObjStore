@@ -12,10 +12,10 @@ os_database *		O_OBJECT
 os_transaction *	O_OBJECT
 os_database_root *	O_OBJECT
 os_segment *		O_OBJECT
-os_cursor *		O_OBJECT
-os_collection *		O_OBJECT
-OSSV *			O_OBJECT
-
+OSSV *			O_OSSV
+OSSV_RAW *		O_OBJECT
+OSSVPV *		O_OSSVPV
+ossv_magic *		O_OBJECT
 
 ######################################################################
 INPUT
@@ -28,6 +28,26 @@ O_OBJECT
 		XSRETURN_UNDEF;
 	}
 
+O_OSSV
+	ossv_magic * ${var}_magic = osperl::sv_2magic($arg);
+	if (! ${var}_magic ) {
+		warn( \"${Package}::$func_name() -- $var is not a persistent type\" );
+		XSRETURN_UNDEF;
+	}
+	$var = ${var}_magic->force_ossv();
+
+O_OSSVPV
+	ossv_magic * ${var}_magic = osperl::sv_2magic($arg);
+	if (! ${var}_magic ) {
+		warn( \"${Package}::$func_name() -- $var is not a persistent type\" );
+		XSRETURN_UNDEF;
+	}
+	$var = ${var}_magic->ospv();
+	if (! $var ) {
+		warn( \"${Package}::$func_name() -- $var is not a persistent object\" );
+		XSRETURN_UNDEF;
+	}
+
 ######################################################################
 OUTPUT
 
@@ -35,3 +55,10 @@ OUTPUT
 # char* having the name of the package for the blessing.
 O_OBJECT
 	sv_setref_pv( $arg, CLASS, (void*)$var );
+
+O_OSSV
+	croak("not implemented");
+
+O_OSSVPV
+	croak("not implemented");
+

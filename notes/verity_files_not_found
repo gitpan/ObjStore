@@ -1,0 +1,67 @@
+SUBJECT:        Index objects error while running oswebdemo
+
+PLATFORM:       NT, Solaris
+
+OBJECTSTORE:    osforms 1.0 and 1.1
+
+DATE:           1996-06-07
+
+EXPIRES:        6/96
+
+KEYWORDS:       VdkSessionNew, INDEX, CATALOG
+
+QUESTION:
+
+ When I run the oswebdemo, as suggested in the README file that comes
+along with the installation, ie.
+
+oswebdemo\working> ..\bin\initdb.exe extra.db d:\nt\msinternet\oswebdemo,
+I get the following error message (the database is created but still 
+I get this error):
+Error    (): Error initializing message database
+Error    (): Warning initializing 
+VdkSessionNew returned error code: -20
+
+ObjectStore CATALOG ERROR - No registered message catalog contains msg# (0)
+[msg# (0) Message text is not available]
+INDEX OBJECTS: Error in VdkSessionNew
+
+What does this error mean and
+What do I do?
+
+ANSWER:
+
+
+This error message indicates that Verity can not find its
+configuration files that it needs to build indexes.
+
+As suggested in the README file please make sure that:
+
+1. Your PATH environment variable does indeed contain <%OSWEB_ROOTDIR%>\
+examples\webdemo\bin.
+
+2. Check to see if you are currently in the directory <%OSWEB_ROOTDIR%>\
+examples\webdemo\working
+
+3. Check to see if this directory (the working directory) has the following 
+hierarchy:
+  working
+    common
+      style
+      style2
+    vercol
+
+Also make sure that the style directory contains the files
+                 1,190 STYLE.DDD
+                 1,703 STYLE.DID
+                 1,026 STYLE.PDD
+                   742 STYLE.SID
+                    77 style.vgw
+                1,145 STYLE.WLD
+(this indicates the size and names of the files).
+
+And, most importantly check to see if you indeed have the 
+all the Verity files properly installed.
+
+4. Check to see if the objectstore server is up and running.
+

@@ -15,7 +15,7 @@ sub init_autonotify {
 	      : \&dispatch_notifications);
     $notifyEv = Event->io(e_desc => 'ObjStore::Serve::Notify',
 			  e_fd => ObjStore::Notification->_get_fd(),
-			  e_poll => 'r', e_cb => $cb);
+			  e_reentrant => 0, e_poll => 'r', e_cb => $cb);
 }
 
 #    ObjStore::Notification->set_queue_size(512);

@@ -38,6 +38,7 @@ sub add_index {
     $$o{_primary} ||= $index;
     $$o{_allindices} ||= [];
     $$o{_allindices}->PUSH($name);
+    $index;
 }
 
 sub remove_index {
@@ -129,6 +130,11 @@ sub map {
     $x->map($sub);
 }
 
+sub all_indices {
+    use attrs 'method';
+    shift->{_allindices} || []
+}
+
 sub map_indices {
     use attrs 'method';
     my ($o, $c) = @_;
@@ -139,12 +145,14 @@ sub map_indices {
 
 sub add {
     use attrs 'method';
+    croak 'ObjStore::Table3->add($)' if @_ != 2;
     my ($t, $o) = @_;
     $t->map_indices(sub { shift->add($o) });
     defined wantarray ? $o : ();
 }
 sub remove {
     use attrs 'method';
+    croak 'ObjStore::Table3->remove($)' if @_ != 2;
     my ($t, $o) = @_;
     $t->map_indices(sub { shift->remove($o) });
 }
@@ -154,13 +162,6 @@ sub compress {
 }
 
 sub table { $_[0]; }
-
-sub primary {
-    carp "primary is depreciated";
-    my ($o) = @_;
-    return if !$$o{_primary};
-    $o->index($$o{_primary});
-}
 
 package ObjStore::Table3::Database;
 use Carp;

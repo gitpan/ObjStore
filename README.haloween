@@ -13,13 +13,13 @@ offering benchmark obsoleting performance.
 
 * Automatic schema evolution.
 
-* Terminate and stay resident SQL emulator written in perl.
+* Terminate and stay resident SQL emulator.
 
 * Precomputes joins between an unlimited number of tables to reach
 bandwidths capable of causing radio interference.  (Also see
 manufacturers of spectroanalysis telemetry equipment.)
 
-* Directly-memory-access 64-bit channels for Sybase, Informix, or
+* Direct-memory-access 64-bit channels for Sybase, Informix, or
 Oracle relational databases.
 
 * Scales curvilinear with problem domain.

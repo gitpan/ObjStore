@@ -24,10 +24,11 @@ my $junk = {
 
 # see if transient works..
 eval {
-    for (qw(ObjStore::AV ObjStore::HV)) {
-	my $x = $_->new('transient');
-	s/^ObjStore::/My/;
-	bless $x, $_;
+    for my $t (qw(ObjStore::AV ObjStore::HV)) {
+	my $x = $t->new('transient');
+	my $nt = $t;
+	$nt =~ s/^ObjStore::/My/;
+	bless $x, $nt;
     }
 };
 ok $@||'', '', 'transient failed';
@@ -35,10 +36,11 @@ ok $@||'', '', 'transient failed';
 begin 'update', sub {
     # see if transient works..
     eval {
-	for (qw(ObjStore::AV ObjStore::HV)) {
-	    my $x = $_->new('transient');
-	    s/^ObjStore::/My/;
-	    bless $x, $_;
+	for my $t (qw(ObjStore::AV ObjStore::HV)) {
+	    my $x = $t->new('transient');
+	    my $nt = $t;
+	    $nt =~ s/^ObjStore::/My/;
+	    bless $x, $nt;
 	}
     };
     ok $@||'', '', 'transient failed';

@@ -10,9 +10,14 @@ following in the body of your message:
 
 + IDEAS +
 
-figure out how to keep PPCODE from trashing the stack!
+tied pvar
+  coderef to retrieve data from the database
+  cached during the transaction
+  refreshed if in a new transaction
 
 $hash->{seg} = $db->create_segment('foo'); #blows up (get_number missing!)
+
+try overload $${} to autoderef references
 
 sort tests into appropriate directories
 
@@ -27,8 +32,6 @@ disable autoload per class via some API
   deprecate _fake:: junk
 
 die with a ref!
-
-test case for freeze bug using databases on multiple hosts
 
 read the installed ObjStore::Config for defaults
 

@@ -15,15 +15,13 @@ except that s/SQL/Perl/ig.
 
 - Perl 5.005_03 or 5.005_5x
 
-- ExtUtils::ExCxx (only needed on Digital UNIX, HP (5.x), OS/2 (3.x),
-  or MS Windows NT/95; send email)
+- Exception::Cxx (only on some operating systems; send email)
 
 See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 
 =head1 IS THIS FOR GENERIC C++ OBJECTSTORE OR ONLY PERL?
 
-On Mon, 21 Sep 1998 tp@mccall.com wrote:
 > I was sort of hoping I'd be able to use perl to write quick-and-dirty data
 > manipulation scripts to mess around with my databases that are used by my
 > C++ applications. I don't know if I'd ever need that, but it sounded like
@@ -58,6 +56,15 @@ query is unique among database architectures.
 =head1 R!CENT CHANGES
 
 
+** 03-22-99 RELEASE 1.54 [STABLE]
+
+- Minor updates to ObjStore::Serve and ObjStore::Table3.
+
+- Better searching heuristics for MakeMaker.
+
+- Minor documentation updates.
+
+
 ** 02-11-99 RELEASE 1.53 [STABLE]
 
 - osperlserver no longer subscribes to notifications by default.  Use
@@ -68,25 +75,6 @@ automatically.  You must invoke begin_dyn() (in the ObjStore::Serve
 package) to be sure a transaction is open.
 
 - Various documentation updates.
-
-
-** 01-12-99 RELEASE 1.52
-
-- Split FatTree representation into a separate tarball.
-
-- Added ObjStore::REP::Splash::ObjAV, an array that stores only
-pointers to composites.
-
-- Fixed sub-optimal growth heuristics of Splash representations.
-
-- More correct integration between C & perl for APIs with a variable
-number of arguments.
-
-- Factored some tests into ObjStore::Test.
-
-- Updates for Event 0.29.
-
-- Remove deprecated code.
 
 
 see ./INSTALL for hints on installation

@@ -2,14 +2,14 @@
 
 use strict;
 use Test;
-eval { 
-    require Devel::Leak;
-    !$ObjStore::FEATURE{bridge_trace}
-} or do {
+#eval { 
+#    require Devel::Leak;
+#    !$ObjStore::FEATURE{bridge_trace}
+#} or do {
     plan test => 1;
     warn "# skipping leak test\n";
     exit;
-};
+#};
 
 plan test => 3;
 use ObjStore;

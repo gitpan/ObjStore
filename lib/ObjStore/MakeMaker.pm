@@ -1,4 +1,3 @@
-use 5.00404;
 use strict;
 package ObjStore::MakeMaker;
 use ObjStore::Config qw(DEBUG);
@@ -118,11 +117,17 @@ sub add_os_args {
 		$_ .= (" $strip ".join(' ',@$libs)." $ospdir -losperl");
 	    }
 	} else {
-	    $arg{INC} .= " -I$installsitearch/auto/ObjStore";
-	    push @{$arg{TYPEMAPS}}, "$installsitearch/auto/ObjStore/typemap";
+	    my $dir;
+	    for my $d ($installsitearch, @INC) {
+		$dir = $d if -e "$d/auto/ObjStore/osperl.h";
+	    }
+	    die "ObjStore does not seem to be installed correctly"
+		if !$dir;
+	    $arg{INC} .= " -I$dir/auto/ObjStore";
+	    push @{$arg{TYPEMAPS}}, "$dir/auto/ObjStore/typemap";
 	    for (@{$arg{LIBS}}) {
 		$_ .= (" $strip ".join(' ', @$libs).
-		       " -L$installsitearch/auto/ObjStore -losperl");
+		       " -L$dir/auto/ObjStore -losperl");
 	    }
 	}
     }

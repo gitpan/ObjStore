@@ -349,11 +349,7 @@ I didn't get a Ph.D in English.  Sorry!
 
 =back
 
-=head1 SOURCE CODE AVAILABILITY
-
-This section is not a legal contract.  This section is not a legal
-statement in any way, shape, or form.
-
+=head1 WHY?
 
 While there have been huge gains in software quality in the form of
 GNU, Perl, Apache, Linux, Qt, and Mozilla (potentially), the world has
@@ -364,17 +360,10 @@ level of quality and simplicity that I find invaluable in addressing
 the hurdles I face as a software professional.
 
 Combining ObjectStore & Perl might seem obvious in hindsight (doesn't
-it always?!) but it is my conscious conviction that it was something
-more than luck and hard work that gave me the necessary insight to
-imagine and implement this technology years before it would be
-recognized and adopted.  While I predict that this software will be
-considered a great achievement (along with many other significant
-contributions), I did (and do) not see it as such.  Rather, it was a
-simple mechanical exercise that helped me gain a basic level of clear
-understanding (with the happy side effect of being useful in a
-business context).
-
-If you will suspend disbelief for a moment, I would like to invite you
+it always?!) but it is my conviction that it was something more than
+luck and hard work that gave me the insight to imagine and implement
+this technology years before it would be recognized and adopted.  If
+you will suspend disbelief for a moment, I would like to invite you
 imagine a hypothetical situation.  What if you found someone who was
 absolutely convincing in their knowledge of the absolute?  What if you
 had an opportunity to spend time with them?  What would you do?
@@ -383,40 +372,37 @@ Designing software requires a basic subtlety of awareness.  To be
 successful you must be able to fluctuate fluidly between the place of
 reason and the place of silent knowledge.  The place of concern is the
 forerunner to the place of reason.  Similarly, the place of unbending
-intent is the forerunner to the place of silent knowledge.  Yet, this
-technique is not limited exclusively to software design.  And there is
-a big difference between mastering software design and knowing the
-hidden potential of your own true self.  Let me emphasize the word
-B<big>.
+intent is the forerunner to the place of silent knowledge.  Happily,
+this technique is not limited to software design exclusively.
 
 Not that there is anything wrong with software design.  Computers have
 an evolutionary function: they (can) help people to understand the
 difference between the mechanical and the non-mechanical aspects of
-themselves.  Computers are I<entirely> mechanical.  Don't believe the
+themselves.  Computers are *entirely* mechanical.  Don't believe the
 anthropomorphisms.  Computers cannot create anything without our help;
 they only do as they are instructed.  Probably this is easy to see.
 However, many people seem to have difficulty seeing what should be
-equally obvious: the pure, non-mechanical creative principle.  Ask
-yourself these questions: Who is the software designer?  Who imagines?
-Who moves the fingers to type?  To try to know yourself consciously is
-the most worthy and worthwhile goal.  Therefore, evolution is served
-by making available software that is very similar to part of our own
-mechanical thinking processes.  By understanding this special type of
-software, consciousness is aided in understanding how the brain works.
-(I am not referring exclusively to the field of artificial
-intelligence.  The brain is a data processor in the broadest sense and
-the algorithms of artificial intelligence are only a part of that.)
+equally obvious: the pure, non-mechanical creative principle in
+themselves.
 
-So I have clear intention as to why I am developing this software and
-why I am (foolishly!) giving it away for free.  By contributing to the
+Ask yourself these questions: Who is the software designer?  Who
+imagines?  Who moves the fingers to type?  IMHO, to try to know
+yourself consciously is the most worthy and worthwhile goal.
+Therefore, evolution is served by making available software that is
+very similar to our mechanical thinking processes.  By understanding
+this type of software, consciousness is aided in understanding how the
+brain works.  (I am not referring exclusively to the field of
+artificial intelligence.  The brain is a data processor in the
+broadest sense and the algorithms of artificial intelligence are only
+a part of that.)
+
+I have clear intention as to why I am developing this software and why
+I am (foolishly!) giving it away for free.  By contributing to the
 evolution of others' understanding, I contribute to my own evolution.
 The better one understands, the less experience is wasted in states of
 confusion.  As you learn how this database works, you will assimilate
-the perspectives that I have consciously distilled.  Self knowledge
-can be actualized when enough perspectives are gathered and special
-subjective techniques are used to reach the fixed point.  My real
-interest is the subjective fact of your existance.  When you have time
-to pursue it, look me up!  Until then, you are welcome to use this
-software anyway (it will work wonders :-).
+the perspectives that I have consciously distilled.  If you wish to
+pursue this to a greater depth, please consider visiting
+http://www.purposeofcompetition.org .
 
 =cut

@@ -9,7 +9,7 @@ use base 'ObjStore::HV';
 use vars qw($VERSION @ISA @EXPORT_OK $SERVE $Init $TXOpen);
 $VERSION = '0.05';
 push @ISA, 'Exporter', 'osperlserver';
-@EXPORT_OK = qw(&txqueue &txretry &seconds_delta &dyn_begin
+@EXPORT_OK = qw(&txqueue &txretry &seconds_delta &dyn_begin &dyn_commit
 		&init_signals &meter &exitloop $ChkptEv);
 
 my $meter_warn=0;
@@ -251,16 +251,19 @@ sub defaultLoop {
     ObjStore::Serve::Notify::init_autonotify();
     if (!$Init) { &init_signals; ++$Init }
     $ChkptEv = Event->timer(e_desc => 'ObjStore::Serve checkpoint',
-			    e_nice => -1, e_hard => 0, 
-			    e_interval => \$LoopTime, e_repeat => 0,
-			    e_cb => sub {
+			    e_nice => -1, e_hard => 0, e_repeat => 0,
+			    e_interval => \$LoopTime, e_cb => sub {
 				eval { dyn_commit($ChkptEv->{e_repeat}) };
 				if ($@) { warn; unloop_all() }
 			    });
     $Event::DIED = sub {
 	my ($e, $why) = @_;
-	$TXN->abort;
-	my $m = "Event '$e->{e_desc}' died: $why";
+	my $how = 'died';
+	if ($TXN and !$TXN->is_aborted) {
+	    $TXN->abort;
+	    $how = 'aborted';
+	}
+	my $m = "Event '$e->{e_desc}' $how: $why";
 	$m .= "\n" if $m !~ m/\n$/;
 	warn $m;
     };

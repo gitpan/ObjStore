@@ -75,7 +75,6 @@ lib/ObjStore/ServerDB.pm
 lib/ObjStore/ServerInfo.pm
 lib/ObjStore/Set.pm
 lib/ObjStore/SetEmulation.pm
-lib/ObjStore/Sex.pm
 lib/ObjStore/Table.pm
 lib/ObjStore/Table2.pm
 lib/ObjStore/Table3.pm

@@ -1,6 +1,6 @@
 # This is -*-perl-*- !
 use Test;
-BEGIN { plan tests => 23 }
+BEGIN { plan tests => 21 }
 
 use strict;
 use ObjStore;
@@ -79,15 +79,6 @@ sub testify {
     undef $@;
 
     delete $ah->{'not there'};
-
-    @k = ();
-    my $c = $ah->new_cursor;
-    $c->moveto(-1);
-    while (my ($k,$v) = $c->at) {
-	push(@k, $k);
-	$c->next;
-    }
-    ok(join('', sort @k) eq '1245678');
 }
 
 require ObjStore::REP::Splash;

@@ -40,7 +40,7 @@ C<ObjectStore> OODBMS (see http://www.odi.com - evaluations are available!)
 
 =item *
 
-Perl 5.004_04 (or perl 5.005, once released)
+Perl 5.005 (5.004_04 might be okay)
 
 =item *
 
@@ -53,20 +53,22 @@ or MS Windows NT/95; send email)
 
 =back
 
-=head1 TUTORIAL
+=head1 WHAT IS THIS GREEN SLIME??
 
-One way to get started is to win the tutorial.  See
-C<ObjStore::Tutorial> or, if you just can't wait, run the following
-code and start molding it right now:
+Maybe you're feeling like you're in unfamiliar territory?  Green slime
+is oozing from the ceiling and something doesn't smell right.  I hope
+you're a quick learner!  Many people haven't made it.  Learning is
+always tough.  But isn't it easier to get ahead than to get left
+behind?  It's a preditory world.  Which alternative is really easier?
 
 =head2 Quick Start!
 
   #!/usr/local/bin/perl -w
  
   use ObjStore;
-  use ObjStore::Config;   #for TMP_DBDIR
+  use ObjStore::Config ('$TMP_DBDIR');
  
-  my $db = ObjStore::open(TMP_DBDIR."/myjunk", 'update', 0666);
+  my $db = ObjStore::open("$TMP_DBDIR/myjunk", 'update', 0666);
  
   begin 'update', sub {
 
@@ -86,7 +88,29 @@ code and start molding it right now:
     ObjStore::peek($db);               #dump to stdout
   };
 
-=head2 TOOLS
+=head2 Incomplete Inheritance Tree
+
+  ObjStore::UNIVERSAL
+        ObjStore::Container
+              ObjStore::AV
+                    ObjStore::AV::QSet
+                    ObjStore::AVHV
+                    ObjStore::Path::Ref
+                    ObjStore::REP::FatTree::Index::Conf
+                    ObjStore::REP::ODI::HashIndex::Conf
+                    ObjStore::REP::Splash::Heap::Conf
+              ObjStore::HV
+                    ObjStore::AVHV::Fields
+                    ObjStore::Serve
+                    ObjStore::ServerDB::Top
+                    ObjStore::Table3
+              ObjStore::Index
+        ObjStore::Cursor
+        ObjStore::Ref
+
+Also see L<Devel::Symdump>.
+
+=head2 Tools
 
 =over 4
 
@@ -163,7 +187,8 @@ an expected cardinality of ten elements.
 
 Complete array support is available, but you must must have at least
 perl 5.004_57.  If you don't, none of the usually array operations are
-supported except fetch and store.  At least the following works:
+supported except fetch and store.  At least the following always
+works:
 
     $a7->[1] = [1,2,3,[4,5],6];
 
@@ -206,6 +231,9 @@ the top-level of the database.
 
 =head2 Cursors
 
+*** First-class cursors for arrays & hashes are EXPERIMENTAL and
+mostly UNIMPLEMENTED. ***
+
 All containers have a method, C<new_cursor($near)>, that creates a
 persistent cursor for the given container.  The following methods are
 available.
@@ -216,12 +244,6 @@ available.
   ($k,$v) = $cs->each(1);       # returns the next element
 
 =over 4
-
-=item *
-
-First-class cursors for arrays & hashes are incomplete and under
-construction.  If you can avoid them, do so!  (Array cursors might be
-depreciated entirely.)
 
 =item *
 
@@ -259,7 +281,7 @@ Index cursors are a B<lot> more powerful than hash or array cursors.
 Here are the available methods:
 
   $c->focus();
-  $c->moveto();
+  $c->moveto($record_no);
   $c->step($delta);
   $c->seek(@keys);
   my $pos = $c->pos();            
@@ -280,19 +302,21 @@ Certain representations for indices (trees) are very sensitive to the
 proper order of the records that they contain.  To eliminate the
 possibility of indices becoming out-of-sync with actual data, keys are
 marked read-only as they are added to the index.  This insures that
-the indexed records will stay in the right order.
+the indexed records will stay in the right order. [rewrite! XXX]
 
 For example:
 
   my $category = { name => 'Bath Toy' };
   my $row = { name => 'Rubber Ducky', category => $category };
 
-  $index->configure(path => 'category/name, name', excl => 1);
+  $index->configure(path => 'category/name, name');
   $index->add($row);
 
   $row->{category}{name} = 'Beach Toy';  #READONLY exception
   $row->{name} = "Rubber Doggie";        #READONLY exception
   $row->{owner} = $bob;                  #ok
+
+[OUT OF DATE]
 
 The first key is the category's name.  The second key is the row's
 name.  This is one more detail to be aware of.  There are two types of
@@ -755,7 +779,7 @@ The word I<tuning> implies too high a brain-level requirement.
 B<Getting performance out of C<ObjectStore> is not rocket science.> On
 the other hand, you shouldn't think that perl will ever go as fast as
 optimized C<C++>.  That's what DLL schemas are for.  [Add a URL to the
-example here]
+example here XXX]
 
 =over 4
 
@@ -764,19 +788,19 @@ example here]
 Transactions, especially update transactions, involve a good deal of
 setup/cleanup.  The more you do per transaction the better.
 
-=item * IS MUTABLE DATA MOSTLY SEPARATED FROM READ-ONLY DATA?
+=item * AVOID THE NETWORK
 
-Update transaction commit time is proportional to the amount of data
-written AND to the number of pages with modifications.  Examine your
-data-flow and data-dependencies.
+Run your program on the same machine as the C<ObjectStore> server.
 
 =item * SEGMENTS
 
 Is your data partitioned into a reasonable number of segments?
 
-=item * AVOID THE NETWORK
+=item * IS MUTABLE DATA MOSTLY SEPARATED FROM READ-ONLY DATA?
 
-Run your program on the same machine as the C<ObjectStore> server.
+Update transaction commit time is proportional to the amount of data
+written AND to the number of pages with modifications.  Examine your
+data-flow and data-dependencies.
 
 =item * COMPACTNESS
 
@@ -797,18 +821,22 @@ your client-side cache bigger/smaller.
 
 =item * SPEED UP PERL
 
-Try using the perl compiler.  See http://www.perl.com
+Try using the perl compiler.  See 'perlcc --help'.
 
 =item * LOCKING AND CACHING
 
 Object Design claims that caching and locking parameters also impact
 performance.  (See C<os_segment::set_lock_whole_segment> and
-C<os_database::set_fetch_policy>.)
+C<os_database::set_fetch_policy>.)  You may also be able to take
+advantage of their knowledgable consulting services.  Consider it!
 
 =item * AVOID THE DATABASE
 
-Memory is faster than databases.  If you don't need all the guarentees
-of data integrity, then pure RAM is as fast as it gets.
+Plain cheap RAM is always faster than any database.  If you don't need
+all the guarentees of data integrity, then memory-mapped files or
+battery-backed RAM are as fast as it gets.  There is no reason that an
+application cannot make use of every opportunity to optimize for
+speed.
 
 =back
 
@@ -860,7 +888,7 @@ or not, you can leave the mode unspecified.
 Built-in automatic deadlock retry is not supported.  It is not
 supported not because it is doesn't work but because it doesn't make
 much sense in perl.  Since deadlock retry is so easy to implement
-yourself, you probably should.
+yourself, you should (if you even need it).
 
 =back
 
@@ -891,7 +919,7 @@ persistent reference to it or kiss the object goodbye.
 
 Note that the C<DESTROY> method is still invoked every time an object
 becomes unreachable from the current scope.  However, contrary to
-transient objects this method does not preview persistent object
+transient objects, this method does not preview persistent object
 destruction.  (Hacking C<DESTROY> such that it can be used as
 C<NOREFS> is desirable, but would require changes to the core perl
 code-base.  This change is under consideration.)
@@ -900,10 +928,10 @@ Also see C<ObjStore::Mortician>!
 
 =head2 C<posh>
 
-C<posh> is your interactive window into databases.
+C<posh> is your command-line window into databases.
 
 It is designed treat your data in an application specific manner.
-Customize by providing your own implementation for these methods:
+Customize by providing your own implementation of these methods:
 
 =over 4
 
@@ -1071,7 +1099,7 @@ Just like C<C++>, the lack of a universal generic schema limits use to
 single applications.  Without some sort of C<tie> mechanism, I can't
 imagine how this could be remedied.  (Even with C<tie>, it might
 already be too late.  Java was not conceived to evolve quite as
-rapidly as is perl.  Imagine that: "designed to evolve"!)
+rapidly as is perl.  It's a paradox:  "Design for change!")
 
 =item *
 
@@ -1084,7 +1112,7 @@ god-like compiler technology can completely cure poor language design.
 
 Perl integrates with C<Java> and the C<SwingSet / AWT> API.  (Of
 course, this is a moot point if you can use C<Qt> -
-http://www.troll.no/.)
+http://www.troll.no/ or Gtk.)
 
 =back
 
@@ -1116,7 +1144,7 @@ be exported.
 
 =head1 ENVIRONMENT VARIABLES
 
-OSPERL_SCHEMA_DB  [MORE SOON]
+OSPERL_SCHEMA_DBDIR
 
 =head1 AUTHOR
 
@@ -1136,8 +1164,8 @@ ftp://ftp.wolfman.com/users/morris/public/splash .
 
 =head1 SEE ALSO
 
-C<ObjStore::Tutorial>, C<ObjStore::Table3>, examples in the t/
-directory, C<ObjStore::Internals>, C<Event>, C<PerlQt>, and C<The SQL
-Reference Manual> (I<just kidding> :-)
+C<ObjStore::Table3>, examples in the t/ directory,
+C<ObjStore::Internals>, C<Event>, C<PerlQt>, and C<The SQL Reference
+Manual> (I<just kidding> :-)
 
 =cut

@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { plan tests => 37, todo => [18] }
+BEGIN { plan tests => 35 }
 
 use ObjStore;
 use lib './t';
@@ -55,21 +55,6 @@ sub testify {
 
     begin sub { $a->[3] = 100 };
     ok($@ =~ m/READONLY/) or warn $@;
-
-    my @k;
-    my $c;
-    begin sub { $c = $a->new_cursor; };
-    undef $@;
-    if ($c) {
-	$c->moveto(-1);
-	while (my ($k,$v) = $c->at) {
-	    push(@k, $k);
-	    $c->next;
-	}
-	ok(join('', sort @k) eq '01101112131415161718192202122232425262728293303132333435363738394404142434445464748495506789');
-    } else {
-	ok(0);
-    }
 };
 
 require ObjStore::REP::Splash;

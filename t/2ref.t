@@ -35,7 +35,7 @@ ObjStore::fatal_exceptions(0);
 my $tsave;
 my ($safe, $unsafe);
 
-my $tdb = ObjStore::open(TMP_DBDIR."/toast", 'update', 0666);
+my $tdb = ObjStore::open($ObjStore::Config::TMP_DBDIR."/toast", 'update', 0666);
 begin sub {
     ok(@{[$tdb->get_all_roots]} == 0);
 };
@@ -66,7 +66,7 @@ begin('update', sub {
     $unsafe = $tsave->{unsafe}->dump;
 
     #norefs
-    $saver = new ObjStore::AV($db);
+    $saver = ObjStore::AV->new($db);
     $saver->[0] = 1;
     new noref_test($db);
     undef $saver;

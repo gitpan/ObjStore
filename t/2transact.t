@@ -24,7 +24,7 @@ for ('read','write') {
     ok(lock_timeout($_), $t);
 }
 
-eval { &ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
+eval { &ObjStore::lookup($ObjStore::Config::TMP_DBDIR . "/bogus.db", 0); };
 ok($@ =~ m/does not exist/) or warn $@;
 
 # make sure the tripwire is ready

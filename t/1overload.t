@@ -1,10 +1,12 @@
 #-*-perl-*-
 use Test;
-BEGIN { plan tests => 7 }
+BEGIN { plan tests => 10 }
 
 use ObjStore ':ADV';
 use lib "./t";
 use test;
+
+my $undef = undef;
 
 &open_db;
 begin 'update', sub {
@@ -15,6 +17,9 @@ begin 'update', sub {
     $john->{h} = {};
 
     ok $john;
+    ok !$john, '';
+    ok $john == $undef, '';
+    ok $john != $undef;
     ok $john == $john_copy;
     ok "$john" eq "$john_copy";
 

@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test 1.03;
-BEGIN { plan tests => 9 }
+BEGIN { plan tests => 43 }
 
 use strict;
 use ObjStore ':ALL';
@@ -30,9 +30,11 @@ begin 'update', sub {
     ok($fatty->[0] == 1.5);
     $fatty->[0] = 'Welcome!'x4097;  #will be truncated
     ok $fatty->[0], '/^Welcome/';
+
+    my $expect = '';
     $fatty->[0] = '';
-    for ('a'..'z') { $fatty->[0] .= $_; }
-    for ('a'..'z') { chop $fatty->[0] }
+    for ('a'..'q') { $fatty->[0] .= $_; $expect .= $_; ok($fatty->[0],$expect) }
+    for ('a'..'q') { chop $fatty->[0]; chop $expect; ok($fatty->[0],$expect) }
 
     ok defined $fatty->[0] && length $fatty->[0] == 0, 1;
     $fatty->[0] = undef;

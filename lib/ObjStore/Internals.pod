@@ -23,6 +23,12 @@ belong.
 
 =back
 
+So basically, you don't have to understand anything to a greater
+depth.  It's not necessary.  You've already arrived and you will be
+successful.  On the other hand, some people want more.  They like to
+turn things inside-out.  These are my kind of people.  In this case,
+read on!
+
 =head1 DESCRIPTION
 
 =head2 Perl & C<C++> APIs: What's The Difference?
@@ -81,8 +87,8 @@ difference in compactness can be quite noticable.
 =head2 Representation
 
 All values take a minimum of 8 bytes (OSSV).  These 8 bytes are used
-to store a 16-bit type, a pointer, and a general purpose 16-bit
-integer.
+to store 16-bits of type information, a pointer, and a general purpose
+16-bit value.
 
   value stored                   extra allocation (in addition to OSSV)
   ------------------------------ -------------------------------------
@@ -93,6 +99,7 @@ integer.
   double                         8 byte block (OSPV_nv)
   string                         length of string (char*)
   object (ref or container)      sizeof object (see subclasses of OSSVPV)
+                                 additional references take no extra space
   bless                          .5-1k bytes per class (zero per object)
 
   %ObjStore::sizeof XXX
@@ -115,8 +122,9 @@ If this seems like a lot of overhead, consider that it is not really
 possible to directly compare these numbers to RDBMS statistics.  (Part
 of the problem is that RDBMS vendors can't even give you these
 statistics.)  At least note that relational data can be stored with
-much less duplication when moved into C<ObjectStore>.  (Definitely
-true if you design your own C++ extensions!)
+much less duplication when moved into C<ObjectStore>.  This is
+unquestionably true when you tailor your own C++ extensions to fit the
+data and access patterns.
 
 =head2 Hard-Coded Limits
 
@@ -131,14 +139,8 @@ Please submit a one page description of your application for judging.
 
 =item *
 
-Readonly counts are only 16 bits.  Once the counter reachs 2^16-10,
-the object becomes permenantly readonly.  This should not be a problem
-in practice (actually, not even in theory).
-
-=item *
-
 Strings are limited to a length of 32767 bytes.  (This limit will be
-relaxed!)
+relaxed in a future version.)
 
 =back
 
@@ -226,7 +228,8 @@ optimized, persistent bit vectors?  Or matrics?  No problem.
 Indices are extremely efficient because they do not copy their keys.
 It is critical that another pointer to C<OSSV>s is not stored, since
 C<OSSV>s can be relocated when arrays need to grow.  C<OSSVPV>s are
-never relocated.
+never relocated.  OTOH, C<OSSVPV>s should be able to change
+representations.  Hm..
 
 =head2 Notes On The Source Code
 
@@ -283,7 +286,7 @@ deleted objects or removed databases.  (Imagine the freedom. :-)
 =item * LEAKS TRANSIENT C<XPVRV>s
 
 The problem is thoroughly understood.  Work-arounds or a real fix have
-been discussed on the perl-porters mailing list.  Well designed
+been discussed on the perl5-porters mailing list.  Well designed
 mechanisms are being developed to solve this problem correctly.
 [Fixed?]
 
@@ -331,9 +334,9 @@ statement in any way, shape, or form.
 
 While there have been gains in software quality in the form of GNU,
 Perl, Apache, Linux, Qt, and recently the Netscape browser
-(potentially), we are still in the dark ages with respect to database
+(potentially), we have been in the dark ages with respect to database
 technology.  After avoiding relational databases for years, I sensed a
-combination of persistance and perl could offer the same level of
+combination of ObjectStore and Perl could offer the same level of
 quality and simplicity that I find invaluable in addressing the
 hurdles I face as a software professional.
 
@@ -341,14 +344,14 @@ It might seem obvious in hindsight (doesn't it always?!), but it is my
 conviction that it was something in particular (not just luck!) that
 encouraged me imagine and implement this cutting-edge technology years
 before it would be recognized and adopted.  Therefore, I would like to
-express a poignant "thank you!" to all the wonderful teachers with
-whom I've had the opportunity of studying.  My ideas are truly theirs.
-While I predict that this software will be considered a world-class
-inter-disciplinary achievement, I do not see it as such.  Rather, I
-see it as a simple mechanical exercise employed to bring me to a basic
-level of clear understanding.  My subsequent hope is that people who
-use this software will also be able to learn from its clarity.  But
-what are my real aspirations?
+say "thank you!" to all the wonderful teachers with whom I've had the
+opportunity of studying.  My ideas are truly theirs.  While I predict
+that this software will be considered a world-class inter-disciplinary
+achievement, I do not see it as such.  Rather, I see it as a simple
+mechanical exercise employed to bring me to a basic level of clear
+understanding.  My subsequent hope is that people who use this
+software will also be able to learn from its clarity.  But what are my
+real aspirations?
 
 I should keep quiet about that but I can say this much: One of my
 friends had an email signature: "Life would be so much easier if we
@@ -362,8 +365,29 @@ belief to be true.  If you want to find out for yourself (first hand),
 I would strongly encourage such an inquiry.  You must seriously
 consider the hard, imporant questions in concert with a well regarded
 teacher.  If you have never studied in this way, I highly recommend
-it.  (It is a priceless opportunity.)  And I guarantee that if you
-look sincerely you will find what you seek.  (Or I'll give you double
-your money back. :-) Trust me, it's worth it.
+it.  (It is an opportunity that is also priceless.)  And I guarantee
+that if you look sincerely you will find what you seek.  (Or I'll give
+you double your money back. :-) Trust me, it's worth it.
+
+In fact, one of the main reasons I bothered to kill myself developing
+this software (and foolishly giving it away for free!) is that I
+wanted to emphasize this point as strongly as possible.  There is
+nothing more important to me.  And yet on the other hand, I know that
+other people may have different priorities.  That is okay.  You are
+welcome to use this software even if you are interested exclusively in
+satisfying your own greed (it will work wonders :-).  However, I have
+an obligation to state the truth.  You can either be part of the
+problem or part of the solution.  And what is at stake is much more
+significant, much bigger than you think.  Designing software requires
+a basic subtlety of awareness: to be successful, you must be able to
+fluctuate fluidly between the place of reason and the place of silent
+knowledge.  The place of concern is the forerunner to the place of
+reason.  Similarly, the place of unbending intent is the forerunner to
+the place of silent knowledge.  Yet, this technique, in my opinion, is
+(worse than?) worthless unless it is properly directed at trying to
+answer the hard, important questions.  If you continue to persist in
+not caring very much, you will find out what is the result.  Your life
+will be become the result!  But always I wish everyone well and the
+best of luck.  :-) You have been warned, but will you take action?
 
 =cut

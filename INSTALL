@@ -1,25 +1,27 @@
 ------------------------------------------------------------ INSTALLATION
 
-*** If do not have (or cannot upgrade) to ObjectStore 5.1, you should
-*** stick with version 1.40 of this extension.
+*** IF DO NOT HAVE (OR CANNOT UPGRADE) TO OBJECTSTORE 5.1, YOU SHOULD ***
+*** STICK WITH VERSION 1.41 OF THIS EXTENSION.                        ***
 
 
 Tested Configurations:
 
-  + perl 5.004_04, 5.004_68
+
++ perl 5.005
 
 
-  + Solaris 2.5.1 & 2.6
++ Solaris 2.5.1 (2.6 should work too)
 
-     SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.1
+  SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.1
 
+  ** REQUIRED: ODI fix #13866 (_Rep_desc_type_table::dope_compatible
+  forgets to fixup name key in name hash table)
 
-  + gmake
 
 -------------------------------------------------------------------------
 *** BUILD STEPS
 
-1. edit lib/ObjStore/Config.pm
+1. edit ./lib/ObjStore/Config.pm
 
 2. cd API; perl Makefile.PL; make install
 
@@ -32,7 +34,7 @@ Tested Configurations:
 6. make install
 
 You have to install the API separately before building the rest of the
-package.  This is because everything depends on the libosperl.so
+package.  The reason is because everything depends on the libosperl.so
 library being in the right place.  (Is there a better way?)
 
 -------------------------------------------------------------------------
@@ -43,9 +45,25 @@ library being in the right place.  (Is there a better way?)
 - Keep running 'make test' until the database size matches.  It takes
 me about three trials.  If it will not match, there is probably a
 serious REFCNT problem.  If you are feeling paranoid, you can check
-that object counts do not increase between runs with 'ossize -c'.
+that object counts do not increase between runs with 'ossize -c
+<database>'.
 
-- The mailing list wants to know if something strange happens!
+-------------------------------------------------------------------------
+*** TROUBLE SHOOTING
+
+- Depending on the platform and whether you built perl to a shared or
+static library, you might need to disable perl's malloc.  This does
+not seem to be necessary on Solaris 2.X.
+
+- If you need to get a stack trace of an ObjectStore exceptions,
+you'll need to use the following breakpoints:
+
+stop in `ObjStore.so`XS_ObjStore__Transaction_SEGV_reason
+stop in `libc.so.1`abort
+ignore SEGV
+cont
+
+- Send any problem reports to the mailing list!
 
 -------------------------------------------------------------------------
 

@@ -61,7 +61,7 @@ TestDB {
     obj => PTest (1) {
       is => 1,
     },
-    right => 70,
+    right => 69,
 
   },
   tripwire => ObjStore::HV (1) {

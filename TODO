@@ -10,43 +10,39 @@ following in the body of your message:
 
 + IDEAS +
 
-transient indices can get unsorted (corrupted) DOCUMENT!
-  shouldn't return reason:  virtual char *remove(OSSVPV*);
+think about avoiding string copies again?
+can BLESS be faster? (at least the first time?)
 
-environment variables to change schema paths!
+tests
+  pathexam.t - test all comparison branches
+  each POSH_PEEK method
+  todo test for unsuccessful path traversals (yuck!)
 
-!! 5.1 schema compatibility problem !!
+any traverse2 should check for RV (&die)
 
-Firble
+ObjStore::Serve
+  customization of pre-commit stats?
 
-Subroutine new redefined at /data/research/usr03/lib/perl5/site_perl/sun4-solaris/ObjStore/REP.pm line 24.
-  examine mod_perl solution!
+performance
+  modification counters?
+  bless: should cache transient refs?
+  AVHV: should create a transient ref to the layout?
+  can easily cache whether object needs AVHV style traverse
 
-AVHV: should create a transient ref to the layout? XXX
-
-_private_root_data XS? XXX
-
-eradicate unneeded dOSP
+Index
+  PUSH & UNSHIFT: just verify the order is correct
 
 RE-THINK:
   sub isa { _isa(@_, 1); }
   sub versionof { _versionof(@_, 1); }
   sub is_evolved { _is_evolved(@_, 1); }
 
-bridges per-thread?
-  optional transaction-level mutex to debug data accesses?
-  move cursor stuff to separate struct
-
-study the perl compiler (ExCxx)
-
-osperlserver -l:daily /tmp/log/qsg_gui.19980304?
-  maybe put logic in ObjStore::Process?
-
-more support for DLL schemas?
-  generic scalar object typemap?
-  XPVMG abstraction?
-  REFCNT?
-  Bit::Vector?
+patches
+  PERL_OBJECT / ExCxx
+  XSthr.h
+  ref overload
+  fold osp_croak back into perl
+  MakeMaker patch for blib shared libraries
 
 Mike Guy writes: How about "die if in a void context"?  That would get
 the best of both worlds.  I'd like to see that style used much more in
@@ -56,17 +52,25 @@ results of open comes particularly to mind.
 
 + VAGUE POSSIBILITIES +
 
-make all depreciated stuff autoloaded
+more support for DLL schemas?
+  generic scalar object typemap?  XPVMG abstraction?
+  Bit::Vector?
 
-Makefile.PL
-  install twice required...?
+arrays using a doubly-linked list representation
+
+threads
+  optional transaction-level mutex to debug data accesses?
+
+fatal_exceptions(0) by default?
+
+pathexam
+  It is feasible to skip load_path if the index matches...?  Hm.
+
+make all depreciated stuff autoloaded
 
 perl magic should be non-lazy?
 
-patches
-  XSthr.h
-  ref overload
-  fold osp_croak back into perl
+_private_root_data XS? XXX
 
 -MObjStore=-Dflags ?
 
@@ -77,13 +81,14 @@ transactions
 qtposh
   AVHV looks different depending whether it goes through resolve??!
   resolve failures seem not to get reported
-  try to share more code between posh & qtposh
+  share more code between posh & qtposh
 &
   optionally distinguish between return and enter keys
   word wrap, but it doesn't seem to be supported
 
 posh
-  merge with ObjStore::Posh::Cursor?
+  merge with ObjStore::Posh::Cursor
+  $HOME/.poshrc
   display style?  web integration?  cgi-posh?
 
 ~magic ownership check?
@@ -93,8 +98,6 @@ $ref->notify('m1', 'batch'); ???
 configure unique index duplicate row behavior?
 
 configure(...) : relax parameter limitation
-
-remove copy of sv_dump
 
 split all the server goodies into a separate package?
 
@@ -112,7 +115,10 @@ typemap
 permutation magic for AVHV
   ObjStore::Index::_(un)protect?
 
-translate('transient', $persistent)
+translate('transient', $persistent) ??
+
+The ObjStore version should be stored in a separate root with a
+fixed data structure like double[10]?
 
 move ObjStore::subscribe back into ObjStore::Notification?
 
@@ -127,12 +133,9 @@ get_database
   factor
   os_server::get_databases() ignores bless; yikes!
 
-per- database/segment shared hash key strings?  (for small hashes?)
-
-prune debugging stuff
+prune excessive debugging hooks
 
 posh
-  Devel::Symdump->methods when peeking if blessed?
   Multiple sessions per user?  Who cares?
   Call system() when in ufs?  How about rawfs?
 Peeker
@@ -143,15 +146,11 @@ cache last lookup to avoid gv_fetchmethod(NOREFS)?
 
 script to insure consistent podding? (get Pod::Parser?)
 
-finish migration to OSPV_Cursor2
-
 assignment to $SIG{SEGV} should not reset SEGV handler
 
 transaction hooks?
 
 factor error messages like diagnostics.pm?
-
-depreciate os_object_cursor?
 
 ObjStore::File!  Use a FatTree of 4K buffers?
 

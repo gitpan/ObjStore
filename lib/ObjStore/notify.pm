@@ -1,7 +1,7 @@
 use strict;
 package ObjStore::notify;
 use Carp;
-use vars qw($Debug);
+use vars qw(@Check);
 
 sub import {
     no strict 'refs';
@@ -12,22 +12,28 @@ sub import {
 #	croak "can't find method $ {p}::do_$m" 
 #	    unless defined *{"$ {p}::do_$m"}{CODE};
 	*{"$p\::$m"} = sub {
+	    for my $x (@Check) { $x->($p,$m,@_) }
 	    my $o = shift;
-	    if ($ObjStore::notify::Debug) {
-		my $ok=1;
-		for my $arg (@_) { $ok=0 if !defined $arg || $arg =~ / $; /x }
-		if (!$ok) {
-		    my @args;
-		    for my $arg (@_) { push @args, defined $arg?$arg:'UNDEF' }
-		    my $args = join(',', @args);
-		    $args =~ s/ $; /\$\;/gx;
-		    carp "$o->$p\::$m($args)\n";
-		}
-	    }
 	    my $msg = join($;, $m, @_);
 	    $o->notify($msg, 'now');
 	    ()
 	};
+	ObjStore::_mark_method(\&{"$p\::$m"});
+    }
+}
+
+sub check_arguments {
+    my $p = shift;
+    my $m = shift;
+    my $o = shift;
+    my $ok=1;
+    for my $arg (@_) { $ok=0 if !defined $arg || $arg =~ / $; /x }
+    if (!$ok) {
+	my @args;
+	for my $arg (@_) { push @args, defined $arg?$arg:'UNDEF' }
+	my $args = join(',', @args);
+	$args =~ s/ $; /\$\;/gx;
+	carp "$o->$p\::$m($args)\n";
     }
 }
 
@@ -57,6 +63,6 @@ Declares a simple stub method that invokes the C<notify> method.
 Works in concert with C<ObjStore::Process::autonotify>.
 
 There will probably be a way to alias this package to 'notify', so you
-can 'use notify'.
+can type 'use notify' instead of 'use ObjStore::notify'.
 
 =cut

@@ -1,13 +1,12 @@
 use strict;
 package ObjStore::Job::Table;
 use ObjStore;
-require Event;
+use Event 0.05;
 use base 'ObjStore::Table3';
 use ObjStore::Serve qw(txretry meter);
 use builtin qw(max min);           # available via CPAN
-use vars qw($VERSION $Interrupt $WorkLevel $RunningJob $Idle);
+use vars qw($VERSION $Interrupt $WorkLevel $RunningJob);
 $VERSION = '0.02';
-$Idle = 0;
 
 require ObjStore::Job;
 
@@ -45,27 +44,24 @@ sub restart {
     my $jref = $o->new_ref('transient','hard');
     my $worker;
     my $work = 0;
-    $worker = sub {
-	++$work;
-	meter('ObjStore::Job::Table->work');
-	my $left = $jref->focus->work();
-	if ($left <= 0) {  # need more slices!
-	    Event->idle($worker) if !$Idle;
-	} else {
-	    $Idle = 0;
-	}
-    };
-    Event->timer(-interval => 1, -callback => sub {
-		     Event->idle($worker) if !$Idle;
-		     $Idle=1;
-		 },
-		 -desc => "jobs idle");
+    $worker = Event->idle(desc => 'ObjStore::Job::Table',
+			  callback => sub {
+			      ++$work;
+			      meter('ObjStore::Job::Table->work');
+
+			      my $left = $jref->focus->work();
+
+			      # need more slices?
+			      $worker->again if $left <= 0;
+			  });
+
+    Event->timer(-interval => 1, -callback => sub { $worker->again },
+		 -desc => "ObjStore::Job::Table timer");
     Event->timer(-interval => 3, -callback => sub {
-		     local $Idle = $Idle;
-		     $worker->() if !$work;
+		     $worker->{callback}->() if !$work;
 		     $work = 0;
 		 },
-		 -desc => "jobs force");
+		 -desc => "ObjStore::Job::Table FORCE");
 }
 
 # Assumes one Job::Table per database.

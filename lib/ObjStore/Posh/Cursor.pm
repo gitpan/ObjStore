@@ -3,7 +3,7 @@ package ObjStore::Posh::Cursor;
 use ObjStore ':ADV';
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-$VERSION = '0.71';
+$VERSION = '0.72';
 
 sub new {
     my ($o) = shift->SUPER::new(@_);

@@ -22,6 +22,8 @@ manufacturers of spectroanalysis telemetry equipment.)
 * Directly-memory-access 64-bit channels for Sybase, Informix, or
 Oracle relational databases.
 
+* Scales curvilinear with problem domain.
+
 * Internet ready.
 
 Available via http://www.perl.com/CPAN/modules/by-module/ObjStore

@@ -5,53 +5,18 @@ ObjStore - Perl Extension For C<ObjectStore> OODBMS
 =head1 SYNOPSIS
 
 Like perl?  Sick of SQL?  Ready to try something new?  This extension
-implements databases that look exactly like normal perl.  These same
-databases can also be easily extended with arbitrary C++ objects.
-
-=head1 DESCRIPTION
-
-ObjectStore is the market leader in object-oriented databases
-http://www.odi.com (NASDAQ: ODIS).  They use a unique Cache-Forward
-Architecture to make persistent data available in literally the most
-efficient manner possible.
-
-Prior to this joining of forces ObjectStore was too radical a design
-decision for many applications and perl5 did not have a simple way of
-storing complex data persistently.  Now there is an easy way to build
-database applications (especially if you are concerned about
-preserving your ideals of encapsulation).
-
-=head2 INCLUDED TOOLS
-
-=over 4
-
-=item * ospeek
-
-Prints out databases in Data::Dumper style.
-
-=item * posh & qtposh
-
-Like C<sh>/C<csh>, except that you can I<change directory> B<into>
-your database and walk around the data from the inside.  You can also
-invoke methods on your objects or write custom reports (in perl, of
-course :-).  (Also similar to C<isql>/C<wisql>.)
-
-=item * osperlserver
-
-Provides remote method invokation, database job scheduling, and
-server-object collaboration services.  Completely generic!
-
-=back
+implements databases that look exactly like normal perl.  The same can
+also be extended with arbitrary C++ objects (!).
 
 =head1 PREREQUISITES
 
 You will need:
 
-- ObjectStore 5.X (see http://www.odi.com; evaluations are available!)
+- ObjectStore 5.1 (see http://www.odi.com; evaluations are available!)
 
-- Perl 5.004_04 (or perl 5.005, once released)
+- Perl 5.005 (perl 5.004_04 might still work)
 
-- Tree::Fat & Test perl extensions
+- Tree::Fat perl extension
 
 - ExtUtils::ExCxx (only needed on Digital UNIX, HP (5.x), OS/2 (3.x),
   or MS Windows NT/95; send email)
@@ -62,12 +27,44 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 =head1 R!CENT CHANGES
 
 
-** 07-07-98 RELEASE 1.41
+** 07-27-98 RELEASE 1.42
 
-This release will probably be the last release before 2.00.  This
-release is important because it is appears to be able to manipulate
-2.00 databases without requiring ObjectStore 5.1 and shared libraries.
-Release 2.00 and subsequent releases will require ObjectStore 5.1.
+- ObjectStore 5.1 is required.  Static linkage is no longer supported.
+OTOH, it is now easy to create persistent C++ objects that are
+seemlessly integrated into perl databases.  Raw C++ performance must
+be sacrificed no longer!  As there is no longer any application
+schema, APIs to configure it have been removed.  A new environment
+variable, OSPERL_SCHEMA_DBDIR, overrides the default schema directory.
+
+Indu Strypundit is quoted as calling this release a tour-de-force of
+technical bravada.  "We suspected that the number forty-two in the
+version might be significant.  It was."
+
+- Many of the core API classes have been through yet another round of
+extensive polishing in preparation for a binary API freeze (or at
+least a chill :-).  The pathexam apparatus has been entirely rewritten
+and is now available at the perl level as ObjStore::PathExam.
+
+- Various osperlserver enhancements including: a -shutdown <when>
+option, an -reload option, and a automatic snapshotting of all
+VERSIONs on startup (see ObjStore::Serve).
+
+- Simplified read-only protocol for indices.  Either keys are
+indexable just once or they must be read-only.
+
+- A few more problems with exception handling were fixed.  Errors were
+not being reported properly in rare circumstances.
+
+- Use the 'methods' command to enquire about available methods in
+posh (5.005 only).
+
+- Schema support for non-ObjStore::Index cursors and ObjStore::Set
+have been dropped.  sync_INC/get_INC is no longer supported.  The
+readonly method is no longer implemented (but you can still check
+easily with eval).
+
+
+** 07-07-98 RELEASE 1.41
 
 - If an object is blessed into a package matching RE m/_fake\:\:/,
 then the package will be ignored (on reads).  A script for generic
@@ -77,29 +74,16 @@ import of CSV files is now a trival exercise.
 well as standard transactions.  The performance gain appears
 measurable.
 
+- Prototyped an ObjStore::Index with a (splash) binary heap
+representation.
+
 - Indices now auto-dereference (just once) in the case that references
 are used.
 
-- Deadlocks are no longer automatic retried.  If you still need this,
-it is easy enough to cobble it together yourself.
-
-
-** 05-30-98 RELEASE 1.40
-
-- Scrubbed code with Insure++ (Parasoft).  Insure++ is a product
-similar to Purify, except better.  Fixed a bug in the os_Dictionary
-hash representation.
-
-- A better effort is made to vivify the @ISA tree when it is
-(partially) unloadable.  This change is aimed towards allowing the
-creation of databases without any .pm file support (discardible
-scaffolding).
-
-- Relaxed restrictions on comparing index keys of differing type.
-
-- & the usual suite of minor bug fixes...
-
-- Edit the Makefile.PL to add -DOSP_SAFE_BRIDGE if you still need it!!
+- Transaction deadlocks are no longer re-tried automatically.  If you
+relied on this behavior it is fairly easy to cobble it together
+yourself.  Perl 5.005 will allow die $ref, which makes the
+implementation even closer to trival.
 
 
 see ./INSTALL for hints on installation

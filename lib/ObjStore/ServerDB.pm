@@ -9,7 +9,7 @@ use vars qw($VERSION);
 $VERSION = '0.04';
 
 sub fork_server {
-    warn "EXPERIMENTAL";
+    carp "EXPERIMENTAL";
     my ($o,$path) = @_;
     $path ||= $o->get_pathname() if ref $o;
     my $class = ref $o || $o;

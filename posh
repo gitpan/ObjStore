@@ -399,8 +399,9 @@ Inside of databases:
    cd $at->...         # your expression should evaluate to a persistent ref
    cd ..               # what you expect
    ls
-   peek                # ls but more
+   peek                # ls with more detail
    raw                 # ignore special POSH_PEEK methods
+   methods             # show available methods (perl 5.005 only)
    pwd
    <or any perl statement!>
 
@@ -440,20 +441,38 @@ sub pwd {
     ();
 }
 
-# revisit once perl-porters figure out how to mark methods XXX
 sub methods {
     my ($ref) = @_;
+    $ref ||= $at;
     my $pack = ref $ref? ref $ref : $ref;
-    my $result;
+    my %result;
+    use attrs;
     no strict;
     # magic adapted from Devel::Symdump
     while (($key,$val) = each(%{*{"$pack\::"}})) {
 	local(*ENTRY) = $val;
 	if (defined $val && defined *ENTRY{CODE}) {
-	    $result->{$key}++;
+	    my @a = attrs::get(*ENTRY{CODE});
+	    for (@a) {
+		$result{$key} = $pack if $_ eq 'method';
+	    }
 	}
     }
-    $result;
+    print "package $pack;\n";
+    print "\@ISA=( ".join(', ', map { "'$_'" } @{"$pack\::ISA"})." );\n";
+    if (keys %result) {
+	my $prefix = "methods: ";
+	print $prefix;
+	my $col= length $prefix;
+	for (sort keys %result) {
+	    do { print "\n".' 'x9; $col=9; } if $col + length > 75;
+	    print "$_ ";
+	    $col += 1+length;
+	}
+	print "\n";
+    } else {
+	print "No methods found.\n"
+    }
 }
 
 package Posh::FakeTerm;

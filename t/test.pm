@@ -4,8 +4,11 @@ package test;
 #use Carp qw(verbose carp croak);
 use Carp;
 use Test;
+use Cwd;
+#use DynaLoader ();
+#BEGIN { unshift @DynaLoader::dl_library_path, getcwd."blib/arch/auto/ObjStore"; }
 use ObjStore;
-use ObjStore::Config ':ALL';
+use ObjStore::Config;
 require Exporter;
 @ISA = 'Exporter';
 @EXPORT = qw(&test_db &open_db $db);
@@ -24,7 +27,7 @@ if (1) {
     };
 }
 
-sub test_db() { TMP_DBDIR . "/perltest" }
+sub test_db() { $ObjStore::Config::TMP_DBDIR . "/perltest" }
 
 sub open_db() {
     $db = ObjStore::open(test_db(), 'update');

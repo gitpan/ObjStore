@@ -14,8 +14,7 @@ sub new {
     if ($app !~ m'/') {
 	my $dbdir = $ENV{"\U${app}_DBDIR"};
 	if (!$dbdir) {
-	    require ObjStore::Config;
-	    $dbdir = ObjStore::Config::TMP_DBDIR();
+	    $dbdir = $ObjStore::Config::TMP_DBDIR;
 	}
 	$app = "$dbdir/$app";
     }

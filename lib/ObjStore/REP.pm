@@ -3,6 +3,13 @@ package ObjStore::REP;
 use Carp;
 use ObjStore;
 
+sub be_compatible {
+    # I'm not sure how to make this more conditional? XXX
+    require ObjStore::REP::Splash;
+    require ObjStore::REP::FatTree;
+    require ObjStore::REP::ODI;
+}
+
 sub load_default {
     my $ty = caller;
     my $sub;
@@ -18,10 +25,13 @@ sub load_default {
 	require ObjStore::REP::FatTree;
 	$sub = \&Index;
     } else {
-	croak "load_default($ty)";
+	croak "load_default($ty)?";
     }
-    no strict 'refs';
-    *{"$ty\::new"} = $sub;
+    {
+	no strict 'refs';
+	local $^W = 0;
+	*{"$ty\::new"} = $sub;
+    }
     goto &$sub;
 }
 

@@ -8,15 +8,15 @@ use Test;
 BEGIN { plan tests => 5 }
 END { ok($loaded);}
 
-use ObjStore;
-$loaded = 1;
-
 use lib './t';
 use test;
 
+use ObjStore;
+$loaded = 1;
+
 #$ObjStore::REGRESS = 1;
 #ObjStore::debug 'PANIC';
-#ObjStore::debug qw/txn bridge/;
+#ObjStore::debug qw/schema/;
 
 $db = ObjStore::open(&test_db, 0, 0666);
 ok($db);

@@ -7,7 +7,10 @@ use vars qw($VERSION);
 $VERSION = '1.00';
 
 sub ROOT() { carp "ROOT is depreciated, sorry"; 'hv' }
-sub hash { $_[0]->root('hv', sub {new ObjStore::HV($_[0], 25)} ); }
+sub hash {
+    use attrs 'method';
+    $_[0]->root('hv', sub { ObjStore::HV->new($_[0], 25) });
+}
 
 sub STORE {
     my ($o, $k, $v) = @_;
@@ -55,17 +58,18 @@ class instead of roots:
 =item * PERFORMANCE
 
 You have no control over the implementation of roots.  Performance is
-unknown and cannot be improved or degraded.
+unknown and cannot be improved or degraded.  (The "do it yourself"
+principle.)
 
 =item * FLEXIBILITY
 
 If you want to move the top-level hash down to a deeper level, you
-cannot easily do this with roots.
+cannot easily do this with roots.  (Principle of consistany.)
 
 =item * NON-STANDARD
 
 The standard way to create hash-oriented databases is with
-C<ObjStore::HV::Database>.
+C<ObjStore::HV::Database>.  (Proof by paradox.)
 
 =back
 

@@ -6,6 +6,7 @@ use vars qw($VERSION);
 $VERSION = '0.02';
 
 sub new {
+    use attrs 'method';
     # a unique $id could be constructed with join('.', `hostname`, $$, $id++);
 
     my ($class, $near, $id, $priority) = @_;
@@ -25,10 +26,12 @@ sub new {
 }
 
 sub runnable {
+    use attrs 'method';
     my $state = shift->{state};
     $state ne 'D' and $state ne 'K';
 }
 sub running {
+    use attrs 'method';
     my $state = shift->{state};
     $state eq 'R' or $state eq 'S';
 }
@@ -68,6 +71,7 @@ sub do_acknowledge {  #like wait(2)
 }
 
 sub cancel {
+    use attrs 'method';
     my ($o) = @_;
     $$o{job_table}->focus->remove($o);
 }

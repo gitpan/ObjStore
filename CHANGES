@@ -1,3 +1,19 @@
+** 05-30-98 RELEASE 1.40
+
+- Scrubbed code with Insure++ (Parasoft).  Insure++ is a product
+similar to Purify, except better.  Fixed a bug in the os_Dictionary
+hash representation.
+
+- A better effort is made to vivify the @ISA tree when it is
+(partially) unloadable.  This change is aimed towards allowing the
+creation of databases without any .pm file support (discardible
+scaffolding).
+
+- Relaxed restrictions on comparing index keys of differing type.
+
+- Edit the Makefile.PL to add -DOSP_SAFE_BRIDGE if you still need it!!
+
+
 ** 05-10-98 RELEASE 1.39
 
 - Fixed a long standing problem with transaction memory usage.  Memory

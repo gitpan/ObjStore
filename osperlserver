@@ -3,8 +3,8 @@
 use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
-use vars qw($VERSION @DB $DAEMON $Loop %Debug $Shutdown);
-$VERSION = '0.54';
+use vars qw($VERSION @DB $DAEMON $Loop %Debug $Shutdown $AutoReloader);
+$VERSION = '1.00';
 $DAEMON = 1;
 my $default_server = 'ObjStore::ServerDB';
 
@@ -36,6 +36,7 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	warn, next if $@;
 	if ($way eq 'M') {
 	    $m->import(@im);
+	    $AutoReloader = 1 if $m eq 'blib' && !defined $AutoReloader;
 	} else {
 	    $m->unimport(@im);
 	}
@@ -52,6 +53,8 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	}
     } elsif ($o =~ m/^-shutdown/) {
 	$Shutdown = $ARGV[++$arg];
+    } elsif ($o =~ m/^-((no)?)reload/) {
+	$AutoReloader = $1 eq 'no'? 0 : 1;
     } elsif ($o !~ m/^-/) {
 #	warn "osperlserver: database.db is boring" if $o =~ m/\.db$/;
 	push @DB, $o;
@@ -142,6 +145,14 @@ for (@DB) {
 
 # checkpoint timer should be a command line option?
 
+if ($AutoReloader) {
+    eval {
+	require Module::Reload;
+	$Module::Reload::Debug = $Module::Reload::Debug = 1;
+	Event->timer(interval => 1, callback => sub { Module::Reload->check });
+    };
+    warn if $@;  #ok if not available
+}
 if ($Shutdown) {
     require Date::Manip;
     Date::Manip->import();
@@ -149,7 +160,7 @@ if ($Shutdown) {
     warn "osperlserver: do not understand -shutdown '$Shutdown' (ignored)\n"
 	if !$at;
     # assumes that Event is in control... XXX
-    Event->timer(-interval => 60, -callback => sub {
+    Event->timer(interval => 60, callback => sub {
 		     my $d = DateCalc('now',$at);
 		     if ($d !~ m/^\+/) {
 			 warn "shutdown at ".UnixDate($at,"%u")."\n";
@@ -175,6 +186,7 @@ if (!$Loop->can('Loop')) {
 sub usage {
     print "
 Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
+  -(no)reload       run Module::Reload every second (requires Event)
   -d\\w+
      b              enable boot diagnostics
      n              print notifications to STDERR

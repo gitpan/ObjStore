@@ -3,13 +3,14 @@ use strict;
 package ObjStore::Serve;
 use Carp;
 use Exporter ();
-use Event; #0.02 or better recommended
+use Event; #0.03 or better recommended
 use IO::Handle;
 use IO::Poll '/POLL/';
 use Time::HiRes qw(gettimeofday tv_interval);
 use ObjStore;
 use base 'ObjStore::HV';
-use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $SERVE %METERS $Init $TXOpen);
+use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $SERVE %METERS $Init $TXOpen $VERSION);
+$VERSION = '0.02';
 push @ISA, 'Exporter', 'osperlserver';
 @EXPORT_OK = qw(&txqueue &txretry &meter &exitloop &seconds_delta
 		$LoopLevel $ExitLevel &init_signals);
@@ -49,6 +50,7 @@ sub seconds_delta {
 }
 
 sub get_all_versions {
+    # adapted from Devel::Symdump!
     my ($V, @todo) = @_;
     my @more;
     for my $pack (@todo) {
@@ -67,6 +69,7 @@ sub get_all_versions {
 	}
     }
     get_all_versions($V, @more) if @more;
+    $V;
 }
 
 sub restart {
@@ -78,23 +81,30 @@ sub restart {
 	sub { die '['.localtime()."] $ObjStore::Server::EXE($$): $_[0]" };
 
     # If we made it here, our assumption is that the database
-    # is not currently being serviced by a live server.  We
-    # will take control.
+    # is not currently being serviced by a live server.
+    # We take control.
     $ObjStore::TRANSACTION_PRIORITY = 0x8000;
 
     $SERVE = $o->new_ref('transient','hard');
     my $h = $$o{history} ||= [];
     my $now = time;
-    my $V = {};
-    get_all_versions($V,'main');
+    my $V = get_all_versions({},'main');
+    $V->{'perl'} = $];
     $h->UNSHIFT({ VERSION => $V, restart => $now, mtime => $now,
 		  recent => [], total => {} });
 }
 
-use vars qw($Status $LoopLevel $ExitLevel);
+sub VERSION {
+    my ($o,$p,$req) = @_;
+    return $o->SUPER::VERSION($p) if $p =~ /^[\d\._]$/;
+    my $v = $o->{history}[0]{VERSION}{$p} || 0;
+    if (defined $req and $req > $v) {
+	croak "$p version $req required--this is only version $v"
+    } else { $v }
+}
 
+use vars qw($Status $LoopLevel $ExitLevel);
 $LoopLevel = $ExitLevel = 0;
-#ObjStore::set_max_retries(0);
 ObjStore::fatal_exceptions(0);
 
 # Don't wait forever! XXX
@@ -128,22 +138,48 @@ sub before_checkpoint {
 	    # make sure we're still in charge
 	    ObjStore::Server->touch($$now[0]);
 
+	    # MAKE EXTENDABLE? XXX
+
+	    # include StatINC by default?
+	    # 
+
 	    # update various stats
 	    my $o = $SERVE->focus;
 	    my $r = $o->{history}[0];
 	    
+	    my ($max_commit,$max_loop) = (0)x2;
+	    $max_commit = $r->{max_commit}[0]{commit_time} if
+		$r->{max_commit};
+	    $max_loop = $r->{max_loop}[0]{loop_time} if $r->{max_loop};
+
 	    my $recent = $$r{recent};
 	    my $prior = $recent->[$#$recent] if @$recent;
-	    $prior->{commit_time} = $ChkptTime if $prior;
-	    push @$recent, { loop_time=> tv_interval($TxnTime, $now),%METERS };
+	    if ($prior) {
+		$prior->{commit_time} = $ChkptTime;
+		if ($ChkptTime > $max_commit) {
+		    my $ar = $r->{max_commit} ||= [];
+		    $ar->UNSHIFT($prior);
+		    $ar->[0]{at} = $$now[0];
+		    pop @$ar if @$ar > 10;
+		}
+	    }
+	    my $loop_time = tv_interval($TxnTime, $now);
+	    push @$recent, { loop_time=> $loop_time, %METERS };
 	    shift @$recent if @$recent > 10;
+
+	    if ($loop_time > $max_loop) {
+		my $ar = $r->{max_loop} ||= [];
+		$ar->UNSHIFT($recent->[$#$recent]);
+		$ar->[0]{at} = $$now[0];
+		pop @$ar if @$ar > 10;
+	    }
 	    
 	    if ($prior) {
 		local $^W=0; #lexical warnings XXX
-		my $t = $$r{total};
-		while (my($k,$v) = each %$prior) { $t->{$k} += $v; }
-		if ($Aborts) { $t->{aborts} += $Aborts; $Aborts = 0; }
-		if ($Commits) { $t->{commits} += $Commits; $Commits = 0; }
+		my $tot = $$r{total};
+		while (my($k,$v) = each %$prior) { $tot->{$k} += $v; }
+		if ($Aborts) { $tot->{aborts} += $Aborts; $Aborts = 0; }
+		if ($Commits) { $tot->{commits} += $Commits; $Commits = 0; }
 	    }
 	    $$r{mtime} = $$now[0];
 	    $BeforeCheckpoint = $now;
@@ -190,9 +226,18 @@ sub dotodo {
 ################################################# default
 
 sub defaultLoop {
-    init_autonotify();
+    require ObjStore::Serve::Notify;
+    ObjStore::Serve::Notify::init_autonotify();
     *Loop = \&Loop_single;
     shift->Loop();
+}
+
+if ($Event::VERSION >= .03) {
+    # Event >= 0.03
+    *doOneEvent = \&Event::Loop::doOneEvent
+} else {
+    # Event <= 0.02
+    *doOneEvent = \&Event::DoOneEvent
 }
 
 ################################################# without threads
@@ -213,7 +258,7 @@ sub Loop_single {
             if ($waiter and $waiter->()) {
 		exitloop('ok');
             } else {
-                while (!$Checkpoint and !$TXN->is_aborted) {Event->DoOneEvent() }
+                while (!$Checkpoint and !$TXN->is_aborted) { doOneEvent() }
             }
         };
         if ($@) { warn; $TXN->abort }
@@ -225,7 +270,7 @@ sub Loop_single {
 }
 
 # WARNING: please do not call this directly!
-use vars qw($UseOSChkpt);
+use vars qw($UseOSChkpt $Timer);
 sub _checkpoint {
     my ($class, $continue) = @_;
     if ($TXN) {
@@ -248,8 +293,13 @@ sub _checkpoint {
             $TXN = ObjStore::Transaction->new($SERVE? 'update' : 'read');
         }
         start_transaction();
-        Event->timer(-after => $LoopTime, -callback => sub {++$Checkpoint},
-		     -desc => "checkpoint");
+	if (!$Timer) {
+	    $Timer = Event->timer(-after => $LoopTime,
+				  -callback => sub { ++$Checkpoint },
+				  -desc => "ObjStore::Serve checkpoint");
+	} else {
+	    $Timer->again;
+	}
         # don't acquire any unnecessary locks!
     }
 }
@@ -310,7 +360,7 @@ sub Loop_mt {
 		    lock $TXOpen;
 		    dotodo() if $TXOpen && @TXready;
 		}
-		Event->DoOneEvent();
+		doOneEvent();
 	    };
 	    if ($@) {
 		warn;
@@ -362,65 +412,6 @@ sub exitloop {
     }
 }
 
-################################################# notifications
-
-# separate file?
-use vars qw($OVERFLOW);
-
-my $notifyEv;
-sub init_autonotify {
-    die "autonotify already invoked" if $notifyEv;
-    my ($Q) = @_;
-    my $fh = IO::Handle->new();
-    $fh->fdopen(ObjStore::Notification->_get_fd(), "r");
-    my $cb = ($Q? sub { $Q->enqueue(DATA => \&dispatch_notifications,
-				    PRIORITY => 2) }
-	      : \&dispatch_notifications);
-    $notifyEv = Event->io(-handle => $fh, -events => POLLRDNORM,
-                          -callback => $cb, -desc => "notifications");
-}
-
-#    ObjStore::Notification->set_queue_size(512);
-
-$OVERFLOW=0;
-sub dispatch_notifications {
-    # split out overflow detect? XXX
-    my ($sz, $pend, $over) = ObjStore::Notification->queue_status();
-    #       $MAXPENDING = $pend if $pend > $MAXPENDING;
-    if ($over != $OVERFLOW) {
-	warn "lost ".($over-$OVERFLOW)." messages";
-	$OVERFLOW = $over;
-    }
-
-    my $max = 10;  # XXX?
-    begin 'update', sub { # need transaction? XXX
-	while (my $note = ObjStore::Notification->receive(0) and $max--) {
-	    my $why = $note->why();
-	    my $f = $note->focus();
-	    my @args = split /$;/, $why;
-	    my $call = shift @args;
-	    warn "$f->$call(".join(', ',@args).")\n"
-		if $osperlserver::Debug{n};
-	    meter(ref($f)."->".$call);
-	    my $mname = "do_$call";
-	    my $m = $f->can($mname);
-	    if (!$m) {
-		no strict 'refs';
-		if ($ { ref($f) . "::UNLOADED" }) {
-		    warn "autonotify: attempt to invoke method '$mname' on unloaded class ".ref $f."\n";
-		} else {
-		    warn "autonotify: don't know how to $f->$mname(".join(', ',@args).") (ignored)\n";
-		    # warn "Loaded: ".join(" ",sort keys %INC)."\n";
-		}
-		next
-	    }
-	    $m->($f, @args);
-	    # fallback to searching @{ blessed($m)."::NOTIFY" } ??XXX
-	}
-    };
-    warn if $@;
-}
-
 1;
 __END__
 
@@ -433,7 +424,9 @@ __END__
 =head1 DESCRIPTION
 
 EXPERIMENTAL package to integrate ObjStore transactions with Event.
-Implements dynamic transactions.  Great service is key.
+Implements dynamic transactions.
+
+Great service is key.
 
 =head1 SEE ALSO
 

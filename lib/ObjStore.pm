@@ -13,12 +13,11 @@ use vars
     qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS 
        %sizeof $INITIALIZED $RUN_TIME $OS_CACHE_DIR),
     qw($FATAL_EXCEPTIONS $SAFE_EXCEPTIONS $REGRESS),           # exceptional
-    qw($SCHEMA_DB $CLIENT_NAME $CACHE_SIZE
-       $TRANSACTION_PRIORITY),                                 # tied
-    qw($DEFAULT_OPEN_MODE $MAX_RETRIES),                       # simulated
-    qw($EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
+    qw($CLIENT_NAME $CACHE_SIZE $TRANSACTION_PRIORITY),        # tied
+    qw($DEFAULT_OPEN_MODE),                                    # simulated
+    qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.41';
+$VERSION = '1.42';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -41,8 +40,7 @@ require DynaLoader;
 		    &set_stargate &DEFAULT_STARGATE
 		    &PoweredByOS),
 		 # depreciated
-		 qw(&release_major &release_minor &release_maintenance
-		    &set_transaction_priority &subscribe &unsubscribe
+		 qw(&set_transaction_priority &subscribe &unsubscribe
 		   ));
     my @x_old = qw(&schema_dir &get_max_retries &set_max_retries);
     my @x_priv= qw($DEFAULT_OPEN_MODE %CLASSLOAD $CLASSLOAD $EXCEPTION
@@ -53,26 +51,12 @@ require DynaLoader;
 		    qw(&try_read &try_abort_only &try_update));
     @EXPORT_FAIL = ('PANIC');
     @EXPORT_OK   = (@EXPORT, @x_adv, @x_tra, @x_old, @x_priv, @EXPORT_FAIL);
-    %EXPORT_TAGS = (ADV => [@EXPORT, @x_adv],
+    %EXPORT_TAGS = (DEFAULT => [@EXPORT],
+		    ADV => [@EXPORT, @x_adv],
 		    ALL => [@EXPORT, @x_adv, @x_tra]);
 }
 
-sub import {
-    no strict 'refs';
-    my $me = shift;
-    my $class = caller($Exporter::ExportLevel);
-
-    # Minimize the performance hit of gv_fetchmethod... XXX
-#    if (! defined &{"$class\::DESTROY"}) {
-#	warn $class."DESTROY";
-#	*{"$class\::DESTROY"} = sub {};
-#    }
-#    if (! defined &{"$class\::NOREFS"}) {
-#	warn $class."NOREFS";
-#	*{"$class\::NOREFS"} = sub {};
-#    }
-    $me->export($class, @_);
-}
+'ObjStore'->bootstrap($VERSION);
 
 $EXCEPTION = sub {
     my $m = shift;
@@ -112,7 +96,12 @@ eval { require Thread::Specific; } or do {
     undef $@;
 };
 
-'ObjStore'->bootstrap($VERSION);
+tie $CACHE_SIZE, 'ObjStore::Config::CacheSize';
+tie $CLIENT_NAME, 'ObjStore::Config::ClientName';
+
+require ObjStore::Config;
+$ObjStore::Config::SCHEMA_DBDIR = $ENV{OSPERL_SCHEMA_DBDIR} if
+    exists $ENV{OSPERL_SCHEMA_DBDIR};
 
 END {
 #    debug(qw(bridge txn));
@@ -124,17 +113,18 @@ END {
     }
 }
 
-tie $CACHE_SIZE, 'ObjStore::Config::CacheSize';
-tie $CLIENT_NAME, 'ObjStore::Config::ClientName';
-tie $SCHEMA_DB, 'ObjStore::Config::SchemaPath';
+sub initialize {
+    croak "initialized twice" if $INITIALIZED; #XXX ?
+    ObjStore::_initialize();
+    $SCHEMA{'ObjStore'}->load($ObjStore::Config::SCHEMA_DBDIR.
+			      "/osperl-".&ObjStore::Config::SCHEMA_VERSION.
+			      ".adb");
+    ObjStore::CORE->boot2($VERSION);  #little hackie
+    ++$INITIALIZED;
+}
 
-ObjStore::initialize() if !$ObjStore::NoInit::INIT_DELAYED;
-
-warn "You need at least ObjectStore 4.0.1!  How were you able to compile this extension?\n" if ObjStore::os_version() < 4.0001;
-
-require ObjStore::REP::ODI;
-require ObjStore::REP::Splash;
-require ObjStore::REP::FatTree;
+ObjStore::initialize()
+    if !$ObjStore::NoInit::INIT_DELAYED;
 
 sub export_fail {
     shift;
@@ -201,7 +191,7 @@ sub DEFAULT_STARGATE {
     my $class = ref $sv;
     if ($type eq 'REF') {
 	my $sv = $$sv;
-	$sv->new_ref($seg, 'unsafe');  #until protected refs are fixed XXX
+	$sv->new_ref($seg, 'unsafe');
     } elsif ($type eq 'HASH') {
 	my $pt = $class eq 'HASH' ? 'ObjStore::HV' : $class;
 	$pt->new($seg, $sv);
@@ -328,24 +318,26 @@ sub peek {
 sub debug {
     my $mask=0;
     for (@_) {
-	/^off/    and last;
-	/^refcnt/ and $mask |= 1, next;
-	/^assign/ and $mask |= 2, next;
-	/^bridge/ and $mask |= 4, next;
-	/^array/  and $mask |= 8, next;
-	/^hash/   and $mask |= 16, next;
-	/^set/    and $mask |= 32, next;
-	/^cursor/ and $mask |= 64, next;
-	/^bless/  and $mask |= 128, next;
-	/^root/   and $mask |= 0x100, next;
-	/^splash/ and $mask |= 0x200, next;
-	/^txn/    and $mask |= 0x400, next;
-	/^ref/    and $mask |= 0x800, next;
-	/^wrap/   and $mask |= 0x1000, next;
-	/^thread/ and $mask |= 0x2000, next;
-	/^index/  and $mask |= 0x4000, next;
-	/^norefs/ and $mask |= 0x8000, next;
-	/^decode/ and $mask |= 0x10000, next;
+	/^off/      and last;
+	/^refcnt/   and $mask |= 1, next;
+	/^assign/   and $mask |= 2, next;
+	/^bridge/   and $mask |= 4, next;
+	/^array/    and $mask |= 8, next;
+	/^hash/     and $mask |= 16, next;
+	/^set/      and $mask |= 32, next;
+	/^cursor/   and $mask |= 64, next;
+	/^bless/    and $mask |= 128, next;
+	/^root/     and $mask |= 0x100, next;
+	/^splash/   and $mask |= 0x200, next;
+	/^txn/      and $mask |= 0x400, next;
+	/^ref/      and $mask |= 0x800, next;
+	/^wrap/     and $mask |= 0x1000, next;
+	/^thread/   and $mask |= 0x2000, next;
+	/^index/    and $mask |= 0x4000, next;
+	/^norefs/   and $mask |= 0x8000, next;
+	/^decode/   and $mask |= 0x10000, next;
+	/^schema/   and $mask |= 0x20000, next;
+	/^pathexam/ and $mask |= 0x40000, next;
 	/^PANIC/  and $mask = 0xfffff, next;
 	die "Snawgrev $_ tsanik brizwah dork'ni";
     }
@@ -357,6 +349,7 @@ sub debug {
 }
 
 #------ ------ ------ ------
+use vars qw($MAX_RETRIES);
 $MAX_RETRIES = 0;
 # goofy?
 sub get_max_retries {
@@ -408,23 +401,6 @@ sub FETCH { ${$_[0]} }
 sub STORE {
     my ($o, $new) = @_;
     ObjStore::_set_cache_size($new);
-    $$o = $new;
-}
-
-package ObjStore::Config::SchemaPath;
-
-sub TIESCALAR {
-    my $p;
-    ObjStore::_set_application_schema_pathname($ENV{OSPERL_SCHEMA_DB})
-	if $ENV{OSPERL_SCHEMA_DB};
-    $p = ObjStore::_get_application_schema_pathname();
-    bless \$p, shift;
-}
-
-sub FETCH { ${$_[0]} }
-sub STORE {
-    my ($o, $new) = @_;
-    ObjStore::_set_application_schema_pathname($new);
     $$o = $new;
 }
 
@@ -694,8 +670,14 @@ sub is_corrupted {
     iscorrupt(@_);
 }
 
+package ObjStore::Root;
+
+for (qw(destroy get_name get_value set_value)) {
+    ObjStore::_mark_method($_)
+}
+
 # 'bless' for databases is totally, completely, and utterly
-# special-cased.  It's like stuffing a balloon inside itself.
+# special-cased.  It's like stuffing a balloon inside itself!
 #
 package ObjStore::Database;
 BEGIN { ObjStore::BRAHMA->import(); }
@@ -704,17 +686,37 @@ use vars qw($VERSION @OPEN0 @OPEN1 %_ROOT_KEYS);
 
 $VERSION = '1.00';
 
+for (qw(close get_host_name get_pathname get_relative_directory
+	get_id get_default_segment_size size size_in_sectors time_created
+	is_open is_writable set_fetch_policy set_lock_whole_segment
+	get_default_segment get_segment get_all_segments get_all_roots
+	create_root find_root)) {
+    ObjStore::_mark_method($_)
+}
+
 #EXPERIMENTAL !!!!!!!!!!!!!!!!!!!!!!!
-@OPEN0=(sub { shift->sync_INC() });
+@OPEN0=(\&backward_version);
 @OPEN1=();
+
+sub backward_version {
+    require ObjStore::REP;
+    ObjStore::REP::be_compatible();
+}
 #EXPERIMENTAL !!!!!!!!!!!!!!!!!!!!!!!
 
-sub database_of { $_[0]; }
-sub segment_of { $_[0]->get_default_segment; }
+sub database_of {
+    use attrs 'method';
+    $_[0];
+ }
+sub segment_of {
+    use attrs 'method';
+    $_[0]->get_default_segment;
+}
 
 sub os_class { 'ObjStore::Database' }
 
 sub open {
+    use attrs 'method';
     my ($db, $mode) = @_;
     $mode = $ObjStore::DEFAULT_OPEN_MODE if !defined $mode;
     if ($mode =~ /^\d$/) {
@@ -742,28 +744,8 @@ sub open {
 
 'ObjStore::Database'->_register_private_root_key('INC');
 
-sub get_INC {
-    carp "EXPERIMENTAL";
-    shift->_private_root_data('INC', sub { [] });
-}
-sub sync_INC {
-    # DEPRECIATED?
-    my ($db) = @_;
-    my $inc = $db->_private_root_data('INC');
-    return if !$inc;
-    # optimize with a hash XXX
-    for (my $x=0; $x < $inc->FETCHSIZE; $x++) {
-	my $dir = $inc->[$x];
-	my $ok=0;
-	for (@INC) { $ok=1 if $_ eq $dir }
-	if (!$ok) {
-#	    warn "sync_INC: adding $dir";
-	    unshift @INC, $dir;
-	}
-    }
-}
-
 sub new {
+    use attrs 'method';
     my $class = shift;
     my $db = ObjStore::open(@_);
     ObjStore::bless($db, $class) if $db;
@@ -836,6 +818,7 @@ sub BLESS {
 }
 
 sub create_segment {
+    use attrs 'method';
     my ($o, $name) = @_;
     carp "$o->create_segment('name')" if @_ != 2;
     my $s = $o->database_of->_create_segment;
@@ -851,6 +834,7 @@ sub gc_segments {
 }
 
 sub destroy {
+    use attrs 'method';
     my ($o, $step) = @_;
     $step ||= 10;
     my $more;
@@ -883,6 +867,7 @@ sub destroy {
 }
 
 sub root {
+    use attrs 'method';
     my ($o, $roottag, $nval) = @_;
     my $root = $o->find_root($roottag);
     if (defined $nval and $o->is_writable) {
@@ -898,6 +883,7 @@ sub root {
 }
 
 sub destroy_root {
+    use attrs 'method';
     my ($o, $tag) = @_;
     my $root = $o->find_root($tag);
     $root->destroy;
@@ -933,7 +919,10 @@ sub _private_root_data {  #XS? XXX
 	my $s = $db->create_segment("_osperl_private");
 	$priv = 'ObjStore::HV'->new($s, 30);
 	$rt->set_value($priv);
-	$priv->{'VERSION'} = $ObjStore::VERSION; #document? XXX
+
+	# Useless?  You have to have to right shared objects loaded
+	# anyway just to read this stuff! XXX
+	$priv->{'VERSION'} = $ObjStore::VERSION;
     }
     if ($new) {
 	if (ref $new eq 'CODE') {
@@ -955,6 +944,27 @@ sub _private_root_data {  #XS? XXX
 }
 
 #------- ------- ------- -------
+sub get_INC {
+    carp "depreciated";
+    shift->_private_root_data('INC', sub { [] });
+}
+sub sync_INC {
+    carp "depreciated";
+    my ($db) = @_;
+    my $inc = $db->_private_root_data('INC');
+    return if !$inc;
+    # optimize with a hash XXX
+    for (my $x=0; $x < $inc->FETCHSIZE; $x++) {
+	my $dir = $inc->[$x];
+	my $ok=0;
+	for (@INC) { $ok=1 if $_ eq $dir }
+	if (!$ok) {
+#	    warn "sync_INC: adding $dir";
+	    unshift @INC, $dir;
+	}
+    }
+}
+
 sub is_open_read_only {
     my ($db) = @_;
     warn "$db->is_open_read_only: just use $db->is_writable or $db->is_open";
@@ -983,10 +993,24 @@ $_ROOT_KEYS{Brahma} = { owner => 'ObjStore::Database' }; #depreciated 1.19
 package ObjStore::Segment;
 use Carp;
 
-sub segment_of { $_[0]; }
-sub database_of { $_[0]->_database_of->import_blessing; }
+for (qw(get_transient_segment is_empty is_deleted return_memory
+       size set_size unused_space get_number set_comment get_comment
+       lock_into_cache unlock_from_cache set_fetch_policy
+       set_lock_whole_segment )) {
+    ObjStore::_mark_method($_);
+}
+
+sub segment_of {
+    use attrs 'method';
+    $_[0];
+}
+sub database_of {
+    use attrs 'method';
+    $_[0]->_database_of->import_blessing;
+}
 
 sub destroy {
+    use attrs 'method';
     my ($o) = @_;
     if (!$o->is_empty()) {
 	croak("$o->destroy: segment not empty (you may use osp_hack if you really need to destroy it)");
@@ -1007,6 +1031,7 @@ use Carp;
 
 # Should work exactly like ObjStore::lookup
 sub get_database {
+    use attrs 'method';
     my ($n) = @_;
     my $db = $n->_get_database();
     if ($db && $db->is_open) {
@@ -1028,7 +1053,14 @@ use overload ('""' => \&_pstringify,
 #	      'nomethod' => sub { croak "overload: ".join(' ',@_); }
 	     );
 
-sub database_of { $_[0]->_database_of->import_blessing; }
+for (qw(segment_of get_pointer_numbers HOLD)) {
+    ObjStore::_mark_method($_)
+}
+
+sub database_of {
+    use attrs 'method';
+    $_[0]->_database_of->import_blessing;
+}
 
 *create_segment = \&ObjStore::Database::create_segment;
 
@@ -1055,12 +1087,17 @@ sub clone_to { croak($_[0]."->clone_to() unimplemented") }
 # Do fancy argument parsing to make creation of unsafe references a
 # very intentional endevour.  Maybe the default should be 'unsafe'? XXX
 sub new_ref {
+    use attrs 'method';
     my ($o, $seg, $safe) = @_;
     $seg = $seg->segment_of if ref $seg;
     $seg = ObjStore::Segment::get_transient_segment()
 	if !defined $seg;
     my $type;
-    if (!defined $safe or $safe eq 'safe') { $type=0; }
+    if (!defined $safe) {
+	carp "default reference type will change to unsafe soon";
+	$type = 0;
+    }
+    elsif ($safe eq 'safe') { $type=0; }
     elsif ($safe eq 'unsafe' or $safe eq 'hard') { $type=1; }
     else { croak("$o->new_ref($safe,...): unknown type"); }
     $o->_new_ref($type, $seg);
@@ -1077,9 +1114,6 @@ sub evolve {
     $o->isa($o->os_class) or croak "$o must be an ".$o->os_class;
 }
 
-sub NOREFS {}
-sub DESTROY {}
-
 #-------- -------- --------
 sub set_weak_refcnt_to_zero { croak "set_weak_refcnt_to_zero is unnecessary"; }
 sub set_readonly { carp "set_readonly depreciated"; shift->const }
@@ -1089,11 +1123,16 @@ use vars qw($VERSION @ISA);
 $VERSION = '1.00';
 @ISA = qw(ObjStore::UNIVERSAL);
 
+for (qw(dump deleted focus)) {
+    ObjStore::_mark_method($_)
+}
+
 # Legal arguments:
 #   dump, database
 #   segment, dump, database
 
 sub load {
+    use attrs 'method';
     my $class = shift;
     my ($seg, $dump, $db);
     if (@_ == 2) {
@@ -1111,6 +1150,7 @@ sub load {
 
 # Should work exactly like ObjStore::lookup
 sub get_database {
+    use attrs 'method';
     my ($r) = @_;
     my $db = $r->_get_database();
     if ($db && $db->is_open) {
@@ -1121,6 +1161,7 @@ sub get_database {
 }
 
 sub open {
+    use attrs 'method';
     my ($r, $mode) = @_;
     my $db = $r->get_database;
     $db->open($mode) unless $db->is_open;
@@ -1131,13 +1172,14 @@ sub clone_to {
     $cloner->($r->focus)->new_ref($seg);
 }
 
-sub NOREFS {}
-sub DESTROY {}
-
 package ObjStore::Cursor;
 use vars qw($VERSION @ISA);
 $VERSION = '1.00';
 @ISA = qw(ObjStore::UNIVERSAL);
+
+for (qw(focus moveto step each at store seek pos keys)) {
+    ObjStore::_mark_method($_)
+}
 
 sub count { $_[0]->focus->FETCHSIZE; }
 
@@ -1146,15 +1188,13 @@ sub clone_to {
     $cloner->($r->focus)->new_cursor($seg);
 }
 
-sub NOREFS {}
-sub DESTROY {}
-
 package ObjStore::Container;
 use vars qw($VERSION @ISA);
 $VERSION = '1.00';
 @ISA = qw(ObjStore::UNIVERSAL);
 
 sub new_cursor {
+    use attrs 'method';
     my ($o, $seg) = @_;
     $seg = ObjStore::Segment::get_transient_segment()
 	if !defined $seg || (!ref $seg and $seg eq 'transient');
@@ -1169,8 +1209,44 @@ sub clone_to {
 
 sub count { shift->FETCHSIZE; }  #goofy XXX
 
-sub NOREFS {}
-sub DESTROY {}
+package ObjStore::PathExam;
+
+for (qw(new load_path load_args stringify keys load_target compare)) {
+    ObjStore::_mark_method($_)
+}
+
+package ObjStore::PathExam::Path;
+use Carp;
+use vars qw(@ISA);
+@ISA='ObjStore::AV';
+
+sub new {
+    use attrs 'method';
+    my ($class, $near, $path) = @_;
+    my @comp = split m",\s*", $path;
+    croak "$class->new($path): invalid" if @comp==0;
+    croak "$class->new($path): too many keys" if @comp >= 8;
+    my $o = $class->SUPER::new($near, scalar @comp);
+    for (my $x=0; $x < @comp; $x++) {
+	my @c = split m"\/", $comp[$x];
+	croak "$class->new($path): '$comp[$x]' too long" if @c > 7;
+	$o->[$x] = [map { "$_\0" } @c];
+    }
+    $o;
+}
+
+sub stringify {
+    use attrs 'method';
+    my $paths = shift;
+    my @ps;
+    $paths->map(sub {
+		    my $path = shift;
+		    my @p;
+		    $path->map(sub { chop(my $s = shift); push(@p, $s) });
+		    push @ps, join('/', @p);
+		});
+    join ', ', @ps;
+}
 
 package ObjStore::AV;
 use Carp;
@@ -1178,27 +1254,7 @@ use vars qw($VERSION @ISA %REP);
 $VERSION = '1.01';
 @ISA=qw(ObjStore::Container);
 
-sub new {
-    my ($this, $loc, $how) = @_;
-    $loc = $loc->segment_of if ref $loc;
-    my $class = ref($this) || $this;
-    my ($av, $sz, $init);
-    if (ref $how) {
-	$sz = @$how || 7;
-	$init = $how;
-    } else {
-	$sz = $how || 7;
-    }
-    if ($sz < 45) {
-	$av = ObjStore::REP::Splash::AV::new($class, $loc, $sz);
-    } else {
-	$av = ObjStore::REP::FatTree::AV::new($class, $loc, $sz);
-    }
-    if ($init) {
-	for (my $x=0; $x < @$init; $x++) { $av->STORE($x, $init->[$x]); }
-    }
-    $av;
-}
+sub new { require ObjStore::REP; &ObjStore::REP::load_default }
 
 sub EXTEND {}  #todo? XXX
 
@@ -1220,9 +1276,6 @@ sub map {
     @r;
 }
 
-sub NOREFS {}
-sub DESTROY {}
-
 #-------------- -------------- -------------- -------------- DEPRECIATED
 sub _count { 
     carp "_count should be done directly" if $] >= 5.00457;
@@ -1243,27 +1296,7 @@ use vars qw($VERSION @ISA %REP);
 $VERSION = '1.01';
 @ISA=qw(ObjStore::Container);
 
-sub new {
-    my ($this, $loc, $how) = @_;
-    $loc = $loc->segment_of if ref $loc;
-    my $class = ref($this) || $this;
-    my ($hv, $sz, $init);
-    if (ref $how) {
-	$sz = (split(m'/', scalar %$how))[0] || 7;
-	$init = $how;
-    } else {
-	$sz = $how || 7;
-    }
-    if ($sz < 25) {
-	$hv = ObjStore::REP::Splash::HV::new($class, $loc, $sz);
-    } else {
-	$hv = ObjStore::REP::ODI::HV::new($class, $loc, $sz);
-    }
-    if ($init) {
-	while (my($hk,$v) = each %$init) { $hv->STORE($hk, $v); }
-    }
-    $hv;
-}
+sub new { require ObjStore::REP; &ObjStore::REP::load_default }
 
 sub TIEHASH {
     my ($class, $object) = @_;
@@ -1290,9 +1323,6 @@ sub map {
     @r;
 }
 
-sub NOREFS {}
-sub DESTROY {}
-
 #----------- ----------- ----------- ----------- ----------- -----------
 
 sub nextKey {
@@ -1308,49 +1338,18 @@ sub nextKey {
     }
 }
 
+# HashIndex will be a separate class; need a better name! XXX
 package ObjStore::Index;
 use Carp;
 use vars qw($VERSION @ISA %REP);
-$VERSION = '1.00';
-@ISA='ObjStore::Container';
+$VERSION = '1.01';
+@ISA='ObjStore::AV';
 
-# HashIndex will be a separate class? XXX
-
-sub new {
-    my ($this, $loc, @CONF) = @_;
-    $loc = $loc->segment_of if ref $loc;
-    my $class = ref($this) || $this;
-    # How should this work by default?
-    my $x;
-    if (@CONF) {
-	if (ref $CONF[0]) { #new
-	    my $c = $CONF[0];
-	    my $sz = $c->{size} || 100;
-
-	    $x = ObjStore::REP::FatTree::Index::new($class, $loc);
-	    $x->configure($c);
-	} else {
-	    # depreciated? XXX
-	    $x = ObjStore::REP::FatTree::Index::new($class, $loc);
-	    $x->configure(@CONF);
-	}
-    } else {
-	$x = ObjStore::REP::FatTree::Index::new($class, $loc);
-    }
-    $x;
+for (qw(configure add remove)) {
+    ObjStore::_mark_method($_)
 }
 
-sub map {
-    my ($o, $sub) = @_;
-    my @r;
-    for (my $x=0; $x < $o->FETCHSIZE; $x++) { push(@r, $sub->($o->[$x])); }
-    @r;
-}
-
-sub _iscorrupt {0}  #write your own!
-
-sub NOREFS {}
-sub DESTROY {}
+sub new { require ObjStore::REP; &ObjStore::REP::load_default }
 
 #----------- ----------- ----------- ----------- ----------- -----------
 
@@ -1367,11 +1366,6 @@ sub nextKey {
 	return $try if !$c->seek($try);
 	++$x;
     }
-}
-
-sub _count { 
-    carp "_count can be done directly" if $] >= 5.00457;
-    $_[0]->FETCHSIZE();
 }
 
 package ObjStore::Database::HV;

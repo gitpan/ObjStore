@@ -7,6 +7,6 @@ $self->{LD}="CC -ztext";
 
 
 $self->{CCCDLFLAGS}="-KPIC";
-$self->{clean} = {FILES => 'Templates.DB'};
+$self->{clean}{FILES} .= ' Templates.DB';
 $self->{PERLMAINCC} = 'gcc';
 

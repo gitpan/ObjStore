@@ -1,6 +1,5 @@
 use strict;
 
-# DEPRECIATED !!!
 package ObjStore::Process;
 use Carp;
 use Exporter ();

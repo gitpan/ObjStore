@@ -6,9 +6,10 @@ use ObjStore ':ADV';
 #require ObjStore::AV::Set; #?
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-$VERSION = '1.02';
+$VERSION = '1.04';
 
 sub new {
+    use attrs 'method';
     my ($class, $where) = @_;
     croak "$class\->new(where)" if @_ != 2;
     my $o = $class->SUPER::new($where);
@@ -16,6 +17,7 @@ sub new {
 }
 
 sub add_index {
+    use attrs 'method';
     my ($o, $name, $index) = @_;
     croak "keys starting with underscore are reserved"
 	if $name =~ m/^_/;
@@ -40,37 +42,56 @@ sub add_index {
 }
 
 sub remove_index {
+    use attrs 'method';
     my ($o, $name) = @_;
     die "$o->remove_index($name): is not an index"
 	if !exists $o->{ $name };
     delete $o->{ $name };
     @{$$o{_allindices}} = grep($_ ne $name, @{$$o{_allindices}});
-    $$o{_primary} ||= $$o{_allindices}->[0]
-	if @{$$o{_allindices}};
+    if (@{$$o{_allindices}}) {
+	$$o{_primary} = $o->index($$o{_allindices}->[0]);
+    } else {
+	$$o{_primary} = undef;
+    }
 }
 
-sub index { $_[0]->{$_[1]}; }
+sub index {
+    use attrs 'method';
+    $_[0]->{$_[1]};
+}
 
-sub fetch { 
+sub fetch {
+    use attrs 'method';
     my $t=shift;
     my $iname = shift;
     my $i = $t->{ $iname };
-    croak "Can't find index '$iname'" if !$i;
+    croak "can't find index '$iname'" if !$i;
     my $c = $i->new_cursor;
-    if ($c->seek(@_)) {
-	$c->at;
+    if (!wantarray) {
+	return $c->seek(@_)? $c->at : undef;
     } else {
-	();
+	my $pe = ObjStore::PathExam->new;
+	$pe->load_args(@_);
+	return if !$c->seek($pe);
+	my @got;
+	while (my $e = $c->at) {
+	    last if $pe->compare($e) != 0;
+	    push @got, $e;
+	    $c->step(1);
+	}
+	@got;
     }
 }
 
 sub primary {
+    carp "primary is depreciated";
     my ($o) = @_;
     return if !$$o{_primary};
     $o->index($$o{_primary});
 }
 
 sub anyx {
+    use attrs 'method';
     my ($o) = @_;
     if ($$o{_primary}) {
 	return $$o{_primary};
@@ -91,12 +112,14 @@ sub anyx {
 }
 
 sub rows {
+    use attrs 'method';
     my ($t) = @_;
     my $i = $t->anyx;
     $i? $i->count : 0;
 }
 
 sub map {
+    use attrs 'method';
     my ($t, $sub) = @_;
     my $x = $t->anyx;
     return if !$x;
@@ -104,6 +127,7 @@ sub map {
 }
 
 sub map_indices {
+    use attrs 'method';
     my ($o, $c) = @_;
     for my $i (@{$$o{_allindices}}) {
 	$c->( $$o{$i} );
@@ -111,11 +135,13 @@ sub map_indices {
 }
 
 sub add {
+    use attrs 'method';
     my ($t, $o) = @_;
     $t->map_indices(sub { shift->add($o) });
     defined wantarray ? $o : ();
 }
 sub remove {
+    use attrs 'method';
     my ($t, $o) = @_;
     $t->map_indices(sub { shift->remove($o) });
 }

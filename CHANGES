@@ -3,6 +3,17 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 08-11-97 Released 1.10
+
+- Overloaded the '""' (stringify) operator for persistent objects.
+
+- ospeek [-addr]
+
+- Important typemap fixes plus other minor stuff.
+
+- No schema changes.
+
+
 ** 08-06-97 Released 1.09
 
 - At our site we are now using osperl for about 2GB worth of data!
@@ -101,9 +112,10 @@ on gigantic databases.  Only three elements are printed from large hashes,
 while small hashes are printed completely.  The meaning of 'large' can be
 customized (not yet).
 
-- Installs the PoweredByOS.gif and publishes the path.
+- Installs PoweredByOS.gif and publishes the path.
 
 
 ** Released 1.00
 
-- The first release, written during a sixty day evaluation.
+- The first release, written during our ObjectStore 60 day evaluation.
+Why does anyone think that ObjectStore is difficult to work with?

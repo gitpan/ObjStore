@@ -9,11 +9,10 @@ ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
 Interface to ObjectStore OODBMS (http://www.odi.com).  Stores scalars,
 sets, hashes, and references directly in the database without any
-flattening of nested or circular structures.  Uses the virtual memory
-mechanism to make read/write access nearly as fast as memory mapped
-files.  Databases can be accessed from Perl, C++, or Java.  Designed
-for easy extension of the internal data representation or data types
-of built-in data structures.
+flattening of nested or circular structures.  Virtual memory mechanism
+used to make read/write access nearly as fast as memory mapped files.
+Includes CGI support module for `Perl Embedded HTML'.  Databases can
+be accessed from Perl, C++, or Java.
 
 Available via http://www.perl.org/CPAN/modules/by-module/ObjStore
 
@@ -30,22 +29,17 @@ see ./TODO for list of things to do
 see ./CHANGES for a historical perspective
 
 
-### FUTURE PLANS ###
-
-Preliminary design of Verity full text indexing interface below.  Should
-the index membership be kept in each member or not?  Leaning towards 'no'.
-
-$Txt->index($indexHandle, $userPointer)
-	$indexHandle - the specific Verity index object
-	$userPointer - returned together with the match score after a search
-
-  This can be called multiple times for different indexes.
-
-$Txt->reindex;                   # call if string is changed
-$Txt->unindex([$indexHandle]);
-
-
 ### RECENT CHANGES ###
+
+
+** 09-02-97 Released 1.12
+
+- HTML::PHTML and Eval modules added.  HTML::PHTML gives you a simple
+and powerful "Perl Embedded HTML" page cache for CGI programs.
+Includes all the best features of HTML::Embperl and ePerl in about 340
+lines of code.  HTML::PHTML module does not require ObjStore.
+
+- No other changes.
 
 
 ** 08-16-97 Released 1.11
@@ -60,12 +54,18 @@ transactions.  Persistent memory leaks now impossible.
 - No schema changes.
 
 
-** 08-11-97 Released 1.10
+### FUTURE PLANS ###
 
-- Overloaded the '""' (stringify) operator for persistent objects.
+Preliminary design of Verity full text indexing interface below.  Should
+the index membership be kept in each member or not?  Leaning towards 'no'.
 
-- ospeek [-addr]
+$Txt->index($indexHandle, $userPointer)
+	$indexHandle - the specific Verity index object
+	$userPointer - returned together with the match score after a search
 
-- Important typemap fixes plus other minor stuff.
+  This can be called multiple times for different indexes.
 
-- No schema changes.
+$Txt->reindex;                   # call if string is changed
+$Txt->unindex($indexHandle);
+
+

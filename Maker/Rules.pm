@@ -159,15 +159,24 @@ sub pod2man {
 }
 
 sub pod2html {
-    my ($o, $pod, $section) = @_;
-    my $stem = $pod;
-    $stem =~ s/\.[^.]+$//;
-    $o->clean("$stem.html", "pod2html-dircache", "pod2html-itemcache");
-    new Maker::Unit("$stem.html", sub {
-	if (newer("$stem.html", $pod)) {
-	    $o->x("pod2html $pod > $stem.html");
-	}
-    });
+    my $o = shift @_;
+    my @r;
+    for my $pod (@_) {
+	my $stem = $pod;
+	$stem =~ s/\.[^.]+$//;
+	$o->clean("$stem.html");
+	push(@r, new Maker::Unit("$stem.html", sub {
+	    if (newer("$stem.html", $pod)) {
+		$o->x("pod2html $pod > $stem.html");
+	    }
+	}));
+    }
+    $o->spotless("pod2html-dircache", "pod2html-itemcache");
+    if (@r == 1) {
+	@r;
+    } else {
+	new Maker::Phase(@r);
+    }
 }
 
 sub _make_install_dirs {

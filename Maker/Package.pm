@@ -23,7 +23,7 @@ use Getopt::Long;
 
 use vars qw(@ISA $VERSION $DEBUG);
 @ISA = qw(Maker::Target);
-$VERSION = 2.05;
+$VERSION = '2.05';
 
 sub new {
     my ($class, %CNF) = @_;

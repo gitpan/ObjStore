@@ -31,10 +31,11 @@ See $SchemaDir in ./be.
     { # osperl
 	my $inst = {
 	    script => [ 'ospeek' ],
-	    man3 => [ 'ObjStore.3' ],
+	    man3 => [ 'ObjStore.3', 'Eval.3', 'PHTML.3' ],
 	    lib => ['ObjStore.pm', 'ObjStore/',
 		    'ObjStore/Peeker.pm', 'ObjStore/PoweredByOS.gif',
-		    'ObjStore/ObjStore.html' ]};
+		    'Eval.pm', 'HTML/', 'HTML/PHTML.pm',
+		    'ObjStore/ObjStore.html', 'Eval.html', 'HTML/PHTML.html']};
 
 	if ($linkage eq 'dyn') {
 	    $inst->{arch} = ['auto/ObjStore/', 'auto/ObjStore/ObjStore.so'];
@@ -62,7 +63,9 @@ See $SchemaDir in ./be.
 			       $r->dlink('cxx', './blib/arch/auto/ObjStore/ObjStore.so') :
 			       $r->link('cxx', './blib/bin/osperl')),
 			      $r->pod2man('ObjStore.pod', 3),
-			      $r->pod2html('ObjStore.pod'),
+			      $r->pod2man('Eval.pm', 3),
+			      $r->pod2man('PHTML.pm', 3),
+			      $r->pod2html('ObjStore.pod', 'Eval.pm', 'PHTML.pm'),
 			      $r->populate_blib($inst),
 			      new Maker::Unit('osperl', sub {}),
 			      ),

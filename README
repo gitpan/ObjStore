@@ -8,13 +8,14 @@ Name           DSLI  Description                                  Info
 ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
 Interface to ObjectStore OODBMS (http://www.odi.com).  Stores scalars,
-sets, hashes, and references directly in the database without
-flattening nested or circular structures.  Databases can be accessed
-from Perl, C++, or Java.  Designed for easy extension of the internal
-data representation or data types of built-in data structures.  Uses
-the virtual memory mechanism to make read/write access nearly as fast
-as memory mapped files.
-Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
+sets, hashes, and references directly in the database without any
+flattening of nested or circular structures.  Uses the virtual memory
+mechanism to make read/write access nearly as fast as memory mapped
+files.  Databases can be accessed from Perl, C++, or Java.  Designed
+for easy extension of the internal data representation or data types
+of built-in data structures.
+
+Available via http://www.perl.org/CPAN/modules/by-module/ObjStore
 
            << This is the relational database killer app! >>
 
@@ -38,14 +39,25 @@ $Txt->index($indexHandle, $userPointer)
 	$indexHandle - the specific Verity index object
 	$userPointer - returned together with the match score after a search
 
-  This can be called multiple times for different indexes.  The OSSV will
-  keep track of the indexes to which it has been added?
+  This can be called multiple times for different indexes.
 
-$Txt->reindex;                   # called if string is changed
-$Txt->unindex([$indexHandle]);   # called upon destruction
+$Txt->reindex;                   # call if string is changed
+$Txt->unindex([$indexHandle]);
 
 
 ### RECENT CHANGES ###
+
+
+** 08-16-97 Released 1.11
+
+- Updates refcnts for transient references in update & abort_only
+transactions.  Persistent memory leaks now impossible.
+
+- ospeek restricted to show only three instances per class.
+
+- Minor fixes (both important and less important).
+
+- No schema changes.
 
 
 ** 08-11-97 Released 1.10
@@ -56,38 +68,4 @@ $Txt->unindex([$indexHandle]);   # called upon destruction
 
 - Important typemap fixes plus other minor stuff.
 
-
-** 08-06-97 Released 1.09
-
-- At our site we are now using osperl for about 2GB worth of data!
-
-- Now built to a shared library!!  Anyone up for Apache/Perl/ObjectStore?
-
-- New, Improved Documentation.
-
-- Persistent blessings now fully tested and working.
-
-- ObjectStore transactions and exceptions now fully integrated into
-Perl.  Cursors have been removed from persistent data; read_only
-transactions now properly supported.  Read_only transactions are
-blazingly fast!
-
-- Regularized allocators.  Specify cardinality when creating containers.
-  new ObjStore::$type($near, $card);  Customize representation selector.
-
-- Regularized peristent typing in preparation for extensibility.
-
-- Peek rewrite with ideas from Data::Dumper.  Peek on circular data
-structures.  Peek reports percent utilization to the delight of the
-accountants everywhere.
-
-- Unions removed from the schema.  This major fix makes it possible to
-evolve databases in the event of future schema enhancements.
-
-- Reference counts are now 32bits wide and check for overflow.
-
-- Static functions (e.g. ObjStore::Segment::of) are now called with ::
-instead of -> for greater efficiency.
-
-- Plus hundreds of fixes...
-
+- No schema changes.

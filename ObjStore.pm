@@ -6,7 +6,7 @@ require 5.004;
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $Exception);
 
-$VERSION = '1.10';  #is string, not a number!
+$VERSION = '1.11';  #is string, not a number!
 
 use Carp;
 use Config;

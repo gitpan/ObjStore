@@ -2,7 +2,7 @@ package ObjStore::Peeker;
 use strict;
 use Carp;
 use vars qw($LinePrefix $LineIndent $LineSep
-	    $Addr $SummaryWidth $MaxWidth $MaxDepth
+	    $Addr $SummaryWidth $MaxWidth $MaxDepth $MaxInstances
 	    $To $All);
 
 $LinePrefix='';
@@ -12,6 +12,7 @@ $Addr=0;
 $SummaryWidth=3;
 $MaxWidth=20;
 $MaxDepth=20;
+$MaxInstances=3;
 $To='string';
 $All=0;
 
@@ -23,6 +24,7 @@ sub new {
 	sep => $LineSep,
 	addr => $Addr,
 	summary_width => $SummaryWidth,
+	instances => $MaxInstances,
 	width => 20,
 	depth => 20,
 	level => 0,
@@ -108,8 +110,10 @@ sub _peek {
 
     my $addr = "$val";
     my $name = $o->{addr} ? $addr : $class;
+    $o->{seen}{$class} ||= 0;
 
-    if ($o->{level} > $o->{depth} or $o->{seen}{$addr}) {
+    if ($o->{level} > $o->{depth} or $o->{seen}{$addr} or
+	($class !~ /^ObjStore::/ and $o->{seen}{$class} > $o->{instances})) {
 	if ($type eq 'HASH') {
 	    $o->o("$name { ... }");
 	} elsif ($type eq 'ARRAY') {
@@ -122,6 +126,7 @@ sub _peek {
 	return;
     }
     $o->{seen}{$addr}=1;
+    ++ $o->{seen}{$class};
 
     if ($val->can('cardinality') and $val->can('percent_unused')) {
 	push(@{$o->{pct_unused}}, {card=>$val->cardinality,

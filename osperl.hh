@@ -65,7 +65,6 @@ struct OSSV {
   //refcnt
   OSSV *REF_inc();
   void REF_dec();
-  void REF_check();
   int PvREFok();
   void PvREF_inc(void *foo=0);
   void PvREF_dec();

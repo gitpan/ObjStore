@@ -36,8 +36,6 @@ indexing, including Verity TOM.  Verity full text indexing.
 
 Programmer friendly C++ / Java access to persistent perl data structures
 
-Move ObjStore::Peeker to a separate file!
-
 Support for notification.
 
 Support for database access control?
@@ -46,7 +44,7 @@ Support for the database utility API?  Who cares?
 
 ossv_magic could do refcnts during update transactions...?
 
-ospeek option to re-bless all classes?
+ospeek option to re-bless all classes?  Only print # instances per class?
 
 Does anyone want ObjectStore pvars?
 

@@ -192,9 +192,20 @@ SV *osperl::hkey_2sv(hkey *hk)
 
 /*--------------------------------------------- ossv_magic */
 
+// Since we update refcnts, the ossv_magic must not
+// change during its lifetime.
 ossv_magic::ossv_magic(OSSV *_sv, OSSVPV *_pv)
   : sv(_sv), pv(_pv)
-{ //warn("new ossv_magic 0x%x", this);
+{
+  assert(sv || pv);
+  os_transaction *xion = os_transaction::get_current();
+  if (xion && xion->get_type() != os_transaction::read_only) {
+    if (sv) { sv->REF_inc(); }
+    else {
+      if (pv) { pv->REF_inc(); }
+      else croak("ossv_magic::ossv_magic");
+    }
+  }
 }
 
 ossv_magic::~ossv_magic()
@@ -202,8 +213,14 @@ ossv_magic::~ossv_magic()
 #if DEBUG_DESTROY
   warn("ossv_magic 0x%x->DESTROY", this);
 #endif
-  if (sv) sv->REF_check();
-    //    if (pv) pv->REF_check();  ??
+  os_transaction *xion = os_transaction::get_current();
+  if (xion && xion->get_type() != os_transaction::read_only) {
+    if (sv) { sv->REF_dec(); }
+    else {
+      if (pv) { pv->REF_dec(); }
+      else croak("ossv_magic::~ossv_magic()");
+    }
+  }
 }
 
 void ossv_magic::dump()
@@ -283,21 +300,6 @@ void OSSV::REF_dec()
   warn("OSSV::REF_dec() 0x%x to %d", this, _refs);
 #endif
   if (_refs <= 0) delete this;
-}
-
-// Transient pointers are references to the underlier. However,
-// refcnts must not change during read-only transactions so we
-// cannot do refcnts from transient references.  At most, we can check
-// for refcnt==0 during update transactions, as below.
-void OSSV::REF_check()
-{
-  os_transaction *xion = os_transaction::get_current();
-  if (xion && xion->get_type() == os_transaction::update) {
-#if (DEBUG_REFCNT || DEBUG_DESTROY)
-    warn("OSSV::REF_check() 0x%x at %d", this, _refs);
-#endif
-    if (_refs <= 0) delete this;
-  }
 }
 
 int OSSV::PvREFok()
@@ -402,10 +404,6 @@ ossvtype OSSV::natural() const
 int OSSV::morph(ossvtype nty)
 {
   if (_type == nty) return 0;
-
-  if (nty == ossv_obj && _type != ossv_undef) {
-    croak("Can't coerce %s to an object", type_2pv());
-  }
 
   if (PvREFok()) PvREF_dec();
   switch (_type) {

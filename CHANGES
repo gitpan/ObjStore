@@ -3,6 +3,41 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 08-06-97 Released 1.09
+
+- At our site we are now using osperl for about 2GB worth of data!
+
+- Now built to a shared library!!  Anyone up for Apache/Perl/ObjectStore?
+
+- New, Improved Documentation.
+
+- Persistent blessings now fully tested and working.
+
+- ObjectStore transactions and exceptions now fully integrated into
+Perl.  Cursors have been removed from persistent data; read_only
+transactions now properly supported.  Read_only transactions are
+blazingly fast!
+
+- Regularized allocators.  Specify cardinality when creating containers.
+  new ObjStore::$type($near, $card);  Customize representation selector.
+
+- Regularized peristent typing in preparation for extensibility.
+
+- Peek rewrite with ideas from Data::Dumper.  Peek on circular data
+structures.  Peek reports percent utilization to the delight of the
+accountants everywhere.
+
+- Unions removed from the schema.  This major fix makes it possible to
+evolve databases in the event of future schema enhancements.
+
+- Reference counts are now 32bits wide and check for overflow.
+
+- Static functions (e.g. ObjStore::Segment::of) are now called with ::
+instead of -> for greater efficiency.
+
+- Plus hundreds of fixes...
+
+
 ** 08-02-97 Released 1.08
 
 - Release canidate for 1.09.

@@ -33,7 +33,8 @@ See $SchemaDir in ./be.
 	    script => [ 'ospeek' ],
 	    man3 => [ 'ObjStore.3' ],
 	    lib => ['ObjStore.pm', 'ObjStore/',
-		    'ObjStore/Peeker.pm', 'ObjStore/PoweredByOS.gif' ]};
+		    'ObjStore/Peeker.pm', 'ObjStore/PoweredByOS.gif',
+		    'ObjStore/ObjStore.html' ]};
 
 	if ($linkage eq 'dyn') {
 	    $inst->{arch} = ['auto/ObjStore/', 'auto/ObjStore/ObjStore.so'];

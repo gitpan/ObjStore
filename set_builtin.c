@@ -220,10 +220,6 @@ SV *OSPV_sethash::ADD(SV *nval)
     ospv = mg->ospv();
     if (!ospv) croak("OSPV_sethash::ADD(SV*): cannot add non-object");
     ospv->REF_inc();
-    if (mg->sv) {
-      mg->sv->set_undef();
-      mg->sv->REF_check();
-    }
     FREETMPS ;
     LEAVE ;
   }

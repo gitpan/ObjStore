@@ -7,25 +7,22 @@ use ExtUtils::MakeMaker;
 use vars qw(@PREREQ);
 
 if ($] < 5.00404) {
-    print "perl 5.004_04 (or better) is required\n";
+    print "perl 5.004_04 (or better) is probably required\n";
     exit;
 }
 
 print "\nPlease edit lib/ObjStore/Config.pm to change the following parameters:\n";
 print "  SCHEMA_DBDIR = ".&SCHEMA_DBDIR."\n";
 print "  TMP_DBDIR    = ".&TMP_DBDIR."\n";
-print "\n";
-print "\nIf the build doesn't finish, try GNU make 3.76.\n";
+print "\n\n(If the build doesn't finish, try GNU make 3.76+)\n\n";
 
 # Also see the ./hints directory!
 
 my $OS_ROOTDIR = $ENV{OS_ROOTDIR} ||
     die "Please set OS_ROOTDIR to the top of the ObjectStore distribution!\n";
-
 my $OS_LIBDIR = $ENV{OS_LIBDIR} || "$ENV{OS_ROOTDIR}/lib";
 
 my $sdir = &SCHEMA_DBDIR;
-
 my $schema_version = '11';
 
 sub MY::postamble {
@@ -60,6 +57,7 @@ my $ccov=0;
 push(@PREREQ, 'Devel::CCov' => 0.06) if $ccov;
 my @CCOV = $ccov? 'ccov_registry.o':'';
 
+#cruft for CCov...
 sub MY::c_o {
     if ($ccov) {
 	my @rules = split(m/( \. \w+ \$\(OBJ_EXT\) \: )/x,

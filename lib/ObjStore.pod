@@ -8,10 +8,9 @@ The new C<SQL> and the sunset of relational databases.
 
 =head1 DESCRIPTION
 
-C<ObjectStore> is the leading object-oriented database.  It is
-engineered by Object Design, Inc. ( http://www.odi.com ) (NASDAQ:
-ODIS).  The database uses the virtual memory mechanism (also known as
-Forward Caching) to make persistent data available in the most
+C<ObjectStore> is the market leader in object-oriented databases
+http://www.odi.com (NASDAQ: ODIS).  They use a I<Cache-Forward
+Architecture> to make persistent data available in literally the most
 efficient manner possible.
 
 Prior to this joining of forces,
@@ -799,7 +798,7 @@ Or you can address the stargate directly:
   my $persistent_junk = ObjStore::translate($near, [1,2,3,{fat=>'dog'}]);
 
 If you want to design your own stargate, you may inspect the default
-stargate in C<ObjStore.pm> for inspiration.  (Not recommended.)
+stargate in C<ObjStore.pm> for inspiration.  (Not recommended. :-)
 
 =head2 How Can I Rescue Persistent Objects From Oblivion?
 
@@ -851,10 +850,10 @@ See C<ObjStore::AVHV> XXX
 
 =head2 Autoloading
 
-When you use a database, ObjStore tries to C<require> each class to
-which it finds reference that doesn't seem to be loaded.  This means
-that you can write generic data processing programs that load the
-appropriate libraries to manipulate data in application specific ways.
+When you use a database, ObjStore tries to C<require> each class that
+doesn't seem loaded.  This means that you can write generic data
+processing programs that load the appropriate libraries to manipulate
+data in application specific ways.
 
 To disable class autoloading behavior call this function before you
 open any databases:
@@ -966,9 +965,9 @@ If this seems like a lot of overhead, consider that it is not really
 possible to directly compare these numbers to RDBMS statistics.  (Part
 of the problem is that RDBMS vendors can't even give you these
 statistics.)  At least, note that relational data can be stored with
-much less duplication in C<ObjectStore>.  (Definitely true if you
-write C++ extensions.)  Of course, the real test must always be to
-code up your problem and make experimental measurements.
+much less duplication when moved to C<ObjectStore>.  (Definitely true
+if you write C++ extensions.)  Of course, the real test must always be
+to code up your problem and make experimental measurements.
 
 =head2 Hard-Coded Limits
 
@@ -976,8 +975,10 @@ code up your problem and make experimental measurements.
 
 =item *
 
-Reference counts are only 32 bits unsigned.  (Let me know if you hit
-this limit!)
+Reference counts are only 32 bits unsigned.  (The first person to hit
+this limit in a real application will receive a check from me for $32.
+Please submit a one page description of your application for judging.
+:-)
 
 =item *
 
@@ -988,7 +989,7 @@ in practice (actually, not even in theory).
 =item *
 
 Strings are limited to a length of 32767 bytes.  (This limit will be
-relaxed when there is enough demand.)
+relaxed...)
 
 =back
 
@@ -1083,49 +1084,6 @@ tonal facility will be available in the next release.
 Indices are extremely efficient because they do not copy their keys.
 It is critical that the copy is avoided, since C<OSSV>s can be
 relocated when arrays need to grow.  C<OSSVPV>s are never relocated.
-
-=head2 Integrating ODI Exceptions With Perl
-
-There are two reasonable ways to do exceptions in C<C++>:
-
-=over 4
-
-=item * C<setjmp>/C<longjmp>
-
-=item * ANSI C<C++> exceptions
-
-=back
-
-When accessing persistent data, exceptions can be through anywhere at
-any time.  You have to trap exceptions throughout the extent of a
-transaction.  Of course, C<longjmp> is compatible with both C<C> &
-C<C++> while C<C++> exceptions are not.
-
-If ODI continued to implement exceptions with C<setjmp>/C<longjmp>,
-then persistent objects will effortlessly interoperate with existing
-C<C> code.  The only changes needed to outfit an existing library for
-persistence is to replace the allocation/deallocate routines.  In
-perl, this is easily accomplished by manipulating the symbol table at
-compile time.  Various perl extensions, such as C<Bit::Vector> and
-C<PDL>, would require virtually no code changes to manipulate
-persistent data.
-
-However, ODI appears to be committed to moving to ANSI C<C++>
-exceptions.  While there might be insignificant performance advantages
-for pure C++ code, this style necessitates significant code changes to
-plain C<C> perl extensions.  To be precise, every operation that
-accesses persistant data must be wrapped in a C<C++> exception handler
-to avoid propagating C<C++> exceptions through perl.  This will
-certainly be done eventually, but it makes compatibility a big job
-instead of a trival one.
-
-While I feel that C<C++> exceptions are the wrong design decision (in
-general), apparently most of ODI's customers disagree with me (C<C++>
-junkies!  Don't they realize that coding in C++ is the leading cause
-of brain damage in technology professionals?).  Alas, the decision has
-already been made.  The ObjStore extension must achieve compatibility
-with both types of exception handling, with an emphasis on the C<C++>
-style.
 
 =head1 DIRECTION
 
@@ -1295,7 +1253,7 @@ be exported.  C<try_*> functions are depreciated.
 
 The problem is thoroughly understood.  Work-arounds or a real fix have
 been discussed on the perl-porters mailing list.  Well designed
-mechanisms are being developed to solve the problem correctly.
+mechanisms are being developed to solve this problem correctly.
 
 =item * C<os_protected_reference>
 
@@ -1349,6 +1307,6 @@ highly recommend it!
 =head1 SEE ALSO
 
 C<ObjStore::Tutorial>, C<ObjStore::Table3>, examples in the t/
-directory, and C<SQL> (B<never again!>)
+directory, and C<The SQL Reference Manual> (I<just kidding>)
 
 =cut

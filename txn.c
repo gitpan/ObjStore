@@ -76,23 +76,30 @@ osp_thr *osp_thr::fetch()
 static void ehook(tix_exception_p cause, os_int32 value, os_char_p report)
 {
   dOSP ; dTXN ;
-  if (txn) {	//assume worst case, SEGV
+  if (txn) {
     DEBUG_txn(warn("before sighandler(SEGV): %s", report));
 
     txn->got_os_exception=1;
     txn->report = report;
+#ifndef _OS_CPP_EXCEPTIONS
     txn->handler._unwind_part_1(cause, value, report);
+#endif
     Perl_sighandler(SIGSEGV);
 
   } else {
+    // This should never happen XXX
     DEBUG_txn(warn("before &EXCEPTION: %s", report));
 
+#ifndef _OS_CPP_EXCEPTIONS
     osp->handler._unwind_part_1(cause, value, report);
+#endif
     dSP ;
     PUSHMARK(sp) ;
     XPUSHs(sv_2mortal(newSVpv(report, 0)));
     PUTBACK;
+#ifndef _OS_CPP_EXCEPTIONS
     osp->handler._unwind_part_2(); //??
+#endif
     SV *hdlr = perl_get_sv("ObjStore::EXCEPTION", 0);
     assert(hdlr);
     perl_call_sv(hdlr, G_DISCARD);
@@ -215,7 +222,9 @@ void osp_txn::post_transaction()
   if (got_os_exception) {
     got_os_exception=0;
     report=0;
+#ifndef _OS_CPP_EXCEPTIONS
     handler._unwind_part_2();
+#endif
 
     //deadlock?
     tix_exception *ex = handler.get_exception();

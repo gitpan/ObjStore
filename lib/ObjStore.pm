@@ -14,7 +14,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $RUN_TIME $TRANSACTION_PRIORITY
 	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof);
 
-$VERSION = '1.26';
+$VERSION = '1.27';
 
 require Exporter;
 require DynaLoader;
@@ -1196,7 +1196,7 @@ sub new {
 	    $x = ObjStore::REP::FatTree::Index::new($class, $loc);
 	    $x->configure($c);
 	} else {
-	    #old - depreciated? XXX
+	    # depreciated? XXX
 	    $x = ObjStore::REP::FatTree::Index::new($class, $loc);
 	    $x->configure(@CONF);
 	}

@@ -6,15 +6,26 @@ Name           DSLI  Description                                  Info
 -----------    ----  -------------------------------------------- -----
 ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
-- Requires ObjectStore OODBMS (http://www.odi.com) & perl 5.004_04
-- Perl 5.005 recommended (when available)
-
 Get it via http://www.perl.com/CPAN/authors/id/JPRIT/ !
+
+
+PREREQUISITES:
+
+- ObjectStore OODBMS - see http://www.odi.com
+- Perl 5.004_04 (or perl 5.005, once available)
+- Tree::Fat & Test extensions
+- ExtUtils::ExCxx (only needed on Digital UNIX, HP (5.x), OS/2 (3.x),
+  or MS Windows NT/95)
 
 
 ##################
 # RECENT CHAN@ES #
 ##################
+
+
+** 01-27-98 RELEASE 1.27
+
+- Digital Unix AXP portability tweaks.  No functional changes.
 
 
 ** 01-24-98 RELEASE 1.26
@@ -29,25 +40,6 @@ Unfortunately, any indices created with a prior version will need to
 be dropped (before upgrading) and re-built (after upgrading).  Either
 this or a schema evolution (yikes!) is necessary.  All other data
 should migrate without a hiccup.
-
-
-** 01-18-98 RELEASE 1.25
-
-- Completed test coverage analysis of the C++ code (with the
-assistance of Devel::CCov).  A number of minor bugs were uncovered and
-fixed.  Most notable bug: splash hashes did not take advantage of
-already empty slots during STORE (I never claimed they were a model of
-efficiency :-).
-
-- Fixed: problems when doing updates while two databases are open, one
-in mvcc mode and one in update mode.  $db->is_writable is now the
-preferred method to determine if you can update data.
-
-- Split each group of collection representations into its own XS file.
-Optimized creation of new persistent objects.  (This may cause
-backward compatibility problems if you were passing an exact
-representation type to a 'new' method.)  The 'new' method will be
-auto-generated at compile-time in a forthcoming release.
 
 
 see ./INSTALL for hints on installation

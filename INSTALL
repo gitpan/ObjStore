@@ -12,6 +12,8 @@ Tested Configurations:
 
 
    Digital Unix OSF1 V4.0 / AXP
+     (requires ExtUtils::ExCxx & patches to perl 5.004_56;
+      email if you need help)
 
      Dec C++ Compiler / ObjectStore 5.0
 

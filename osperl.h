@@ -186,6 +186,7 @@ struct OSPV_nv {
 
 #define OSPV_INUSE	0x0001	/* protect against race conditions */
 #define OSPV_BLESS2	0x0002	/* blessed with 'bless version 2' */
+#define OSPV_REPLOCK	0x0004	/* do not change representation dynamically XXX */
 
 #define OSPvFLAGS(pv)		(pv)->pad_1
 #define OSPvROCNT(pv)		(pv)->_weak_refs

@@ -10,6 +10,8 @@ following in the body of your message:
 
 + IDEAS +
 
+apply patch from Buczek
+
 testing
   OSSV::compare
   redesign t/1index.t
@@ -30,6 +32,11 @@ CLEAR & GIMME_V optimizations seem broken with tied hashes; verify and
 submit bug reports (or fix the code!)
 
 SV set magic?
+
+switch representations dynamically
+  lock representation... hm
+
+just add PDL & Bit::Vector to the schema and see if it works
 
 Restart read transactions without jumping up the stack!
   begin('update!',...)

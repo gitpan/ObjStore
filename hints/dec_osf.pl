@@ -83,21 +83,10 @@ sub postamble {
 	#
 
 	$out=~s/^(\t\s*)ossg(\s)/$1ossg -xtaso$2/gm;
-	$out;
-}
-
-sub top_targets {
-
-	my $out=shift->SUPER::top_targets(@_);
-
-	# add dependencies to automaticly make,install,clean
-	# our perl32.
-
-	<<'_EOF_'.$out;
+	$out.<<'_EOF_';
 all :: $(MAP_TARGET)
 pure_install :: $(MAP_TARGET)
 	$(MAKE) -f $(MAKE_APERL_FILE) pure_inst_perl
 _EOF_
 }
-
 

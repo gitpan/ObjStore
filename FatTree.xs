@@ -3,6 +3,9 @@
 #include "FatTree.h"
 #include "XSthr.h"
 
+/* CCov: fatal SERIOUS */
+#define SERIOUS warn
+
 static const char *file = __FILE__;
 
 struct FatTree_thr {
@@ -22,8 +25,6 @@ static void destory_thr(FatTree_thr *ti)
 dTHRINIT(FatTree, construct_thr, destroy_thr);
 
 //--------------------------- ---------------------------
-
-XS(XS_ObjStore__REP__FatTree__Index_new);
 
 OSPV_fatindex::OSPV_fatindex()
 { dexinit_tv(&fi_tv); conf_slot=0; }
@@ -48,8 +49,7 @@ void OSPV_fatindex::CLEAR()
 {
   if (conf_slot) {
     OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
-    assert(conf->is_array());
-    OSPV_Generic *paths = (OSPV_Generic*) conf->FETCHi(2)->get_ospv();
+    OSPV_Generic *paths = (OSPV_Generic*) conf->avx(2)->get_ospv();
     dDEXTMPCURSOR(this);
     dextc_moveto(&gl->tc, 0);
     OSSVPV *pv;
@@ -64,14 +64,13 @@ void OSPV_fatindex::CLEAR()
 
 void OSPV_fatindex::add(OSSVPV *obj)
 {
-  assert(conf_slot);
+  if (!conf_slot) croak("Index(%p) is not configured", this);
   OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
   dDEXTMPCURSOR(this);
-  assert(conf->is_array());
-  OSPV_Generic *paths = (OSPV_Generic*) (conf)->FETCHi(2)->get_ospv();
+  OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
   osp_pathexam exam(paths, obj, 's');
   int match = dextc_seek(&gl->tc, exam.keycnt, exam.pcache, exam.keys);
-  if (match && conf->FETCHi(1)->istrue()) {
+  if (match && conf->avx(1)->istrue()) {
     OSSVPV *here;
     dextc_fetch(&gl->tc, &here);
     if (here == obj) return;
@@ -84,9 +83,10 @@ void OSPV_fatindex::add(OSSVPV *obj)
 
 void OSPV_fatindex::remove(OSSVPV *target)
 {
+  assert(conf_slot);
   dDEXTMPCURSOR(this);
   OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
-  OSPV_Generic *paths = (OSPV_Generic*) conf->FETCHi(2)->get_ospv();
+  OSPV_Generic *paths = (OSPV_Generic*) conf->avx(2)->get_ospv();
   osp_pathexam exam(paths, target, 'u');
   dextc_seek(&gl->tc, exam.keycnt, exam.pcache, exam.keys);
   OSSVPV *obj;
@@ -102,8 +102,10 @@ void OSPV_fatindex::remove(OSSVPV *target)
   croak("%p->remove(%p): record not found", this, target);
 }
 
-OSSVPV *OSPV_fatindex::FETCHx(int xx)
+OSSVPV *OSPV_fatindex::FETCHx(SV *key)
 {
+  if (!conf_slot) return 0;
+  unsigned long xx = SvIV(key);
   dDEXTMPCURSOR(this);
   dextc_moveto(&gl->tc, xx);
   OSSVPV *pv=0;
@@ -112,7 +114,10 @@ OSSVPV *OSPV_fatindex::FETCHx(int xx)
 }
 
 double OSPV_fatindex::_percent_filled()
-{ return dexTvFILL(&fi_tv) / (double) dexTvMAX(&fi_tv); }
+{ 
+  SERIOUS("_percent_filled() is experimental");
+  return dexTvFILL(&fi_tv) / (double) dexTvMAX(&fi_tv);
+}
 int OSPV_fatindex::_count()
 { return dexTvFILL(&fi_tv); }
 
@@ -122,23 +127,14 @@ OSSVPV *OSPV_fatindex::new_cursor(os_segment *seg)
 OSPV_fatindex_cs::OSPV_fatindex_cs(OSPV_fatindex *_at)
 {
   dexinit_tc(&fi_tc);
-  if (os_segment::of(this) == os_segment::of(0)) {
-    dOSP; dTXN;
-    if (txn->can_update()) _at->REF_inc();
-  } else {
-    _at->REF_inc();
-  }
+  if (can_update(_at)) _at->REF_inc();
   fi_tc.xtc_tv = _at;
 }
 
 OSPV_fatindex_cs::~OSPV_fatindex_cs()
 {
-  if (os_segment::of(this) == os_segment::of(0)) {
-    dOSP; dTXN;
-    if (txn->can_update()) TcOSPV(&fi_tc)->REF_dec();
-  } else {
-    TcOSPV(&fi_tc)->REF_dec();
-  }
+  OSSVPV *foc = TcOSPV(&fi_tc);
+  if (can_update(foc)) foc->REF_dec();
   dexfree_tc(&fi_tc);
 }
 
@@ -159,10 +155,10 @@ void OSPV_fatindex_cs::keys()
   if (dextc_fetch(&fi_tc, &pv)) {
     SV *keys[DEXTV_MAXKEYS];
     OSPV_Generic *conf = (OSPV_Generic *) TcOSPV(&fi_tc)->conf_slot;
-    OSPV_Generic *paths = (OSPV_Generic*) (conf)->FETCHi(2)->get_ospv();
+    OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
     int keycnt = paths->_count();
     for (int kx=0; kx < keycnt; kx++) {
-      keys[kx] = osp->ossv_2sv(OSPV_Generic::path_2key(pv, (OSPV_Generic*) paths->FETCHi(kx)->get_ospv()));
+      keys[kx] = osp->ossv_2sv(OSPV_Generic::path_2key(pv, (OSPV_Generic*) paths->avx(kx)->get_ospv()));
     }
     dSP;
     EXTEND(SP, keycnt);
@@ -176,7 +172,7 @@ void OSPV_fatindex_cs::keys()
 int OSPV_fatindex_cs::seek(SV **top, int items)
 {
   OSPV_Generic *conf = (OSPV_Generic *) TcOSPV(&fi_tc)->conf_slot;
-  OSPV_Generic *paths = (OSPV_Generic*) (conf)->FETCHi(2)->get_ospv();
+  OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
   int keycnt = paths->_count() < items-1 ? paths->_count() : items-1;
   if (keycnt <= 0) return 0;
   OSSV tmpkeys[DEXTV_MAXKEYS];
@@ -185,7 +181,7 @@ int OSPV_fatindex_cs::seek(SV **top, int items)
   for (int xa=0; xa < keycnt; xa++) {
     tmpkeys[xa] = top[xa+1];
     keys[xa] = &tmpkeys[xa];
-    pcache[xa] = (OSPV_Generic*) paths->FETCHi(xa)->get_ospv();
+    pcache[xa] = (OSPV_Generic*) paths->avx(xa)->get_ospv();
   }
   return dextc_seek(&fi_tc, keycnt, pcache, keys);
 }
@@ -207,7 +203,10 @@ MODULE = ObjStore::REP::FatTree		PACKAGE = ObjStore::REP::FatTree
 BOOT:
   SV *rep;
   HV *xvrep = perl_get_hv("ObjStore::Index::REP", TRUE);
-  hv_store(xvrep, "ObjStore::REP::FatTree", 22, newSViv(1), 0);
+  hv_store(xvrep, "ObjStore::REP::FatTree::Index", 22, newSViv(1), 0);
+  HV *szof = perl_get_hv("ObjStore::sizeof", TRUE);
+  hv_store(szof, "OSPV_fatindex", 13, newSViv(sizeof(OSPV_fatindex)), 0);
+  hv_store(szof, "dextn", 5, newSViv(sizeof(dextn)), 0);
 
 MODULE = ObjStore::REP::FatTree		PACKAGE = ObjStore::REP::FatTree::Index
 
@@ -230,7 +229,7 @@ OSPV_fatindex::_conf_slot(...)
 	SV *ret = 0;
 	if (items == 2) {
 	  if (dexTvFILL(&THIS->fi_tv)) {
-	    croak("Cannot change the configuration of an active index");
+	    croak("Configuration of an active index cannot be changed");
 	  }
 	  ossv_bridge *br = osp->sv_2bridge(ST(1), 1, os_segment::of(THIS));
 	  OSSVPV *nconf = br->ospv();

@@ -325,10 +325,14 @@ README).
                   pork => [1,2,3],
                   chicken => [1,2,3],
                   wheat => [1,2,3],
+                  tests => 0,
                };
 
     $db->root("junk", sub { $junk });
     
+    my $pjunk = $db->root("junk");
+    $pjunk->{tests} ++;
+
     ObjStore::peek($db);
   };
 
@@ -1030,6 +1034,12 @@ bit vectors?  Or matrics?  These would not be difficult to add.
 Especially once Object Design figures out how to support multiple
 application schemas within the same executable.  They claim that this
 tonal facility will be available in the next release.
+
+=head2 ObjStore::Index
+
+Indices are extremely efficient because they do not copy their keys.
+It is critical that the copy is avoided, since keys can be relocated
+when arrays need to grow.  OSSVPV pointers are never relocated.
 
 =head1 DIRECTION
 

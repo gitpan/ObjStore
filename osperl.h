@@ -10,13 +10,13 @@ extern "C" {
 #ifndef __GNUG__
 
 #undef __attribute__
-#define __attribute__(attr)
+#define __attribute__(_arg_)
 
 /* This directive is used by gcc to do extra argument checking.  It
 has no affect on correctness; it is just a debugging tool.
 Re-defining it to nothing avoids warnings from the solaris sunpro
 compiler.  If you see warnings on your system, figure out how to force
-your compiler to shut-the-fuck-up, and send me a patch! */
+your compiler to shut-the-fuck-up (!), and send me a patch! */
 
 #endif
 
@@ -106,8 +106,11 @@ typedef void (*XS_t)(CV*);
 
 #define OSVf_XSHARED		0x80
 #define OSvXSHARED(sv)		((sv)->_type & OSVf_XSHARED)
-#define OSvXSHARED_on(sv)	((sv)->_type |= OSVf_XSHARED)
-#define OSvXSHARED_off(sv)	((sv)->_type &= ~OSVf_XSHARED)
+#define OSvXSHARED_set(sv,on)			\
+STMT_START {					\
+	if (on) ((sv)->_type |= OSVf_XSHARED);	\
+	else ((sv)->_type &= ~OSVf_XSHARED);	\
+} STMT_END
 
 #define OSvTRYWRITE(sv)						\
 STMT_START {							\
@@ -117,6 +120,7 @@ STMT_START {							\
 
 struct ossv_bridge;
 struct OSSVPV;
+struct OSPV_Generic;
 
 // 8 bytes
 struct OSSV {
@@ -146,6 +150,7 @@ struct OSSV {
   char *type_2pv();
   static char *type_2pv(int);
   OSSVPV *get_ospv();
+  OSPV_Generic *ary();
   //refcnt
   int PvREFok();
   void PvREF_inc(void *foo);
@@ -205,6 +210,8 @@ struct OSSVPV : os_virtual_behavior {
   void ROCNT_inc();
   void ROCNT_dec();
   int _is_blessed();
+  int can_update(void *vptr);
+  void NOTFOUND(char *meth);
   HV *stash();
   char *blessed_to(STRLEN *len);
   void fwd2rep(char *methname, SV **top, int items);
@@ -213,12 +220,9 @@ struct OSSVPV : os_virtual_behavior {
   virtual char *os_class(STRLEN *len);  //must be NULL terminated too
   virtual char *rep_class(STRLEN *len);
   virtual int get_perl_type();
-  // you must implement none or both of the following
+  // you must implement none or both of the following:
   virtual OSSV *traverse(char *keyish);
   virtual void XSHARE(int on);
-  // methods for easy downcasting assertions
-  virtual int is_array();
-  virtual int is_hash();
 };
 
 struct OSPV_Ref2 : OSSVPV {
@@ -259,8 +263,8 @@ struct OSPV_Ref2_protect : OSPV_Ref2 {
 struct OSPV_Cursor2 : OSSVPV {
   static os_typespec *get_os_typespec();
   virtual char *os_class(STRLEN *len);
-  virtual os_database *get_database();   //might be a ref too
-  virtual int deleted();
+//  virtual os_database *get_database();   //only for cross-database
+//  virtual int deleted();
   virtual OSSVPV *focus();
   virtual void moveto(I32);
   virtual void step(I32 delta);
@@ -281,35 +285,34 @@ struct OSPV_Cursor; //XXX
 
 struct OSPV_Container : OSSVPV {
   static os_typespec *get_os_typespec();
-  static void install_rep(HV *hv, const char *file, char *name, XS_t mk);
-  //  virtual void _rep();
   virtual double _percent_filled();
   virtual int _count();
   virtual void CLEAR();
   virtual OSSVPV *new_cursor(os_segment *seg);
 };
 
-// Methods should return OSSV*, OSPV_*, or void (avoid SV* !).  'void' is
-// preferred and the most flexible.  Not all methods conform to this
-// convention yet.
+// Methods should accept SV* and return OSSV*, OSPV_*, or void 
+// (avoid SV* !).  'void' is preferred and the most flexible. 
+// Not all methods conform to this convention yet.
 
 // Generic collections support the standard perl array & hash
 // collection types.  This is 1 class (instead of 2-3) because you might
 // have a single collection that can be accessed as a hash or
-// an index or an array.  (And there is no down-side except C++ ugliness.)
+// an index or an array.  (And there is no down-side except C++ ugliness,
+// and you already have that anyway. :-)
 
 struct OSPV_Generic : OSPV_Container {
   static os_typespec *get_os_typespec();
+  virtual OSSV *FETCH(SV *key);
+  virtual OSSV *STORE(SV *key, SV *value);
   // hash
-  virtual SV *FIRST(ossv_bridge*);
-  virtual SV *NEXT(ossv_bridge*);
-  virtual OSSV *FETCHp(char *key);
-  virtual OSSV *STOREp(char *key, SV *value);
+  virtual OSSV *hvx(char *key);
   virtual void DELETE(char *key);
   virtual int EXISTS(char *key);
+  virtual SV *FIRST(ossv_bridge*);
+  virtual SV *NEXT(ossv_bridge*);
   // array (preliminary)
-  virtual OSSV *FETCHi(int xx);
-  virtual OSSV *STOREi(int xx, SV *value);
+  virtual OSSV *avx(int xx);
   virtual int _LENGTH();
   virtual SV *Pop();    //these will change
   virtual SV *Unshift();
@@ -319,11 +322,8 @@ struct OSPV_Generic : OSPV_Container {
   virtual void add(OSSVPV *);
   virtual void remove(OSSVPV *);
   virtual void configure(SV **top, int items);
-  virtual OSSVPV *FETCHx(int xx);
+  virtual OSSVPV *FETCHx(SV *keyish);
   static OSSV *path_2key(OSSVPV *obj, OSPV_Generic *path);
-  // goofy
-  virtual int is_array();
-  virtual int is_hash();
   // sets : depreciated
   virtual void set_add(SV *);
   virtual int set_contains(SV *);
@@ -343,29 +343,25 @@ struct osp_pathexam {
   void abort();
 };
 
-struct ossv_bridge {
-  ossv_bridge *next;
+#if !OSSG
+#include "txn.h"
+
+struct ossv_bridge : osp_bridge {
   OSSVPV *pv;
-  int is_strong_ref;
   int is_transient;
-  int can_delete;
+  int can_delete;  //is perl done with us?
 
   ossv_bridge(OSSVPV *_pv);
   virtual ~ossv_bridge();
-  void dump();
-  void *get_location();
-  OSSVPV *ospv();
-  void HOLD();
-  void release();
+  virtual void release();
+  virtual void invalidate();
+  virtual int ready();
   void unref();
-  int ready();
-  void invalidate(OSSVPV * = 0);
+  OSSVPV *ospv();
 
   // Add transient cursors here in sub-classes
 };
 
-#if !OSSG
-#include "txn.h"
 #endif
 
 ////////////////////////////////////////////////////////////////////////

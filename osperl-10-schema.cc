@@ -1,5 +1,7 @@
 #include "osperl.h"
-#include "GENERIC.h"
+#include "GENERIC.h"  //depreciated
+#include "ODI.h"
+#include "Splash.h"
 #include "FatTree.h"
 #include <ostore/manschem.hh>
 
@@ -27,11 +29,13 @@ OS_MARK_SCHEMA_TYPE(OSPV_hvarray2);
 OS_MARK_SCHEMA_TYPE(OSPV_hvarray2_cs);
 // fat tree
 OS_MARK_SCHEMA_TYPE(dextn);
-OS_MARK_SCHEMA_TYPE(dexxpvtv);
 OS_MARK_SCHEMA_TYPE(dextce);
-OS_MARK_SCHEMA_TYPE(dexxpvtc);
 OS_MARK_SCHEMA_TYPE(OSPV_fatindex);
 OS_MARK_SCHEMA_TYPE(OSPV_fatindex_cs);
+// objectstore collections
+OS_MARK_DICTIONARY(hkey,OSSV*);
+OS_MARK_SCHEMA_TYPE(OSPV_hvdict);
+OS_MARK_SCHEMA_TYPE(OSPV_hvdict_cs);
 
 //-------------------------------- DEPRECIATED
 OS_MARK_SCHEMA_TYPE(OSPV_Ref);
@@ -43,9 +47,6 @@ OS_MARK_SCHEMA_TYPE(OSPV_hvarray);
 OS_MARK_SCHEMA_TYPE(OSPV_hvarray_cs);
 OS_MARK_SCHEMA_TYPE(OSPV_setarray);
 OS_MARK_SCHEMA_TYPE(OSPV_setarray_cs);
-// objectstore collections
-OS_MARK_DICTIONARY(hkey,OSSV*);
-OS_MARK_SCHEMA_TYPE(OSPV_hvdict);
-OS_MARK_SCHEMA_TYPE(OSPV_hvdict_cs);
+// sets!
 OS_MARK_SCHEMA_TYPE(OSPV_sethash);
 OS_MARK_SCHEMA_TYPE(OSPV_sethash_cs);

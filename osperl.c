@@ -4,6 +4,17 @@
 #include "osperl.h"
 #include <ostore/coll.hh>
 
+/* CCov: off */
+
+#define OR_RETURN_UNDEF(cond) if (!(cond)) return &sv_undef;
+
+/* CCov: fatal OLD_SUPPORT_CODE SERIOUS RETURN_BADNAME */
+#define OLD_SUPPORT_CODE
+#define SERIOUS warn
+#define RETURN_BADNAME(len) *len=3;return "???"
+
+/* CCov: on */
+
 /*--------------------------------------------- typemap services */
 
 os_segment *osp_thr::sv_2segment(SV *sv)
@@ -19,7 +30,7 @@ ossv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
 // Is OSSV in a PVMG?
 
   if (SvGMAGICAL(ref))
-    mg_get(ref);        //? XXX
+    mg_get(ref);        //NEEDED; can't remember how to reproduce the case
 
   assert(ref);
   if (!SvROK(ref)) {
@@ -112,56 +123,49 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
     
     DEBUG_wrap(warn("[av]wrap %p", ospv); sv_dump(rv););
     return rv;}
-  default:
-    croak("osp::ossv_2sv: unknown perl type (%d)", ospv->get_perl_type());
   }
+  croak("osp::ossv_2sv: unknown perl type (%d)", ospv->get_perl_type());
   return 0;
 }
 
 SV *osp_thr::ospv_2sv(OSSVPV *pv)
 {
-  if (!pv) return &sv_undef;
+  OR_RETURN_UNDEF(pv);
   return wrap(pv, ospv_2bridge(pv));
 }
 
 //    if (GIMME_V == G_VOID) return 0;  // fold into ossv_2sv? XXX
-// We must to trade speed for paranoia:
 SV *osp_thr::ossv_2sv(OSSV *ossv)
 {
+  // We must to trade speed for paranoia --
   if (!ossv) return &sv_undef;
   switch (ossv->natural()) {
   case OSVt_UNDEF:
     return &sv_undef;
   case OSVt_IV32:
-    if (!ossv->vptr) return &sv_undef;
+    OR_RETURN_UNDEF(ossv->vptr);
     return sv_2mortal(newSViv(OSvIV32(ossv)));
   case OSVt_NV:
-    if (!ossv->vptr) return &sv_undef;
+    OR_RETURN_UNDEF(ossv->vptr);
     return sv_2mortal(newSVnv(OSvNV(ossv)));
   case OSVt_PV:
-    if (!ossv->vptr) return &sv_undef;
+    OR_RETURN_UNDEF(ossv->vptr);
+    // Problems with eliding the copy:
+    // 1. What if the persistent copy is deleted?  Read transactions only.
+    // 2. There is significant bookkeeping overhead to invalidate
+    //    at the end of the transaction.  Maybe for long strings?
+    //    Too narrow an optimization.
     return sv_2mortal(newSVpv((char*) ossv->vptr, ossv->xiv));
   case OSVt_RV:{
-    if (!ossv->vptr) return &sv_undef;
+    OR_RETURN_UNDEF(ossv->vptr);
     OSSVPV *pv = (OSSVPV*) ossv->vptr;
     return wrap(pv, ospv_2bridge(pv));
   }
   case OSVt_IV16:
     return sv_2mortal(newSViv(OSvIV16(ossv)));
-  default:
-    warn("OSSV %s is not implemented", ossv->type_2pv());
-    return &sv_undef;
   }
-}
-
-void osp_thr::push_ospv(OSSVPV *pv)
-{
-  dOSP ;
-  if (!pv) return;
-  SV *sv = osp->ospv_2sv(pv);
-  dSP;
-  PUSHs(sv);
-  PUTBACK;
+  SERIOUS("OSSV %s is not implemented", ossv->type_2pv());
+  return &sv_undef;
 }
 
 OSSV *osp_thr::plant_ospv(os_segment *seg, OSSVPV *pv)
@@ -198,17 +202,27 @@ OSSV::OSSV() : _type(OSVt_UNDEF)
 OSSV::OSSV(SV *nval) : _type(OSVt_UNDEF)
 { this->operator=(nval); }
 
-OSSV::OSSV(OSSV *nval) : _type(OSVt_UNDEF)
-{ *this = *nval; }
+//OSSV::OSSV(OSSV *nval) : _type(OSVt_UNDEF)
+//{ *this = *nval; }
 
 OSSV::OSSV(OSSVPV *nval) : _type(OSVt_UNDEF)
 { s(nval); }
 
 OSSV::~OSSV()
 {
-  OSvXSHARED_off(this);
+  OSvXSHARED_set(this, 0);
   set_undef();
 }
+
+/*
+OSPV_Generic *OSSV::ary()
+{
+  assert(this);
+  assert(natural() == OSVt_RV);
+  assert(vptr);
+  return (OSPV_Generic*)vptr;
+}
+*/
 
 OSSVPV *OSSV::get_ospv()
 {
@@ -286,12 +300,6 @@ OSSV *OSSV::operator=(OSSV &nval)
 void OSSV::FORCEUNDEF()
 { _type = OSVt_UNDEF; }
 
-int OSSV::operator==(OSSVPV *pv)
-{
-  if (natural() != OSVt_RV) return 0;
-  return vptr == pv;
-}
-
 int OSSV::natural() const
 { return OSvTYPE(this); }
 
@@ -319,8 +327,8 @@ int OSSV::morph(int nty)
   case OSVt_RV: break;
   case OSVt_IV16: break;
 
-  default: warn("OSSV(0x%p)->morph type %s unknown! (serious error)",
-		this, OSSV::type_2pv(OSvTYPE(this)));
+  default: croak("OSSV(0x%p)->morph type %s unknown! (serious error)",
+		 this, OSSV::type_2pv(OSvTYPE(this)));
   }
   OSvTYPE_set(this, nty);
   return 1;
@@ -363,14 +371,13 @@ void OSSV::s(double nval)
   }
 }
 
-// nval must be null terminated or the length must be specified.
-// Since the length is not stored, a null terminated is added if not found.
+#define OSSV_NULL_TERMINATE 0  //memory cost is too high
 void OSSV::s(char *nval, os_unsigned_int32 nlen)
 {
   OSvTRYWRITE(this);
   assert(nlen > 0 || nval[0] == 0);
   if (nlen > 32767) {
-    warn("String truncated to 32767 bytes");
+    warn("ObjStore: string of length %d truncated to 32767 bytes", nlen);
     nlen = 32767;
   }
   xiv = nlen;
@@ -380,8 +387,8 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)
     vptr = 0;
   }
   char *str = new(os_segment::of(this), os_typespec::get_char(),
-		  nlen) char[nlen];
-  memcpy(str, nval, nlen);
+		  nlen+OSSV_NULL_TERMINATE) char[nlen+OSSV_NULL_TERMINATE];
+  memcpy(str, nval, nlen+OSSV_NULL_TERMINATE);
   vptr = str;
   DEBUG_assign(warn("OSSV(0x%x)->s(%s): alloc 0x%x", this, (char*) vptr, str));
 }
@@ -406,6 +413,7 @@ void OSSV::s(ossv_bridge *br)
   croak("OSSV::s(ossv_bridge*): assertion failed");
 }
 
+/*
 void OSSV::s(OSSV *nval)
 { 
   assert(nval);
@@ -419,9 +427,11 @@ void OSSV::s(OSSV *nval)
   default:         croak("OSSV::s(OSSV*): assertion failed");
   }
 }
+*/
 
+/* CCov: off */
 char OSSV::strrep[64];
-char *OSSV::stringify()
+char *OSSV::stringify() // debugging ONLY!
 {
   switch (natural()) {
   case OSVt_UNDEF: return "<UNDEF>";
@@ -443,6 +453,7 @@ char *OSSV::stringify()
   }
   return strrep;
 }
+/* CCov: on */
 
 int OSSV::istrue()
 {
@@ -453,7 +464,7 @@ int OSSV::istrue()
   case OSVt_PV:     return xiv != 0;
   case OSVt_RV:     return 1;
   case OSVt_IV16:   return OSvIV16(this) != 0;
-  default:	    croak("unknown type");
+  default:	    SERIOUS("istrue: unknown type"); return 0;
   }
 }
  
@@ -531,7 +542,8 @@ int OSSV::compare(OSSV *that)
   }
 }
  
-char *OSSV::type_2pv(int ty)
+/* CCov: off */
+char *OSSV::type_2pv(int ty)  //debugging ONLY
 {
   switch (ty) {
    case OSVt_UNDEF:  return "undef";
@@ -546,7 +558,7 @@ char *OSSV::type_2pv(int ty)
   }
 }
 
-char *OSSV::type_2pv()
+char *OSSV::type_2pv()  //debugging ONLY
 {
   int ty = natural();
   switch (ty) {
@@ -563,6 +575,7 @@ char *OSSV::type_2pv()
      return strrep;
   }
 }
+/* CCov: on */
 
 /*--------------------------------------------- OSSVPV */
 
@@ -623,13 +636,14 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
     if (OSPvBLESS2(this)) {
       OSPV_Generic *av = (OSPV_Generic*)classname;
       assert(av);
-      OSSV *str = av->FETCHi(1);
+      OSSV *str = av->avx(1);
       assert(str && str->natural() == OSVt_PV);
       CLASS = OSvPV(str, *CLEN);
     } else {
       // CLASS must be null terminated!
       CLASS = (char*) classname;
       *CLEN = strlen(CLASS);
+      OLD_SUPPORT_CODE
     }
   }
 
@@ -643,7 +657,7 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
       // CAN BE SLOW
       STRLEN len;
       char *oscl = os_class(&len);
-      if (len != strlen(oscl)) die("os_class(): length of %s is wrong", oscl);
+      if (len != strlen(oscl)) croak("os_class(): length of %s is wrong", oscl);
       SV *ldr = perl_get_sv("ObjStore::CLASSLOAD", 0);
       assert(ldr);
       dSP;
@@ -711,7 +725,7 @@ void OSSVPV::REF_inc() {
 
 void OSSVPV::REF_dec() { 
   if (_refs == 0) {
-    warn("Attempt to free unreferenced object (%p)", this);
+    SERIOUS("ObjStore: attempt to free unreferenced object (%p)", this);
     return;
   }
   if (_refs == 1 && classname != 0 && !OSPvINUSE(this)) {
@@ -748,19 +762,39 @@ void OSSVPV::REF_dec() {
 int OSSVPV::get_perl_type()
 { return SVt_PVMG; }
 
-char *OSSVPV::os_class(STRLEN *)
-{ croak("OSSVPV(0x%x)->os_class() must be overridden", this); return 0; }
-char *OSSVPV::rep_class(STRLEN *)
-{ croak("OSSVPV(0x%x)->rep_class() not found", this); return 0; }
+int OSSVPV::can_update(void *vptr)
+{
+  if (os_segment::of(this) == os_segment::of(0)) {
+    // might be updating the transient index in read mode
+    dOSP; dTXN;
+    return txn->can_update(vptr);
+  } else {
+    // can only be in update mode
+    return 1;
+  }
+}
+
+/* CCov: fatal NOTFOUND */
+void OSSVPV::NOTFOUND(char *meth)
+{
+  STRLEN len;
+  croak("OSSVPV(%p) '%s' method not found (os_class='%s' rep_class='%s')",
+	this, meth, os_class(&len), rep_class(&len));
+}
+
+char *OSSVPV::os_class(STRLEN *len)
+{ RETURN_BADNAME(len); }
+char *OSSVPV::rep_class(STRLEN *len)
+{ RETURN_BADNAME(len); }
 
 // Usually will override, but here's a simple default.
 ossv_bridge *OSSVPV::new_bridge()
 { return new ossv_bridge(this); }
 
 OSSV *OSSVPV::traverse(char *keyish)
-{ croak("OSSVPV(%p)->traverse", this); return 0; }
+{ NOTFOUND("traverse"); return 0; }
 void OSSVPV::XSHARE(int)
-{ croak("OSSVPV(%p)->xshare", this); }
+{ NOTFOUND("XSHARE"); }
 
 void OSSVPV::fwd2rep(char *methname, SV **top, int items)
 {
@@ -769,7 +803,7 @@ void OSSVPV::fwd2rep(char *methname, SV **top, int items)
   char *rep = rep_class(&len);
   HV *pkg = gv_stashpvn(rep, len, 0);
   if (pkg) meth = (SV*) gv_fetchmethod(pkg, methname);
-  if (!meth) croak("%s(%p)->%s not found", rep, this, methname);
+  if (!meth) NOTFOUND(methname);
   dSP;
   //  assert(SP == top); XXX
   PUSHMARK(SP);
@@ -778,58 +812,87 @@ void OSSVPV::fwd2rep(char *methname, SV **top, int items)
   perl_call_sv(meth, GIMME_V);
 }
 
-int OSSVPV::is_array() { return 0; }
-int OSSVPV::is_hash() { return 0; }
+/*--------------------------------------------- ossv_bridge */
 
-// common to containers
-void OSPV_Container::install_rep(HV *hv, const char *file, char *name, XS_t mk)
+ossv_bridge::ossv_bridge(OSSVPV *_pv)
+  : pv(_pv)
 {
-  SV *rep = (SV*) newXS(0, mk, (char*) file);
-  sv_setpv(rep, "$$$");
-  hv_store(hv, name, strlen(name), newRV(rep), 0);
+  is_transient = os_segment::of(pv) == os_segment::of(0);
+  can_delete = 0;
+
+  dOSP; dTXN;
+  assert(pv);
+  STRLEN junk;
+  DEBUG_bridge(warn("ossv_bridge 0x%x->new(%s=0x%x) is_transient=%d",
+		    this, _pv->os_class(&junk), pv, is_transient));
+  if (txn->can_update(pv) || is_transient) pv->REF_inc();
 }
 
+ossv_bridge::~ossv_bridge()
+{ assert(ready()); }
+OSSVPV *ossv_bridge::ospv()
+{ assert(pv); return pv; }
+int ossv_bridge::ready()
+{ return can_delete && !pv; }
+void ossv_bridge::release()
+{ unref(); can_delete = 1; }
+
+void ossv_bridge::invalidate()
+{
+  // If transient, has lifetime outside of a transaction.  Let perl
+  // decide when to delete it.
+  if (is_transient) return;
+  unref();
+}
+
+void ossv_bridge::unref()
+{
+  if (!pv) return;
+  OSSVPV *copy = pv;  //avoid any potential race condition
+  pv=0;
+
+  dOSP ; dTXN ;
+  DEBUG_bridge(warn("ossv_bridge 0x%x->unref(pv=0x%x) updt=%d",
+		    this, copy, txn->can_update(copy)));
+  if (txn->can_update(copy)) {
+    copy->REF_dec();
+  }
+}
+
+/*--------------------------------------------- INTERFACES */
+
 double OSPV_Container::_percent_filled()
-{ return -1; }
+{ NOTFOUND("_percent_filled"); return -1; }
 int OSPV_Container::_count()
-{ STRLEN ign; croak("%s->_count not implemented", os_class(&ign)); return 0; }
+{ NOTFOUND("_count"); return 0; }
 OSSVPV *OSPV_Container::new_cursor(os_segment *seg)
-{ STRLEN ign; croak("%s->new_cursor not implemented", os_class(&ign)); return 0; }
-void OSPV_Container::CLEAR() { croak("OSSVPV(0x%x)->CLEAR",this); }
+{ NOTFOUND("new_cursor"); return 0; }
+void OSPV_Container::CLEAR() { NOTFOUND("CLEAR"); }
 
 /*--------------------------------------------- GENERIC */
 
-SV *OSPV_Generic::FIRST(ossv_bridge*) { croak("OSSVPV(0x%x)->FIRST",this); return 0; }
-SV *OSPV_Generic::NEXT(ossv_bridge*) { croak("OSSVPV(0x%x)->NEXT",this); return 0; }
+SV *OSPV_Generic::FIRST(ossv_bridge*) { NOTFOUND("FIRST"); return 0; }
+SV *OSPV_Generic::NEXT(ossv_bridge*) { NOTFOUND("NEXT"); return 0; }
 
 // hash
-OSSV *OSPV_Generic::FETCHp(char *) { croak("OSSVPV(0x%x)->FETCHp",this); return 0; }
-OSSV *OSPV_Generic::STOREp(char *, SV *) { croak("OSSVPV(0x%x)->STOREp",this); return 0; }
-void OSPV_Generic::DELETE(char *) { croak("OSSVPV(0x%x)->DELETE",this); }
-int OSPV_Generic::EXISTS(char *) { croak("OSSVPV(0x%x)->EXISTS",this); return 0; }
-
-// set (depreciated)
-void OSPV_Generic::set_add(SV *) { croak("OSSVPV(0x%x)->add",this); }
-int OSPV_Generic::set_contains(SV *) { croak("OSSVPV(0x%x)->contains",this); return 0; }
-void OSPV_Generic::set_rm(SV *) { croak("OSSVPV(0x%x)->rm",this); }
+OSSV *OSPV_Generic::hvx(char *) { NOTFOUND("hvx"); return 0; }
+OSSV *OSPV_Generic::FETCH(SV *) { NOTFOUND("FETCH"); return 0; }
+OSSV *OSPV_Generic::STORE(SV *, SV *) { NOTFOUND("STORE"); return 0; }
+void OSPV_Generic::DELETE(char *) { NOTFOUND("DELETE"); }
+int OSPV_Generic::EXISTS(char *) { NOTFOUND("EXISTS"); return 0; }
 
 // array (preliminary)
-OSSV *OSPV_Generic::FETCHi(int) { croak("OSSVPV(0x%x)->FETCHi", this); return 0; }
-OSSVPV *OSPV_Generic::FETCHx(int) { croak("OSSVPV(0x%x)->FETCHx", this); return 0; }
-OSSV *OSPV_Generic::STOREi(int, SV *) { croak("OSSVPV(0x%x)->STOREi",this); return 0; }
-int OSPV_Generic::_LENGTH() {croak("OSSVPV(0x%x)->_LENGTH",this); return 0; }
-SV *OSPV_Generic::Pop() {croak("OSSVPV(0x%x)->Pop",this); return 0; }
-SV *OSPV_Generic::Unshift() {croak("OSSVPV(0x%x)->Unshift",this); return 0; }
-void OSPV_Generic::Push(SV *) {croak("OSSVPV(0x%x)->Push",this); }
-void OSPV_Generic::Shift(SV *) {croak("OSSVPV(0x%x)->Shift",this); }
-int OSPV_Generic::is_array() { return 1; }
-int OSPV_Generic::is_hash() { return 1; }
+OSSV *OSPV_Generic::avx(int) { NOTFOUND("avx"); return 0; }
+int OSPV_Generic::_LENGTH() { NOTFOUND("_LENGTH"); return 0; }
+SV *OSPV_Generic::Pop() { NOTFOUND("Pop"); return 0; }
+SV *OSPV_Generic::Unshift() { NOTFOUND("Unshift"); return 0; }
+void OSPV_Generic::Push(SV *) { NOTFOUND("Push"); }
+void OSPV_Generic::Shift(SV *) { NOTFOUND("Shift"); }
 
 // INDEX
-void OSPV_Generic::add(OSSVPV*)
-{croak("OSPV_Generic(%p)->add", this);}
-void OSPV_Generic::remove(OSSVPV*)
-{croak("OSPV_Generic(%p)->remove", this);}
+OSSVPV *OSPV_Generic::FETCHx(SV*) { NOTFOUND("FETCHx"); return 0; }
+void OSPV_Generic::add(OSSVPV*) { NOTFOUND("add"); }
+void OSPV_Generic::remove(OSSVPV*) { NOTFOUND("remove"); }
 void OSPV_Generic::configure(SV **top, int items)
 { fwd2rep("configure", top, items); }
 
@@ -840,7 +903,7 @@ OSSV *OSPV_Generic::path_2key(OSSVPV *obj, OSPV_Generic *path)
   int pi = 0;
   while (1) {
     STRLEN slen;
-    OSSV *s1 = path->FETCHi(pi);
+    OSSV *s1 = path->avx(pi);
     assert(s1->natural() == OSVt_PV);
     char *tr = OSvPV(s1, slen);
     assert(tr[slen-1] == 0);  //null terminated!
@@ -870,7 +933,6 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
 {
   mode = mode_in;
   assert(mode == 's' || mode == 'u');
-  assert(paths->is_array());
 
   int pathcnt = paths->_count();
   if (pathcnt < 1) croak("Index path unset");
@@ -880,8 +942,7 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
   trailcnt = 0;
 
   for (int kx=0; kx < pathcnt; kx++) {
-    pcache[kx] = (OSPV_Generic*) paths->FETCHi(kx)->get_ospv();
-    assert(pcache[kx]->is_array());
+    pcache[kx] = (OSPV_Generic*) paths->avx(kx)->get_ospv();
 
     OSPV_Generic *path = pcache[kx];
     int len = path->_count();
@@ -891,7 +952,7 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
     OSSVPV *obj = target;
 
     while (1) {
-      OSSV *s1 = path->FETCHi(pstep);
+      OSSV *s1 = path->avx(pstep);
       assert(s1->natural() == OSVt_PV);
 
       STRLEN slen;
@@ -906,7 +967,7 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
       if (!at || !at->is_set()) croak("Could not traverse field '%s'", tr);
 
       if (mode == 's')
-	OSvXSHARED_on(at);  // will reset when ROCNT_dec to zero
+	OSvXSHARED_set(at, 1);  // will reset when ROCNT_dec to zero
 
       if (++pstep < len) {
 	if (at->natural() != OSVt_RV) 
@@ -924,19 +985,20 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
   assert(keycnt == pathcnt);
 }
 
+// SET (DEPRECIATED)
+void OSPV_Generic::set_add(SV *) { NOTFOUND("add"); }
+int OSPV_Generic::set_contains(SV *) { NOTFOUND("contains"); return 0; }
+void OSPV_Generic::set_rm(SV *) { NOTFOUND("rm"); }
+
 // REFERENCES
 OSPV_Ref2::OSPV_Ref2()
 {}
 char *OSPV_Ref2::os_class(STRLEN *len)
 { *len = 13; return "ObjStore::Ref"; }
-os_database *OSPV_Ref2::get_database()
-{ croak("OSPV_Ref2::get_database()"); return 0; }
-char *OSPV_Ref2::dump()
-{ croak("OSPV_Ref::dump()"); return 0; }
-OSSVPV *OSPV_Ref2::focus()
-{ croak("OSPV_Ref::focus()"); return 0; }
-int OSPV_Ref2::deleted()
-{ croak("OSPV_Ref2(%p)->deleted(): unsupported on this type of ref", this); return 0; }
+os_database *OSPV_Ref2::get_database() { NOTFOUND("get_database"); return 0; }
+char *OSPV_Ref2::dump() { NOTFOUND("dump"); return 0; }
+OSSVPV *OSPV_Ref2::focus() { NOTFOUND("focus"); return 0; }
+int OSPV_Ref2::deleted() { NOTFOUND("deleted"); return 0; }
 
 // protected reference
 OSPV_Ref2_protect::OSPV_Ref2_protect(OSSVPV *pv) : myfocus(pv)
@@ -970,35 +1032,31 @@ OSSVPV *OSPV_Ref2_hard::focus()
 // CURSORS
 char *OSPV_Cursor2::os_class(STRLEN *len)
 { *len = 16; return "ObjStore::Cursor"; }
+
+//override like REFS if cross-database allowed
+/*
 os_database *OSPV_Cursor2::get_database()
 { return os_database::of(this); }
 int OSPV_Cursor2::deleted()
 { return 0; }
-OSSVPV *OSPV_Cursor2::focus()
-{ croak("OSPV_Cursor2(0x%x)->focus", this); return 0; }
-void OSPV_Cursor2::moveto(I32)
-{ croak("OSPV_Cursor2(0x%x)->moveto", this); }
-void OSPV_Cursor2::step(I32)
-{ croak("OSPV_Cursor2(0x%x)->step", this); }
-void OSPV_Cursor2::keys()
-{ croak("OSPV_Cursor2(0x%x)->keys", this); }
-void OSPV_Cursor2::at()
-{ croak("OSPV_Cursor2(0x%x)->at", this); }
-void OSPV_Cursor2::store(SV*)
-{ croak("OSPV_Cursor2(0x%x)->store", this); }
-int OSPV_Cursor2::seek(SV **, int)
-{ croak("OSPV_Cursor2(0x%x)->seek", this); return 0; }
-void OSPV_Cursor2::ins(SV*, int)
-{ croak("OSPV_Cursor2(0x%x)->ins", this); }
-void OSPV_Cursor2::del(SV*, int)
-{ croak("OSPV_Cursor2(0x%x)->del", this); }
-I32 OSPV_Cursor2::pos()
-{ croak("OSPV_Cursor2(0x%x)->pos", this); return -1; }
-void OSPV_Cursor2::stats()
-{ croak("OSPV_Cursor2(0x%x)->stats", this); }
+*/
+//cross-database
+
+OSSVPV *OSPV_Cursor2::focus() { NOTFOUND("focus"); return 0; }
+void OSPV_Cursor2::moveto(I32){ NOTFOUND("moveto"); }
+void OSPV_Cursor2::step(I32) { NOTFOUND("step"); }
+void OSPV_Cursor2::keys() { NOTFOUND("keys"); }
+void OSPV_Cursor2::at() { NOTFOUND("at"); }
+void OSPV_Cursor2::store(SV*) { NOTFOUND("store"); }
+int OSPV_Cursor2::seek(SV **, int) { NOTFOUND("seek"); return 0; }
+void OSPV_Cursor2::ins(SV*, int) { NOTFOUND("ins"); }
+void OSPV_Cursor2::del(SV*, int) { NOTFOUND("del"); }
+I32 OSPV_Cursor2::pos() { NOTFOUND("pos"); return -1; }
+void OSPV_Cursor2::stats() { NOTFOUND("stats"); }
 
 //////////////////////////////////////////////////////////////////////
 // DEPRECIATED
+/* CCov: off */
 OSPV_Ref::OSPV_Ref(OSSVPV *_at) : myfocus(_at)
 {}
 
@@ -1030,9 +1088,9 @@ OSPV_Cursor::OSPV_Cursor(OSSVPV *_at) : OSPV_Ref(_at)
 char *OSPV_Cursor::os_class(STRLEN *len)
 { *len = 29; return "ObjStore::DEPRECIATED::Cursor"; }
 void OSPV_Cursor::seek_pole(int)
-{ croak("OSPV_Cursor(0x%x)->seek_pole()", this); }
+{ NOTFOUND("seek_pole"); }
 void OSPV_Cursor::at()
-{ croak("OSPV_Cursor(0x%x)->at()", this); }
+{ NOTFOUND("at"); }
 void OSPV_Cursor::next()
-{ croak("OSPV_Cursor(0x%x)->next()", this); }
+{ NOTFOUND("next"); }
 

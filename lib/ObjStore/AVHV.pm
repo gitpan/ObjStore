@@ -14,6 +14,7 @@ sub verify_class_fields {
     return if $] < 5.00450;
     my ($db) = @_;
     my $layouts = $db->_private_root_data('layouts');
+    return if !$layouts;
     map { get_certified_layout($layouts, $_) } keys %$layouts;
 }
 
@@ -191,8 +192,8 @@ Support for extremely efficient records.
 =item *
 
 This could be implemented with zero memory overhead if we stored the
-layout in the per-class globals.  Will wait for performance numbers
-and overload % before considering such techniques.
+layout in a per-class global.  Will wait for performance numbers and
+overload % before considering such techniques.
 
 =back
 

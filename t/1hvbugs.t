@@ -1,5 +1,6 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..3\n"; }
+use Test;
+BEGIN { todo tests=>5, failok => [1,2]; }
 
 use ObjStore;
 use lib './t';
@@ -10,11 +11,11 @@ begin 'update', sub {
     my $john = $db->root('John');
     die 'no john' if !$john;
     
-    my $xr = $john->{nest}{rat} = {};
-#    ok(tied %$xr);
+    my $xr = $john->{nest}{rat} = {};  #autovivify doesn't work for tied hashes
+    ok(tied %$xr);
     
     $xr->{blat} = 69;
-#    ok($john->{nest}{rat}{blat} == 69);
+    ok( ($john->{nest}{rat}{blat} or 0) == 69);
     
     delete $john->{nest}{rat}{blat};
     delete $john->{nest}{rat};

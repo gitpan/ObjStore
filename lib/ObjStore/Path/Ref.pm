@@ -3,6 +3,8 @@ use strict;
 use Carp;
 use ObjStore;
 use base 'ObjStore::AV';
+use vars qw($VERSION);
+$VERSION = '1.00';
 
 sub new {
     my ($this, $where) = @_;

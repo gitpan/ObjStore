@@ -1,5 +1,6 @@
 # -*-perl-*- is going global, I tell ya!
-BEGIN { $| = 1; $tx=1; print "1..3\n"; }
+use Test;
+BEGIN { todo tests => 3 }
 
 package MyGSpot;
 use ObjStore;
@@ -20,13 +21,13 @@ begin 'update', sub {
     die "no db" if !$j;
 
     my $s = new MyGSpot($j);
-    my $g = $s->GLOBS;
+    my $g = $s->stash;
     $g->{color} = 'Pink';
     $g->{size} = 10;
 };
 
 begin sub {
-    my $g = $db->GLOBS('MyGSpot');
+    my $g = $db->stash('MyGSpot');
     ok($g->{color} eq 'Pink');
     ok($g->{size} == 10);
 };

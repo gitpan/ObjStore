@@ -1,3 +1,6 @@
+#ifndef __splash_h__
+#define __splash_h__
+
 /*
  * Version 1.91
  * Written by Jim Morris,  morris@netcom.com
@@ -55,8 +58,8 @@ public:
 			  allocinc, a, first));
     }
 
-    SPListBase(const SPListBase<T>& n);
-    SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n);
+//    SPListBase(const SPListBase<T>& n);
+//    SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n);
     virtual ~SPListBase(){
       DEBUG_splash(warn("~SPListBase() a= %p, allocinc= %d\n", a, allocinc));
       delete [] a;
@@ -138,6 +141,7 @@ INLINE const T& SPListBase<T>::operator[](const int i) const
      return a[first+i];
 }
 
+/*
 template <class T>
 SPListBase<T>::SPListBase(const SPListBase<T>& n)
 {
@@ -151,7 +155,8 @@ SPListBase<T>::SPListBase(const SPListBase<T>& n)
     DEBUG_splash(warn("SPListBase(SPListBase&) a= %p, source= %p\n", a, n.a));
 
 }
-
+*/
+/*
 template <class T>
 SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n){
 //  cout << "SPListBase<T>::operator=()" << endl;
@@ -168,6 +173,8 @@ SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n){
     DEBUG_splash(warn("operator=(SPListBase&) a= %p, source= %p\n", a, n.a));
     return *this;
 }
+*/
+
 /* 
 ** increase size of array, default means array only needs
 ** to grow by at least 1 either at the end or start
@@ -244,13 +251,13 @@ void SPListBase<T>::compact(const int n){ // shuffle down starting at n
 int i;
     assert((n >= 0) && (n < cnt));
     if(n == 0) {
-      a[first] = 0;
+      a[first].set_undef();
       first++;
     } else {
       for(i=n;i<cnt-1;i++) {
 	a[first+i]= a[(first+i)+1];
       }
-      a[cnt-2+first+1] = 0;  //snark the last element
+      a[cnt-2+first+1].set_undef();  //snark the last element
     }
     cnt--;
 }
@@ -337,3 +344,5 @@ int i;
 	compact(offset);
     return r;
 }
+
+#endif

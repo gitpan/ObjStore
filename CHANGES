@@ -1,3 +1,14 @@
+** 01-07-98 EMERGENCY RELEASE 1.23
+
+- Fixed refcnt problems in bless & indices.  From now on, make sure
+to check ossize as outlined in ./INSTALL.
+
+- Indices now set readonly locks *ONLY* on fields that are used as
+keys.
+
+- Notification API.
+
+
 ** 01-06-98 RELEASE 1.22
 
 - Real indices!  Queries such as /date between qw(Nov97 Jan98)/ are

@@ -15,7 +15,7 @@ struct OSPV_fatindex : OSPV_Generic {
   virtual void CLEAR();
   virtual void add(OSSVPV*);
   virtual void remove(OSSVPV*);
-  virtual OSSVPV *FETCHx(int xx);
+  virtual OSSVPV *FETCHx(SV *xx);
   virtual double _percent_filled();
   virtual int _count();
   virtual OSSVPV *new_cursor(os_segment *seg);

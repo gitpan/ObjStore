@@ -3,26 +3,17 @@
 package test;
 #use Carp qw(verbose carp croak);
 use Carp;
+use Test;
 use ObjStore;
 use ObjStore::Config ':ALL';
 require Exporter;
 @ISA = 'Exporter';
-@EXPORT = qw(&ok &test_db &open_db $db);
+@EXPORT = qw(&test_db &open_db $db);
 
 #ObjStore::debug qw(txn);
 #$ObjStore::REGRESS = 1;
-*tx = *main::tx;
 
 sub test_db() { TMP_DBDIR . "/perltest" }
-
-sub ok {
-    my ($ok, $guess) = @_;
-    carp "This is ok $tx" if $guess && $guess != $tx;
-    print(($ok? '':'not ')."ok $tx\n");
-#    croak $tx if !$ok;
-    ++ $tx;
-    $ok;
-}
 
 sub open_db() {
     $db = ObjStore::open(test_db(), 'update');

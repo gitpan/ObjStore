@@ -1,16 +1,8 @@
 TestDB {
   John => ObjStore::HV (1) {
      => 'zero',
-    1 => 'String 1',
-    10 => 'String 10',
-    2 => 'String 2',
-    3 => 'String 3',
-    4 => 'String 4',
-    5 => 'String 5',
-    6 => 'String 6',
-    7 => 'String 7',
-    8 => 'String 8',
-    9 => 'String 9',
+    a => ObjStore::AV (1) [
+    ],
     c => ObjStore::SetEmulation (1) [
     ObjStore::HV (1) {
       joe => 1,
@@ -22,24 +14,14 @@ TestDB {
       ed => 3,
     },
     ],
-    dict => ObjStore::HV (1) {
-      1 => 3.14159,
-      10 => 31.4159,
-      2 => 6.28318,
-      3 => 9.42477,
-      4 => 12.56636,
-      5 => 15.70795,
-      6 => 18.84954,
-      7 => 21.99113,
-      8 => 25.13272,
-      9 => 28.27431,
-    },
     fatty => ObjStore::AV (1) [
-      32760,
+      undef,
       32761,
       32762,
       ...
     ],
+    h => ObjStore::HV (1) {
+    },
     junk_in_seg => ObjStore::HV (1) {
       nums => ObjStore::AV (1) [
         1,
@@ -72,27 +54,10 @@ TestDB {
     obj => PTest (1) {
       is => 1,
     },
-    os_dictionary => ObjStore::HV (1) {
-      1 => 1,
-      2 => 1,
-      4 => 1,
-      5 => 1,
-      6 => 1,
-      7 => 1,
-      8 => 1,
-    },
     right => 70,
-    splash_array => ObjStore::HV (1) {
-      1 => 1,
-      2 => 1,
-      4 => 1,
-      5 => 1,
-      6 => 1,
-      7 => 1,
-      8 => 1,
-    },
+
   },
   tripwire => ObjStore::HV (1) {
   },
 },
-count = 241
+count = 164

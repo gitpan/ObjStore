@@ -3,6 +3,8 @@ use strict;
 use Carp;
 use ObjStore;
 use base 'ObjStore::Path::Ref';
+use vars qw($VERSION);
+$VERSION = '0.01';
 
 # Do something reasonable if the stack is made of Cursors.
 

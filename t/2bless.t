@@ -1,5 +1,6 @@
 # This is obviously -*-perl-*- don'tcha-think?
-BEGIN { $| = 1; $tx=1; print "1..21\n"; }
+use Test;
+BEGIN { todo tests => 24, failok => [8,20]; }
 
 package Winner;
 use vars qw($VERSION);
@@ -67,7 +68,7 @@ sub isa_test {
 
     pop @{"$pkg\::ISA"}; ++ $ObjStore::RUN_TIME;
     ok($o->isa('Winner'));
-#    $o->UNIVERSAL::isa('Winner') ? not_ok:ok; #XXX
+    ok(! $o->UNIVERSAL::isa('Winner')); #ISA cache broken
     bless $o, $pkg;
     bless $o, $pkg;
     ok(isa_matches($o));
@@ -85,9 +86,11 @@ begin 'update', sub {
     # basic bless
     my $phash = bless {}, 'Bogus';
     my $p1 = bless $phash, 'PTest';
+    my $transient = "$p1";
     ok(ref $p1 eq 'PTest') or warn $p1;
     
     $j->{obj} = bless $p1, 'PTest';
+    ok($j->{obj} ne $transient) or warn $transient;
     ok(ref $j->{obj} eq 'PTest') or warn $j->{obj};
 
     $j->{obj} = new PTest($db);

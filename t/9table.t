@@ -1,5 +1,6 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..3\n"; }
+use Test;
+BEGIN { todo tests => 3 }
 
 use ObjStore;
 use lib './t';

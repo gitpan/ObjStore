@@ -13,8 +13,6 @@ bootstrap ObjStore::REP::FatTree $ObjStore::VERSION;
 package ObjStore::REP::FatTree::Index;
 use Carp;
 
-#%sizeof = ();   XS
-
 # make recursive!
 sub estimate {
     my ($type, $count, $fill) = @_;
@@ -42,10 +40,11 @@ sub configure {
     my $c = $o->ObjStore::REP::FatTree::Index::_conf_slot();
     $c ||= [0,1,[]];
     return $c if @_ == 0;
-    while (@_) {
-	my $k = shift;
-	croak "$o->configure: no value found for key '$k'" if !@_;
-	my $v = shift;
+    my @conf = ref $_[0] ? %{$_[0]} : @_;
+    while (@conf) {
+	my $k = shift @conf;
+	croak "$o->configure: no value found for key '$k'" if !@conf;
+	my $v = shift @conf;
 	if ($k eq 'unique') {
 	    $c->[1] = $v;
 	} elsif ($k eq 'path') {
@@ -54,6 +53,7 @@ sub configure {
 	    croak("$o->configure(path=>'$v'): too many keys") if @comp >= 8;
 	    $c->[2] = [map {[map {"$_\0"} split(m"\/", $_)]} @comp];
 	    
+	} elsif ($k eq 'size' or $k eq 'type') {
 	} else {
 	    carp "$o->configure: unknown parameter '$k'";
 	}

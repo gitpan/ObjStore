@@ -1,12 +1,13 @@
 #-*-perl-*-
-BEGIN { $|=1; $tx=1; print "1..11\n"; }
+use Test;
+BEGIN { todo tests=>15 }
 
 use strict;
 use ObjStore ':ADV';
 use lib './t';
 use test;
 ObjStore::fatal_exceptions(0);
-#ObjStore::debug qw/refcnt array/;
+#ObjStore::debug qw/ index /;
 
 package Toy;
 use base 'ObjStore::HV';
@@ -40,8 +41,10 @@ begin 'update', sub {
 
     my $nx = ObjStore::Index->new($j);
     $nx->configure(path=>"name");
+    $nx->configure(path=>"name");
     
     my $ax = ObjStore::Index->new($j);
+    ok(!defined $ax->[0]);
     $ax->configure(unique => 0, path=>"age/0, age/1");
 
     my @ages;
@@ -62,6 +65,7 @@ begin 'update', sub {
 	$nx->add($t);
 	$ax->add($t);
     }
+    ok($nx->count == 11);
 
     # READONLY
     begin sub { $ages[0][0] = 0; };
@@ -70,6 +74,7 @@ begin 'update', sub {
 
     $nx->[0]{age}[3] = 3;
     $nx->[0]{'ok'} = 1;  #should allow writes
+    $nx->add($nx->[0]);  #re-add is ok
 
 #    ok(readonly($nx->[0]{age}));  not yet
 
@@ -78,7 +83,10 @@ begin 'update', sub {
 
     # cursors
     my $c = $ax->new_cursor;
+#    ok(! $c->deleted);
+#    ok($c->get_database->get_id eq $db->get_id);
     ok($c->focus() == $ax) or warn $c->focus;
+    ok(! $c->seek());
     ok(! $c->seek(2,5));
     $c->step(-1);
     ok(join('', $c->keys()) eq '24') or warn join('',$c->keys);
@@ -89,7 +97,11 @@ begin 'update', sub {
     ok($c->at == $at);
 
     # readonly flags again
+    $ax->add(new Toy($j, {name => 'Decoy', age => bless [1,3], 'Toy::AgeGrp'}));
+    $ax->remove($ax->[1]); #will seek to [0] first
     $ax->CLEAR();
+    ok(!defined $ax->[0]);
+
     $nx->[0]{age}[0] = 3;
 
     $nx->map(sub { my $r = shift; ok(0) if $ax->add($r) != $r; });

@@ -1,5 +1,6 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..6\n"; }
+use Test;
+BEGIN { todo tests => 10 }
 
 use ObjStore;
 use lib './t';
@@ -11,8 +12,18 @@ my $sid;
 
 begin 'update', sub {
     my $seg = $db->create_segment;
+    $seg->set_comment("tripwire");
     $sid = $seg->get_number;
     $db->root("tripwire", [1,2,3,'Oops, tripped!']);
+
+    my $r = $db->find_root('empty') || $db->create_root('empty');
+    ok(!defined $r->get_value) or warn $r->get_value;
+    ok($r->get_name eq 'empty') or warn $r->get_name;
+    $r->set_value([0]);
+    ok($r->get_value->[0] == 0);
+    $r->set_value([1]);
+    ok($r->get_value->[0] == 1);
+    $r->destroy;
 };
 
 begin 'update', sub {

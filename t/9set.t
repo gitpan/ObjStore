@@ -1,5 +1,6 @@
 # set -*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..7\n"; }
+use Test;
+BEGIN { todo tests => 7 }
 
 use strict;
 use ObjStore;

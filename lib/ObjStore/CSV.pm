@@ -47,7 +47,7 @@ sub print_csv {
 	    my @k;
 	    if ($v->isa('ObjStore::AVHV')) {
 		my $kmap = $v->[0];
-		@k = grep(!$kmap->is_system_field($_), keys %$kmap);
+		@k = grep(!/^_/, keys %$kmap);
 	    } else {
 		@k = keys %$v;
 	    }
@@ -67,7 +67,7 @@ sub print_csv {
 	    if ($v->isa('ObjStore::AVHV')) {
 		my $kmap = $v->[0];
 		while (my ($rk, $rx) = each %$kmap) {
-		    next if $kmap->is_system_field($rk);
+		    next if $rk =~ m/^_/;
 		    my $rv = $v->[$rx];
 		    if (!exists $st->{cmap}{$rk}) {
 			$st->{cmap}{$rk} = @{$st->{cols}};

@@ -12,6 +12,8 @@ use ObjStore ':ADV';
 use ObjStore::Peeker;
 require ObjStore::Path::Ref;
 use base 'ObjStore::HV';
+use vars qw($VERSION);
+$VERSION = '1.00';
 
 # Refcnts are wildly inaccurate unless you are in read_only mode? XXX
 
@@ -53,8 +55,7 @@ sub enter {
 	    $o->{cursor}->open() if $o->{cursor};
 	};
 	if ($@) {
-	    warn "** An non-serious error occured while re-entering '$o->{db}':\n";
-	    warn $@;
+	    warn "A non-serious error occured while re-entering '$o->{db}':\n$@\n";
 	    $o->{cursor} = new ObjStore::Path::Ref($o);
 	    $o->{db} = '';
 	}
@@ -84,7 +85,11 @@ sub fetch_db {
     my $db;
     $db = ObjStore::lookup($view->{db});
     if (!$db->is_open) {
-	$db->open('update');
+	begin sub { $db->open('update'); };
+	if ($@) {
+	    die if $@ !~ m'permission_denied';
+	    $db->open('mvcc');
+	}
 	$db->import if $db->can('import');
     }
     $db;
@@ -112,7 +117,7 @@ sub resolve {
     my @at = ('/', $db, $cs->map(sub { shift->focus }));
     if ($path =~ m/^\s*$/) {
 	('/', $db)
-    } elsif ($path =~ m,^[\w/.]+$,) { 
+    } elsif ($path =~ m,^[\w\/\.\:]+$,) {
 	my @path = split(m'/+', $path);
 	for my $c (@path) {
 	    next if $c eq '.';
@@ -195,10 +200,10 @@ sub execute {
 		my $cs = $o->{cursor};
 		if ($at->can("POSH_ENTER")) {
 		    my $at2 = $at->POSH_ENTER();
-		    warn "$at->POSH_ENTER() returned $at2\n"
-			if !blessed $at2;
-		    if (blessed $at and $at->can("new_ref")) {
-			$cs->_Push($at->new_ref($cs, 'unsafe'));
+		    if (!blessed $at2 or !$at2->_is_persistent) {
+			warn "$at->POSH_ENTER() returned junk ($at2)\n";
+		    } else {
+			$cs->_Push($at2->new_ref($cs, 'unsafe'));
 		    }
 		}
 	    }
@@ -379,7 +384,7 @@ sub new {
 	$o->{public}{user} ||= $o->{user};
 	$o->{pref} ||= {view=>0};
 	$o->{view} ||= [new Posh::View($o->{public})];
-	$o->{prompt} = $o->view->enter($o->get_pathname);
+	$o->{prompt} = $o->view->enter($o->wdb->get_pathname);
 	$o->uncache;
     });
     die if $@;

@@ -95,7 +95,8 @@ sub reset {
     for (my $i=0; $i < $x->count; $i++) {
 	$x->[$i]->boss($x->[int(rand($x->count))]);
     }
-    $db;
+    $t->{you} ||= new Worker($db, "Winner", "Potential");
+    ();
 }
 
 #------------------------------------------------------------

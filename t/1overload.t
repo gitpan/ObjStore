@@ -1,14 +1,18 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..9\n"; }
+use Test;
+BEGIN { todo tests => 9 }
 
 use ObjStore ':ADV';
 use lib "./t";
 use test;
 
 &open_db;
-begin sub {
+begin 'update', sub {
     my $john = $db->root('John');
     my $john_copy = $db->root('John');
+
+    $john->{a} = [];
+    $john->{h} = {};
 
     ok($john);
     ok(! ($john == 'john'));

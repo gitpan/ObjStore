@@ -26,29 +26,22 @@ that there isn't always room for improvement...
 
 + IDEAS +
 
+testing
+  OSSV::compare
+  redesign t/1index.t
+
 ospeek
   style - raw, vanilla, etc...
   -depth switch?
-Peeker
-  fix comma - $o->comma, then check in $o->nl
-  fix for "$at = " prefix ?
 
 Restart read transactions without jumping up the stack!
   begin('update!',...)
 
 Table3
-  add_index should create a scratch cursor to speed fetch
+  add_index should create a scratch cursor to speed fetch?
 
 ObjStore::FatTree
-  hash based index
-
-do autoclassloading upon open; maybe not, you don't know what to load
-
-database access control API
-  segment access control...?
-  change_schema_key:
-    delete database INC, checksum %INC, light up security flag
-    open: require each %INC, verify checksums (unless some flags is set)
+  array
 
 posh
   factor more!
@@ -67,25 +60,25 @@ _Per_segment_data is not free'd when no longer needed
 
 + VAGUE POSSIBILITIES +
 
+generate 'new' methods at compile time!
+
+Autoclassloading upon open?  Maybe not, you don't know what to load
+
+CLEAR & GIMME_V optimizations are broken with tied hashes
+
 pathexam
   invisibly auto-traverse references?
-
-refactor XSHARED stuff
 
 get_database
   factor
   os_server::get_databases() doesn't deal with bless
-
-Split GENERIC into ODI & Splash parts!
-
-use a hashing algorithm to speed up splash hashes!
 
 factor error messages like diagnostics.pm
 
 prune debugging stuff
 
 Improve transaction memory management.  Go back to using doubly-linked
-lists to destroy the bridge as soon as possible.
+lists to destroy the bridge at soonest point.
 
 iterating over AVHV keys is broken - cursor is stored in the ossv_bridge
   unmagic the keys hash - make non-lazy?
@@ -94,10 +87,12 @@ propagate READONLY to the perl side?
 
 posh
   improve pre/post eval logic
-  $at->open('mvcc') ?
   Devel::Symdump->methods when peeking if blessed?
   Multiple sessions per user?  Who cares?
   Call system() when in ufs?  How about rawfs?
+Peeker
+  fix comma - $o->comma, then check in $o->nl
+  fix for "$at = " prefix ?
 
 cache last lookup to avoid gv_fetchmethod(NOREFS)?
 
@@ -111,9 +106,9 @@ transaction hooks?
 
 depreciate os_object_cursor?
 
-ObjStore::File!
+ObjStore::File!  Use a FatTree of 4K buffers?
 
-automatically spooge $ObjStore::RUN_TIME if @ISA changes
+automatically spooge $ObjStore::RUN_TIME if @ISA changes?
 
 install HTML versions of the pod files & gif image
 
@@ -121,9 +116,14 @@ notifications
   batch notify
   notify should in/out the string length - #SE057480_O#
 
+change_schema_key:
+  delete database INC, checksum %INC, light up security flag
+  open: require each %INC, verify checksums (unless some flags is set)
+  TAINTing?
+
 Make XS code more efficient.  (How?)
 
-Evolve the schema to eliminate this annoyance:  The object at 0xdff30194(</elvis/export2/os/tmp/perltest | 2 | 194>)(type "OSPV_hvdict"), contains a pointer at 0xdff301a0(OSPV_hvdict::OSPV_Generic::OSPV_Container::OSSVPV.classname) with the illegal value 0xe0582d28. The declared type "char" is incompatible with the type of the object at address </elvis/export2/os/tmp/perltest | 4 | 2d28>(OSPV_avarray::OSPV_Generic::OSPV_Container::OSSVPV::os_virtual_behavior|vtbl{os_virtual_behavior*}).  The type of this object is: OSPV_avarray.
+Evolve the schema to eliminate this harmless annoyance:  The object at 0xdff30194(</elvis/export2/os/tmp/perltest | 2 | 194>)(type "OSPV_hvdict"), contains a pointer at 0xdff301a0(OSPV_hvdict::OSPV_Generic::OSPV_Container::OSSVPV.classname) with the illegal value 0xe0582d28. The declared type "char" is incompatible with the type of the object at address </elvis/export2/os/tmp/perltest | 4 | 2d28>(OSPV_avarray::OSPV_Generic::OSPV_Container::OSSVPV::os_virtual_behavior|vtbl{os_virtual_behavior*}).  The type of this object is: OSPV_avarray.
 
 
 + BIGGISH PROJECTS +
@@ -131,6 +131,10 @@ Evolve the schema to eliminate this annoyance:  The object at 0xdff30194(</elvis
 Support for multiple application schemas (expected 1Q98)
 
 Add support for parts of the TimeSeries Object Manager?
+
+Needed is a more flexible hash table that can serve to replace
+os_Dictionary and also be used as an ObjStore::Index.  Also, splash
+hash performance would be easy to improve.
 
 
 + CORE-PERL WISH LIST +

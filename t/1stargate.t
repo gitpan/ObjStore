@@ -1,5 +1,6 @@
 #-*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..6\n"; }
+use Test;
+BEGIN { todo test => 6 }
 
 use Carp;
 use ObjStore;
@@ -8,7 +9,7 @@ use test;
 
 sub chk_refs {
     my ($r1, $r2) = @_;
-    ok($r1 == $r2) or carp "[$tx] refs wrong by ".($r1-$r2);
+    ok($r1 == $r2) or carp "[$ntest] refs wrong by ".($r1-$r2);
 }
 
 my $refs;

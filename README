@@ -7,14 +7,32 @@ Name           DSLI  Description                                  Info
 ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
 - Requires ObjectStore OODBMS (http://www.odi.com) & perl 5.004_04
-- Perl 5.005 recommended (once available)
+- Perl 5.005 recommended (when available)
 
 Get it via http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 
 ##################
-# RE@ENT CHAN@ES #
+# RECENT CHAN@ES #
 ##################
+
+
+** 01-18-98 RELEASE 1.25
+
+- Completed test coverage analysis of the C++ code (with the
+assistance of Devel::CCov).  A number of minor bugs were uncovered and
+fixed.  Most notable bug: splash hashes did not take advantage of
+already empty slots during STORE.
+
+- Fixed: problems when doing updates while two databases are open, one
+in mvcc mode and one in update mode.  $db->is_writable is now the
+preferred method to determine if you can update data.
+
+- Split each group of collection representations into its own XS file.
+Optimized creation of new persistent objects.  (This may cause
+backward compatibility problems if you were passing an exact
+representation type to a 'new' method.)  The 'new' method will be
+auto-generated at compile-time in a forthcoming release.
 
 
 ** 01-10-98 RELEASE 1.24
@@ -22,35 +40,18 @@ Get it via http://www.perl.com/CPAN/authors/id/JPRIT/ !
 - The index readonly locking has been tweaked again.  You'll need to
 re-create any indices.  Let me know if I got it right this time!
 
-- Re-organized the logic of blessing with significant performance
+- Re-organized the logic of blessing with a significant performance
 improvement.  Greatly expanded tracking of version numbers.  Be aware
 that bless now requires all classes throughout the @ISA heirarchy to
-set their $VERSION since is_evolved compares them (and not the @ISA
-tree).
+set their $VERSION since is_evolved compares them (and no longer
+compares the @ISA tree).
 
-- Persistent per-class globals via a new $o->GLOBS() method.
+- Persistent per-class globals via a new $o->stash() method.
 
 - Improved the API for private root data.  Also, moved the private
 root to a separate segment (so it's easier to study memory usage).
 
 - $db->sync_INC uses unshift instead of push.
-
-
-** 01-07-98 EMERGENCY RELEASE 1.23
-
-- Fixed refcnt problems in bless & indices.  From now on, make sure
-to check ossize as outlined in ./INSTALL:
-
-  'make test', then save the output of 'ossize -c'.  Run 'make test'
-  again and compare 'ossize -c' to the last snapshot.  The only thing
-  that might be different is the addition of another empty segment (this
-  is a known bug in safe references, example below).  If anything else
-  changes, there is a serious refcnt bug!
-
-- Indices now set readonly locks *ONLY* on fields that are used as
-keys.
-
-- Notification API.
 
 
 see ./INSTALL for hints on installation

@@ -1,9 +1,9 @@
 # Give -*-perl-*- a kiss
 
+use Test;
 BEGIN {
-    $| = 1; 
-    print("1..0\n"), exit if $]<5.00452;
-    $tx=1; print "1..4\n";
+    if ($] < 5.00450) { todo tests => 0; exit; }
+    else { todo tests => 5; }
 }
 
 use lib "./t";
@@ -50,6 +50,8 @@ begin 'update', sub {
     my $o = $john->{avhv};
     my $cnt = $o->count;
     bless $o, 'Test::AVHV2';
+    ok($o->is_evolved);
+    $o->evolve;
     ok($o->is_evolved);
     ok($o->{'my'} == 1 and
        $o->{'name'} == 2 and

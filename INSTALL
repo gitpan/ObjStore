@@ -15,25 +15,13 @@ Tested Configurations:
 
      Dec C++ Compiler / ObjectStore 5.0
 
-
 -------------------------------------------------------------------------
 
-- ./t/z_ospeek.t is very sensitive to the success of the other tests.
+- ./t/zpeek.t is very sensitive to the success of the other tests.
 
-- 'make test', then save the output of 'ossize -c'.  Run 'make test'
-again and compare 'ossize -c' to the last snapshot.  The only thing
-that might be different is the addition of another empty segment (this
-is a known bug in safe references, example below).  If anything else
-changes, there is a serious refcnt bug!
-
-Data segment 6:
-Size: 1024 bytes (1 Kbytes)
- Singles   Arrays    Total   Obj Sz   Total Sz  Type
-       0        2      628        1        628  (unused space)
-       0        1       10       12        128  _Hash_table_entry<unsigned int,void*>
-       1        0        1       32         32  _Per_segment_data
-       1        0        1       20         20  _Per_segment_reference_db
-
+- Keep running 'make test' until the database size matches.  It takes
+me three trials.  If it will not match, there is a serious refcnt
+problem.  Also see 'ossize -c'.
 
 -------------------------------------------------------------------------
 

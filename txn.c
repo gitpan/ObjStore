@@ -1,5 +1,7 @@
 #include "osperl.h"
 
+/* CCov: off */
+
 void osp_croak(const char* pat, ...)
 {
   dSP;
@@ -17,13 +19,38 @@ void osp_croak(const char* pat, ...)
   perl_call_pv("Carp::croak", G_DISCARD);
 }
 
+/* CCov: on */
+
 // Since perl_exception has no parent and is never signalled, we always
 // get an unhandled exception when ObjectStore throws.
 DEFINE_EXCEPTION(perl_exception,"Perl/ObjStore Exception",0);
 
+/*--------------------------------------------- osp_bridge */
+
+osp_bridge::osp_bridge()
+{
+  dOSP; dTXN;
+  next = txn->bridge_top;
+  txn->bridge_top = this;
+}
+
+osp_bridge::~osp_bridge()
+{
+//  assert(ready()); should be done in subclasses
+  DEBUG_bridge(warn("bridge(%p)->DESTROY", this));
+}
+void osp_bridge::release()
+{ croak("osp_bridge::release()"); }
+void osp_bridge::invalidate()
+{ croak("osp_bridge::invalidate()"); }
+int osp_bridge::ready()
+{ croak("osp_bridge::ready()"); return 0; }
+
 /*--------------------------------------------- per-thread context */
 
 int osp_thr::info_key;
+
+/* CCov: off */
 
 osp_thr *osp_thr::fetch()
 {
@@ -72,6 +99,8 @@ static void ehook(tix_exception_p cause, os_int32 value, os_char_p report)
   }
 }
 
+/* CCov: on */
+
 osp_thr::osp_thr()
   : handler(&perl_exception)
 {
@@ -88,10 +117,10 @@ osp_thr::osp_thr()
 
 void osp_thr::destroy_bridge()
 {
-  ossv_bridge *br = bridge_top;
+  osp_bridge *br = bridge_top;
   bridge_top=0;
   while (br) {
-    ossv_bridge *nxt = br->next;
+    osp_bridge *nxt = br->next;
     if (br->ready()) delete br;
     else {
       br->next = bridge_top;
@@ -107,92 +136,8 @@ osp_thr::~osp_thr()
   //free errsv 
 }
 
-int osp_thr::can_update()
-{ return txn && txn->can_update(); }
-
-/*
-void osp_thr::invalidate(OSSVPV *pv)
-{
-  // nuke? XXX
-  int reps=0;
-  DEBUG_txn(warn("thr(%p)->invalidate(%p): enter", this, pv));
-  osp_txn *tx = txn;
-  while (tx) {
-    tx->invalidate(pv);
-    tx = tx->up;
-    if (reps++ > 1000)
-      croak("thr(%p)->invalidate: loop detected", this);
-  }
-  DEBUG_txn(warn("thr(%p)->invalidate(%p): exit", this, pv));
-}
-*/
-
-/*--------------------------------------------- ossv_bridge */
-
-ossv_bridge::ossv_bridge(OSSVPV *_pv)
-  : pv(_pv)
-{
-  is_transient = os_segment::of(pv) == os_segment::of(0);
-  can_delete = 0;
-
-  dOSP ; dTXN ;
-  assert(pv);
-  STRLEN junk;
-  DEBUG_bridge(warn("ossv_bridge 0x%x->new(%s=0x%x) is_transient=%d",
-		    this, _pv->os_class(&junk), pv, is_transient));
-  if (txn->can_update()) pv->REF_inc();
-
-  // add to TXN bridge
-  next = txn->bridge_top;
-  txn->bridge_top = this;
-}
-
-ossv_bridge::~ossv_bridge()
-{
-  if (!can_delete) croak("%p->~ossv_bridge: still valid");
-  DEBUG_bridge(warn("ossv_bridge(0x%x)->DESTROY", this));
-}
-
-int ossv_bridge::ready()
-{ return can_delete && !pv; }
-
-void ossv_bridge::release()
-{
-  DEBUG_bridge(warn("ossv_bridge 0x%x->release(pv=0x%x)", this, pv));
-  unref(); can_delete = 1;
-}
-
-void ossv_bridge::unref()
-{
-  if (!pv) return;
-  OSSVPV *copy = pv;  //avoid race condition
-  pv=0;
-
-  dOSP ; dTXN ;
-  DEBUG_bridge(warn("ossv_bridge 0x%x->unref(pv=0x%x) updt=%d",
-		    this, copy, txn->can_update()));
-  if (txn->can_update()) {
-    copy->REF_dec();
-  }
-}
-
-void ossv_bridge::invalidate(OSSVPV *it)
-{
-  if (is_transient || (it && pv != it)) return;
-  unref();
-}
-
-void ossv_bridge::dump()
-{ warn("ossv_bridge=0x%x pv=0x%x next=0x%x", this, pv, next); }
-
-OSSVPV *ossv_bridge::ospv()
-{
-  if (!pv) croak("Attempt to use persistent variable out of scope (0x%p)", this);
-  return pv;
-}
-
-void *ossv_bridge::get_location()
-{ return pv; }
+int osp_thr::can_update(void *vptr)
+{ return txn && txn->can_update(vptr); }
 
 /*--------------------------------------------- per-transaction context */
 
@@ -227,9 +172,9 @@ osp_txn::~osp_txn()
   int moved=0;
 
   // invalidate; then delete or move to thread bridge
-  ossv_bridge *br = bridge_top;
+  osp_bridge *br = bridge_top;
   while (br) {
-    ossv_bridge *nxt = br->next;
+    osp_bridge *nxt = br->next;
     br->invalidate();
     if (br->ready()) delete br;
     else {
@@ -242,6 +187,8 @@ osp_txn::~osp_txn()
   DEBUG_txn(warn("txn(%p)->~osp_txn: up=0x%p moved=%d", this, up, moved));
 }
 
+/* CCov:off */
+// EXPERIMENTAL
 void osp_txn::prepare_to_commit()
 {dOSP ; dTXN ; assert(txn && txn->os); txn->os->prepare_to_commit(); }
 int osp_txn::is_prepare_to_commit_invoked()
@@ -250,18 +197,7 @@ int osp_txn::is_prepare_to_commit_invoked()
 int osp_txn::is_prepare_to_commit_completed()
 {dOSP ; dTXN ; assert(txn && txn->os);
  return txn->os->is_prepare_to_commit_completed();}
-
-/*
-void osp_txn::invalidate(OSSVPV *pv)
-{
-  // nuke? XXX
-  ossv_bridge *br = bridge_top;
-  while (br) {
-    br->invalidate(pv);
-    br = br->next;
-  }
-}
-*/
+/* CCov:on */
 
 void osp_txn::post_transaction()
 {
@@ -270,7 +206,7 @@ void osp_txn::post_transaction()
 
   DEBUG_txn(warn("%p->post_transaction", this));
 
-  ossv_bridge *br = bridge_top;
+  osp_bridge *br = bridge_top;
   while (br) {
     br->invalidate();
     br = br->next;
@@ -292,12 +228,22 @@ void osp_txn::post_transaction()
   }
 }
 
-int osp_txn::can_update()
-{ return (os && !os->is_aborted() && tt != os_transaction::read_only); }
+int osp_txn::can_update(os_database *db)
+{
+  return (os && !os->is_aborted() &&
+	  tt != os_transaction::read_only && db->is_writable());
+}
+
+int osp_txn::can_update(void *vptr)
+{
+  if (!os || os->is_aborted()) return 0;  //CAREFUL!  vptr might be invalid!
+  os_database *db = os_database::of(vptr);
+  return can_update(db);
+}
 
 void osp_txn::abort()
 {
-  if (!os) return;
+  assert(os);
   if (!os->is_aborted()) {
     DEBUG_txn(warn("txn(%p)->abort", this));
     os_transaction::abort(os);
@@ -308,7 +254,7 @@ void osp_txn::abort()
 
 void osp_txn::commit()
 {
-  if (!os) return;
+  assert(os);
   if (!os->is_aborted()) {
     DEBUG_txn(warn("txn(%p)->commit", this));
     os_transaction::commit(os);

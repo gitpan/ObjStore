@@ -1,0 +1,50 @@
+Name           DSLI  Description                                  Info
+-----------    ----  -------------------------------------------- -----
+ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
+
+Interface to ObjectStore OODBMS (http://www.odi.com).  Stores perl
+data directly in a database without flattening of either nested or
+cyclic structures.  Includes interactive perl shell for examining and
+editing arbitrary perl databases.  Virtual memory mechanism is used to
+make access nearly as fast as memory mapped files.
+
+Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
+
+
+** 10-31-97 Released 1.19 (Haloween Edition)
+
+- Requires perl 5.004_53 or better for some features.
+
+- Emulation of RDBMS tables.  Unstructured perl databases are, well,
+unstructured.  The RDBMS table paradigm is actually a good way to
+structure data.  And since you can store complex nested structures per
+row, add the same row to multiple tables, or nest tables, it's not
+half bad.
+
+- Persistent support for fake hashes (requires 5.004_50+) & schema
+evolution for fake hashes.
+
+- $o->NOREFS method invoked when an object becomes reachable only by
+weak references.
+
+- Transaction support has been complete rewritten.  Nested
+transactions and nested eval blocks are now fully supported.
+
+- Bless is now non-intrusive and customizable.
+
+
+see ./INSTALL for hints on installation
+see ./UPGRADE to evolve databases from prior releases
+see ./TODO for a list of stuff in the queue
+see ./CHANGES for a visionary perspective
+
+
+Perl-ObjectStore mailing list:
+
+majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
+
+-------------------------------------------------------------------
+Copyright (c) 1997 Joshua Nathaniel Pritikin.  All rights reserved.
+This software is provided "as is" without express or implied warranty.
+This package is free software; you can redistribute it and/or modify
+it under the same terms as perl itself.

@@ -289,8 +289,8 @@ sub opt {
     my ($o, $opt) = @_;
     if ($opt) {
 	# -DNDEBUG to turn off assert
-	$o->flags('cc', '-O', '-DNDEBUG');
-	$o->flags('cxx', '-O', '-DNDEBUG');
+	$o->flags('cc', '-O');
+	$o->flags('cxx', '-O');
     } else {
 	$o->flags('cc', '-g');
 	$o->flags('cxx', '-g');
@@ -333,8 +333,7 @@ sub objstore {
     }
     $o->flags('ld', "-los",
 	      $o->want_threads? "-losthr" : "-losths",
-	      $Config{libs},
-	      "-lC");  # -lC should not be required
+	      $Config{libs});  # -lC is not be required on solaris
     
     $o->clean("$tag-osschema.c", "neutral-$tag");
 #    $o->spotless(sub {$o->x("osrm -f $o->{osdbdir}/$tag.adb");});

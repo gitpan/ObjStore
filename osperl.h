@@ -21,19 +21,18 @@ extern "C" {
 
 #include <ostore/ostore.hh>
 
-// per thread?
 #ifdef OSP_DEBUG
-#define DEBUG_refcnt(a) if (osp::debug & 1)  a
-#define DEBUG_assign(a) if (osp::debug & 2)  a
-#define DEBUG_bridge(a) if (osp::debug & 4)  a
-#define DEBUG_array(a)  if (osp::debug & 8)  a
-#define DEBUG_hash(a)   if (osp::debug & 16) a
-#define DEBUG_set(a)    if (osp::debug & 32) a
-#define DEBUG_cursor(a) if (osp::debug & 64) a
-#define DEBUG_bless(a)  if (osp::debug & 128) a
-#define DEBUG_root(a)   if (osp::debug & 256) a
-#define DEBUG_splash(a) if (osp::debug & 512) a
-#define DEBUG_deadlock(a) if (osp::debug & 1024) a
+#define DEBUG_refcnt(a)   if (osp_thr::fetch()->debug & 1)  a
+#define DEBUG_assign(a)   if (osp_thr::fetch()->debug & 2)  a
+#define DEBUG_bridge(a)   if (osp_thr::fetch()->debug & 4)  a
+#define DEBUG_array(a)    if (osp_thr::fetch()->debug & 8)  a
+#define DEBUG_hash(a)     if (osp_thr::fetch()->debug & 16) a
+#define DEBUG_set(a)      if (osp_thr::fetch()->debug & 32) a
+#define DEBUG_cursor(a)   if (osp_thr::fetch()->debug & 64) a
+#define DEBUG_bless(a)    if (osp_thr::fetch()->debug & 128) a
+#define DEBUG_root(a)     if (osp_thr::fetch()->debug & 256) a
+#define DEBUG_splash(a)   if (osp_thr::fetch()->debug & 512) a
+#define DEBUG_txn(a)      if (osp_thr::fetch()->debug & 1024) a
 #else
 #define DEBUG_refcnt(a)
 #define DEBUG_assign(a)
@@ -45,7 +44,7 @@ extern "C" {
 #define DEBUG_bless(a)
 #define DEBUG_root(a)
 #define DEBUG_splash(a)
-#define DEBUG_deadlock(a)
+#define DEBUG_txn(a)
 #endif
 
 typedef void (*XS_t)(CV*);
@@ -122,14 +121,19 @@ struct OSPV_nv {
   double nv;
 };
 
-struct OSPV_Cursor;
+#define OSPV_NOREFS	0x0001	/* refcnt fell to zero, running NOREFS */
+
+#define PvFLAGS(pv)		(pv)->pad_1
+
+#define PvNOREFS(pv)		(PvFLAGS(pv) & OSPV_NOREFS)
+#define PvNOREFS_on(pv)		(PvFLAGS(pv) |= OSPV_NOREFS)
+#define PvNOREFS_off(pv)	(PvFLAGS(pv) &= ~OSPV_NOREFS)
 
 struct OSSVPV : os_virtual_behavior {
   static os_typespec *get_os_typespec();
-  static void install_rep(HV *hv, const char *file, char *name, XS_t mk);
   os_unsigned_int32 _refs;
   os_unsigned_int16 _weak_refs;
-  os_int16 pad_1;
+  os_int16 pad_1;		//should rename to 'flags'
   char *classname;
   OSSVPV();
   virtual ~OSSVPV();
@@ -152,15 +156,15 @@ struct OSPV_Ref : OSSVPV {
   virtual char *base_class();
   // lock down the implementation with non-virtual methods (& for speed :-)
   os_reference_protected myfocus;
-  os_database *_get_database();
   int _broken();
+  os_database *get_database();
   int deleted();
   OSSVPV *focus();
 };
 
 // A cursor must be a single composite object.  Otherwise you would
 // need cursors for cursors.
-//
+
 struct OSPV_Cursor : OSPV_Ref {
   static os_typespec *get_os_typespec();
   OSPV_Cursor(OSSVPV *);
@@ -170,18 +174,24 @@ struct OSPV_Cursor : OSPV_Ref {
   virtual void next();
 };
 
-// Any OSSVPV that containers pointers to other OSSVPVs (except a cursor)
-// must be a container.  The STORE method must be compatible with the
-// cursor output also.
+// Any OSSVPV that contains pointers to other OSSVPVs (except a cursor)
+// must be a container.  Also note that the STORE method must be compatible
+// with the cursor output.
 
 struct OSPV_Container : OSSVPV {
   static os_typespec *get_os_typespec();
+  static void install_rep(HV *hv, const char *file, char *name, XS_t mk);
   //  virtual void _rep();
   virtual RAW_STRING *_get_raw_string(char *key);
   virtual double _percent_filled();
   virtual int _count();
   virtual OSPV_Cursor *new_cursor(os_segment *seg);
 };
+
+// Generic collections support the standard perl array & hash
+// collection types.  This is a single class because you might
+// have a single collection that can be accessed as a hash or
+// an array.
 
 struct OSPV_Generic : OSPV_Container {
   static os_typespec *get_os_typespec();
@@ -224,35 +234,5 @@ struct ossv_bridge {
 };
 
 #if !OSSG
-
-typedef void *(*MkOSPerlObj_t)(os_segment *seg, char *name, os_unsigned_int32 card);
-
-// private global utilities (should be per-thread?)
-struct osp {
-  //private
-  static const char *private_root;
-  static void boot_thread();
-  static long debug;
-  static int to_bless;
-  static HV *CLASSLOAD;
-  static int rethrow_exceptions;
-  static int tie_objects;
-  static int txn_is_ok;
-  static int is_update_txn;
-  static void destroy_bridge();
-  static ossv_bridge *bridge_top;
-  static SV *wrap_object(OSSVPV *ospv);
-  //??
-  static SV *stargate;
-  //public
-  static ossv_bridge *sv_2bridge(SV *);
-  static ossv_bridge *force_sv_2bridge(os_segment *seg, SV *nval);
-  static os_segment *sv_2segment(SV *);
-  static SV *ossv_2sv(OSSV *);
-  static SV *ospv_2sv(OSSVPV *);
-  static OSSV *plant_sv(os_segment *, SV *);
-  static OSSV *plant_ospv(os_segment *seg, OSSVPV *pv);
-  static void push_ospv(OSSVPV *pv);
-};
+#include "txn.h"
 #endif
-

@@ -18,7 +18,9 @@ sub open {
     my ($o, $how) = @_;
     my $cnt = $o->_count;
     for (my $x=0; $x < $cnt; $x++) {
-	$o->[$x]->open($how);
+	my $db = $o->[$x]->get_database();
+	$db->open($how);
+	$db->sync_INC();
     }
 }
 

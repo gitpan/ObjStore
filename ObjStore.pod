@@ -128,8 +128,6 @@ README).
 
 =item * $is_open = $db->is_open();
 
-=item * $db->open_mvcc();
-
 =item * $is_mvcc = $db->is_open_mvcc();
 
 =item * $read_only = $db->is_open_read_only();
@@ -144,8 +142,6 @@ Policy can be one of C<segment>, C<page>, or C<stream>.
 
 Policy can be one of C<as_used>, C<read>, or C<write>.
 
-=item * $db = ObjStore::Database::of($pvar);
-
 =item * $Seg = $db->create_segment();
 
 =item * $Seg = $db->get_segment($segment_number);
@@ -158,7 +154,7 @@ Policy can be one of C<as_used>, C<read>, or C<write>.
 
 =item * $root = $db->find_root($root_name);
 
-=item * $value = $db->root($root_name[, $new_value]);
+=item * $value = $db->root($root_name, sub{ $new_value });
 
 This is the recommended API for roots.  If the given root is not
 found, creates a new one.  Sets the root's value if $new_value is
@@ -204,6 +200,12 @@ to modify persistent data.
 	my $var = $db->root('top');
 	$var->{abc} = 7;	# write to $var triggers die(...)
     };
+
+Also available is a wrapper C<begin> that lets you dynamically pick
+your transaction type:
+
+    my $txn = 'abort_only';
+    begin $txn, { ... };
 
 =over 4
 
@@ -271,8 +273,6 @@ Policy can be one of C<segment>, C<page>, or C<stream>.
 
 Policy can be one of C<as_used>, C<read>, or C<write>.
 
-=item * $Seg = ObjStore::Segment::of($pvar);
-
 =back
 
 =head1 PERSISTENT OBJECTS
@@ -287,7 +287,7 @@ which it is to be allocated.  All containers are created using the
 form C<'new ObjStore::$type($store, $cardinality)'> and other creation
 methods follow a similar pattern.  You may pass any persistent object
 in place of $store and the new container will be created in the same
-segment as the $store object!
+segment as the $store object.
 
 =head2 Arrays
 
@@ -297,8 +297,8 @@ an expected cardinality of ten elements.
     my $a7 = new ObjStore::AV($store, 10);
 
 None of the usually array operations are supported except fetch and
-store.  (Actually push, pop, shift and unshift are all available but
-not documented...)  At least the following works:
+store.  (Actually push, pop, shift and unshift might be available but
+undocumented.)  At least the following works:
 
     $a7->[1] = [1,2,3,[4,5],6];
 
@@ -321,7 +321,7 @@ Data structures can be built with the normal perl syntax:
 
     $h7->{foo} = { 'fwaz'=> { 1=>'blort', 'snorf'=>3 }, b=>'ouph' };
 
-Or the equally effective but unbearibly tedious:
+Or the equally effective, but unbearibly tedious:
 
     my $h1 = $dict->{foo} ||= new ObjStore::HV($dict);
     my $h2 = $h1->{fwaz} ||= new ObjStore::HV($h1);
@@ -340,8 +340,8 @@ hashes.
 =head2 References
 
 You can generate a reference to any persistent object with the method
-C<new_ref($segment)>.  The main reason to use references is to refer
-to data in other databases.  Refs do not affect remote refcnts and
+C<new_ref($segment)>.  One reason to use references is to refer to
+data in other databases.  Refs do not affect remote refcnts and
 therefore are a relatively safe way to create cross database pointers.
 
   $f = $r->focus;              # returns the focus of the ref
@@ -349,8 +349,7 @@ therefore are a relatively safe way to create cross database pointers.
   $yes = $r->deleted;          # is the focus deleted?
 
 Be aware that references can return garbage if the focus' database is
-not open.  You need to call C<open> explicitly.  If the database is
-already open, C<open> will not be called again.
+not open.  You will need to call C<open> explicitly.
 
 =head2 Cursors
 
@@ -411,8 +410,7 @@ features.  (E.g. 'can_chicken_walk')
 =head2 And Access Paths (Oh My!)
 
 An array of references or cursors is essentially an access path.  Two
-simple classes for doing access paths are included in the
-distribution:
+simple classes are provided for manipulating access paths:
 
   ObjStore::Ref            # access path composed of refs
   ObjStore::Cursor         # cursor based access path
@@ -431,8 +429,8 @@ summary, not the entire database.
 
 =head2 Wait!  No Schema?!  How Can This Scale?
 
-How can a relational database scale?!  When you write down a central
-schema, you are violating the principle of encapsulation.  This is
+How can a relational database scale?!  B<When you write down a central
+schema, you are violating the principle of encapsulation.>  This is
 dumb.  None of the usual database management operations require a
 central schema.  Why create artificial dependencies between your
 classes when you can avoid it?
@@ -455,10 +453,11 @@ current structure.
 
 =back
 
-The main thing is to keep an archive of prior object formats to
-regression test your new C<evolve> methods.  If you can do extracts to
-a mini-database, that would do the trick.  Then just run your new code
-through a copy of your historical database.
+If you are using fake hashes, there is already support for lazy schema
+evolution.  The main thing is to keep an archive of prior object
+formats to regression test your new C<evolve> methods.  If you can do
+extracts to a mini-database, that would do the trick.  Then just run
+your new code through a copy of your historical database.
 
 =head2 ospeek Example Output
 
@@ -583,10 +582,10 @@ assigning both field-names, field-types, and field-order.
 	double size;
   };
 
-Programs almost always require a recompile to change any of these
-attributes.  This is fine for small to medium size applications but is
-not suitable for large databases.  It is too inflexible.  An SQL-type
-language is needed.
+Programs almost always require a recompile to change these
+declarations.  This is fine for small to medium size applications but
+is not suitable for large databases.  It is too inflexible.  An
+SQL-style language is needed.
 
 When you create a table in SQL you are assigning only field-names and
 field-types.
@@ -608,11 +607,12 @@ language.  For example, this is similar to an SQL table:
 
   my $h1 = { name => undef, title => undef, size => undef };
 
-Only the field-names are specified.
+Only the field-names are specified.  This declaration is actually even
+more flexible than SQL because the field-types are dynamic.
 
-To address the other side of the spectrum, Malcolm Beattie is working
-on a perl compiler which is currently in beta-test.  Here is his brief
-description of a new hybrid hash-array that is supported:
+But not only is perl more flexible, it's also fast.  Malcolm Beattie
+is working on a perl compiler which is currently in beta.  Here is his
+brief description of a new hybrid hash-array that is supported:
 
 	An array ref $a can be dereferenced as if it were a hash
 ref.  $a->{foo} looks up the key "foo" in %{$a->[0]}. The value is the
@@ -627,10 +627,6 @@ For example:
   my $schema_hashref = { 'field1' => 1, 'field2' => 2 };
   my $arr = [$schema_hashref, 'fwaz', 'snorf'];
   print "$arr->{field1} : $arr->{field2}\n";      # "fwaz : snorf"
-
-I haven't done benchmarks yet, but considering the implementation,
-compiled fake hashes should make perl very competitive with Java /
-ObjectStore database applications in terms of raw performance.
 
 =head2 Summary (LONG)
 
@@ -677,7 +673,7 @@ Perl will soon integrate with Java enough to use SwingSet - AWT.
 =item *
 
 I'd like to see some comparisions of code length when solving the same
-problems in Java and in perl.
+problems in Java and in perl...  :-)
 
 =back
 
@@ -706,17 +702,28 @@ general ease of use.
 
 =over 4
 
-=item * 0-3 MONTHS
+=item * NOW TO 3 MONTHS
 
-Perl compiler; perl kernel threads; fake hashes
+Perl-Java integration; perl compiler
 
 =item * 3-6 MONTHS
 
 Dynamically loaded application schemas;
-proper tied arrays; debugged tie interface;
-Perl-Java integration
+perl kernel-level threads;
+proper tied arrays & repaired tie interface
 
 =back
+
+=head1 RDBMS EMULATION
+
+Unstructured perl databases are, well, unstructured.  I think the
+RDBMS table paradigm is actually a good way to structure data.  And
+since you can store complex nested structures per row, add the same
+row to multiple tables, or nest tables, it's not half bad.
+
+See ObjStore::Database::HV, ObjStore::Table, and ObjStore::AVHV.
+
+Not documented yet.
 
 =head1 THE ADVANCED CHAPTER
 
@@ -725,7 +732,7 @@ Perl-Java integration
 The ObjStore module installs its own version of C<bless> which assures
 that blessings are persistent.  For example:
 
-    package MyObject;
+    package Scottie;
     use ObjStore;
     @ISA = qw(ObjStore::HV);
     sub new {
@@ -736,11 +743,7 @@ that blessings are persistent.  For example:
     }
 
     package main;
-    my $o = new MyObject($db);
-
-Be aware that if a C<$class->isa('ObjStore::UNIVERSAL')>, you cannot
-C<bless {}, $class>.  You can only bless persistent objects into
-persistent classes.
+    my Scottie $dog = new Scottie($db);
 
 =head2 Class Autoloading
 
@@ -779,44 +782,55 @@ if anything went wrong and determine how to proceed.
 
 =item * DEADLOCK
 
-Transactions are automatically retried in the case of a deadlock.  If
-you need to handle deadlocks specially, you can use
-ObjStore::set_max_retries(0) and write the logic (or illogic)
-yourself.
+Top level transactions are automatically retried in the case of a
+deadlock.  If you need to handle deadlocks specially, you can use
+ObjStore::set_max_retries(0).
 
 =back
 
 =head2 Stargate
 
 The stargate determines which collection representations are used to
-store implicitly created hashes and arrays.  The function is called
-recursively on data structures in order to copy them into persistent
-memory.  You can access the stargate directly with
-C<ObjStore::translate>.
+store implicitly created hashes and arrays.  It is called recursively
+on data structures in order to copy them into persistent memory.  You
+can access the stargate directly with C<ObjStore::translate>.
 
-  my $persistent_stuff = ObjStore::translate([1,2,3,{phat=>'dog'}]);
+  my $persistent_copy = ObjStore::translate([1,2,3,{fat=>'dog'}]);
 
-If you replace the default stargate with your own, make sure to
-dismember the transient structures as they are processed to insure
-that cyclic structures will be collected in transient memory.  (See
-C<ObjStore.pm> for an example.)
+If you want to design your own stargate, make sure to dismember
+transient structures as they are processed to insure that cyclic
+structures are collected in transient memory.  (See C<ObjStore.pm> for
+an example.)
 
-=head2 Cross Database Pointers
+=head2 Weak References
 
-You can allow cross database pointers with:
+At the moment when only weak references refer to an object, the method
+C<NOREFS> is invoked.  You should either break any remaining weak
+references or store a real ref to the given object.  You can also do
+nothing and wait for all remaining references to be broken naturally.
+In special situations, you may need to resort to:
 
-  $db->_allow_external_pointers;
+  $o->set_weak_refcnt_to_zero();
 
-But you should avoid this if at all possible.  Pointers affect
-refcnts, even in other databases.  Your refcnts will be wrong if you
-simply C<osrm> a random database.  This will cause some of your data
-to become undeletable.
+But this is sloppy and you should avoid it unless you're a slob.
 
-It is much safer to use references or cursors to refer to data in
-other databases.  References use the os_reference_protected class,
-which is designed to solve this problem.  References and cursors do
-not use refcnts when pointing to remote database so you are free to
-osrm with less trepidation and planning.
+=head2 Peek
+
+You can customize the output of ospeek.  Not documented yet.  See
+ObjStore::Peeker.
+
+  $o->peek($peeker, $name);    #add a method like this...
+
+=head2 Fake Hashes
+
+You can declare an object in two lines:
+
+  use base 'ObjStore::AVHV';
+  use Class::Fields qw(f1 f2 f3);
+
+Not documented yet.
+
+  $o->evolve() if !$o->is_evolved;
 
 =head2 Performance Check List
 
@@ -825,24 +839,24 @@ B<Getting performance out of ObjectStore is not rocket science.>
 
 =over 4
 
-=item * SEGMENTS
-
-Is your data partitioned into as many segments as possible?  (See
-the introduction to containers.)
-
 =item * COMPACTNESS
 
 Is your data stored as compactly as possible?
 
 You get 90% of your performance because you can fit your whole working
-data set into RAM.  If you are doing a good job, your database should
-be less than twice the size of it's uncompressed ASCII dump; i.e.,
-less than 2 times expansion.  (See the section on data
+data set into RAM.  If you are doing a good job, your unindexed
+database should be less than twice the size of it's uncompressed ASCII
+dump; i.e., less than 2 times expansion.  (See the section on data
 representation.)
+
+=item * SEGMENTS
+
+Is your data partitioned into as many segments as possible?  (See
+the introduction to containers.)
 
 =item * DO AS MUCH AS POSSIBLE PER TRANSACTION
 
-Transactions, especially update transactions, involve a lot of
+Transactions, especially update transactions, involve a good deal of
 set/cleanup.  The more you do per transaction the better.
 
 =item * WHERE IS THE REAL BOTTLENECK?
@@ -860,6 +874,25 @@ impact performance.  I haven't been able to verify this.  (See
 os_segment::set_lock_whole_segment and os_database::set_fetch_policy.)
 
 =back
+
+=head2 Cross Database POINTERS
+
+This feature is depreciated, but you can allow cross database pointers
+with:
+
+  $db->_allow_external_pointers;
+
+But you should avoid this if at all possible.  Pointers affect
+refcnts, even in other databases.  Your refcnts will be wrong if you
+simply C<osrm> a random database.  This will cause some of your data
+to become undeletable.  Currently, there is no way to safely delete
+undeletable data.
+
+Instead, you should use references or cursors to refer to data in
+other databases.  References use the os_reference_protected class,
+which is designed to solve this problem.  References and cursors do
+not use refcnts when pointing to remote database so you are free to
+osrm with less trepidation and planning.
 
 =head1 TECHNICAL IMPLEMENTATION
 
@@ -896,6 +929,10 @@ The interface for lookup and open is simplified.
 
 =item *
 
+All persistent objects have C<database_of> and C<segment_of> methods.
+
+=item *
+
 Transactions are simplified.
 
 =back
@@ -906,14 +943,18 @@ Memory usage is much more important in a database than in transient
 memory.  When databases can be as large or larger than ten million
 megabytes, a few percent difference in compactness can mean a lot.
 
-To store 32 bit signed integers and doubles, small memory blocks must
-be allocated.  Integers are stored in C<OSPV_iv> and doubles are
-stored in C<OSPV_nv>.  16 bit signed integers are stored much more
-efficiently than other types of numbers.  However, you may need to
-tell perl to C<use integer> since perl generally defaults to using
-doubles.
+All values take a minimum of 8 bytes (OSSV).  These 8 bytes are used
+to store the type of the value, a pointer, and a 16-bit integer.
 
-[table of bytes per ?]
+  value stored                   allocation in addition to the OSSV
+  ------------------------------ -------------------------------------
+  undef                          none
+  pointer                        none
+  16-bit signed integers         none
+  32-bit signed integers         4 byte block (OSPV_iv)
+  double                         8 byte block (OSPV_nv)
+  string                         length of string (char*)
+  object (ref or container)      size of object (subclasses of OSSVPV)
 
   splash collections ...
 
@@ -952,6 +993,8 @@ C<ObjStore::UNIVERSAL::Cursor> is the base class for cursors.
 
 C<ObjStore::AV> is the base class for tied arrays.
 
+C<ObjStore::AVHV> is the base class for fake hashes.
+
 C<ObjStore::HV> is the base class for tied hashes.
 
 C<ObjStore::File> will be the base class for large binary data.
@@ -989,29 +1032,30 @@ persistent data.  Immediately after a transaction finishes,
 C<invalidate> is invoked on all outstanding bridges.  This is
 necessary in order to update the reference counts properly.  This was
 also the most difficult part to get right.  But hey, how many
-databases do ref-counting?
+databases do reference counting?  Or even how many databases can store
+pointers?
 
 =head1 DIRECTION
 
 =over 4
 
+=item * APIs
+
+Support for notification, database access control, and any other
+interesting ObjectStore APIs.
+
 =item * LEANER COLLECTION REPRESENTATIONS
 
-The ObjectStore collections are weighted down with unnecessary index
-and query support.  Worse, ObjectStore cursors cannot use references,
-only pointers.  I'd like to find a suite of lean representations for
-large cardinality collections to compliment the Splash collections.
+The ObjectStore collections are weighted down with embedded index and
+query support.  Worse, ObjectStore cursors cannot use references, only
+pointers.  I'd like to find a suite of lean representations for large
+cardinality collections to compliment the Splash collections.
 
 =item * MORE BUILT-IN DATA TYPES
 
 File objects implemented using osmmtype and subclassed from
 IO::Handle.  Support for one of Object Design's Text Object Managers?
 Support for bit vectors and matrics?
-
-=item * APIs
-
-Support for notification, database access control, and any other
-interesting ObjectStore APIs.
 
 =back
 
@@ -1026,8 +1070,8 @@ Most other static methods can also be exported.
 
 =item * HIGH VOLITILITY
 
-Anything not documented is subject to change without notice.  (But I will
-try to preserve backward compatibility when possible.)
+Anything not documented is subject to change without notice.
+(Backward compatibility will be preserved when possible.)
 
 =item * CURSED OBJECTS
 
@@ -1036,10 +1080,6 @@ are allocated under a private root in the default segment of a
 database (See C<'ospeek -all'>).  If you accidentally mess up or
 change any of these strings, your objects will be cursed.  You have a
 backup, right?
-
-=item * NESTED TRANSACTIONS
-
-Disabled until the transaction support is cleaned up.
 
 =item * MOP
 

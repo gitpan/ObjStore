@@ -24,7 +24,7 @@ $addr=0;
 $refcnt=0;
 $summary_width=3;
 $instances=3;
-$width=20;
+$width=30;
 $depth=20;
 $to='string';
 $all=0;
@@ -60,7 +60,7 @@ sub Peek {
     $o->{has_prefix} = 0;
     $o->{coverage} = 0;
     $o->o('$fake'.$o->{serial}." = ") if $o->{vareq};
-    $o->_peek($top);
+    $o->peek_any($top);
     $o->nl;
     ++ $o->{serial};
     $o->{output};
@@ -117,7 +117,7 @@ sub avg {
     } else { 0 }
 }
 
-sub _peek {
+sub peek_any {
     my ($o, $val) = @_;
 
     # interrogate
@@ -125,16 +125,16 @@ sub _peek {
     my $class = ref $val;
     my $blessed = $class ne $type;
 
-    # Since persistent-bless might be tweaked...
+    # Since persistent-bless might be tweaked... ? XXX
     $class = $val->_blessed_to if ($class and $class->isa('ObjStore::UNIVERSAL'));
 
     if (!$class) {
 	if (!defined $val) {
 	    $o->o('undef,');
-	} elsif ($val =~ /^-?[0-9]\d{0,8}$/) {   #floating point? XXX
+	} elsif ($val =~ /^-?\d+(\.\d+)?$/) {
 	    $o->o("$val,");
 	} else {
-	    $val =~ s/([\\\'])/\\$1/g;
+	    # do special quoting? XXX
 	    $o->o("'$val',");
 	}
 	++ $o->{coverage};
@@ -159,71 +159,81 @@ sub _peek {
     ++ $o->{seen}{$class};
 
     $o->prefix;
-    if ($blessed and $val->can('_peek')) {
-	$val->_peek($o, $name);
-    } elsif ($type eq 'HASH') {
-	# might try to use _count method XXX
-	my @S;
-	my $x=0;
-	while (my($k,$v) = each %$val) {
-	    ++ $o->{coverage};
-	    last if $x++ > $o->{width}+1;
-	    push(@S, [$k,$v]);
-	}
-	@S = sort { $a->[0] cmp $b->[0] } @S;
-	my $big = @S > 20;
-	my $limit = $big ? $o->{summary_width}-1 : $#S;
-
-	$o->o($name . " {");
-	$o->nl;
-	++$o->{level};
-	for $x (0..$limit) {
-	    my ($k,$v) = @{$S[$x]};
-
-	    $o->prefix;
-	    $o->o("$k => ");
-	    $o->{has_prefix}=1;
-	    $o->_peek($v);
-	    $o->nl;
-	}
-	if ($big) {
-	    $o->prefix;
-	    $o->o("...");
-	    $o->nl;
-	}
-	--$o->{level};
-	$o->prefix;
-	$o->o("},");
-	$o->nl;
+    if ($blessed and $val->can('peek')) {
+	$val->peek($o, $name);
     } elsif ($type eq 'ARRAY') {
-	my $len = ($blessed and $val->can("_count"))? $val->_count : @$val;
-	$o->{coverage} += $len;
-	my $big = $len > $o->{width};
-	my $limit = $big? $o->{summary_width} : $len;
-
-	$o->o($name . " [");
-	$o->nl;
-	++$o->{level};
-	for (my $x=0; $x < $limit; $x++) {
-	    $o->prefix;
-	    $o->_peek($val->[$x]);
-	    $o->nl;
-	}
-	if ($big) {
-	    $o->prefix;
-	    $o->o("...");
-	    $o->nl;
-	}
-	--$o->{level};
-	$o->prefix;
-	$o->o("],");
-	$o->nl;
+	$o->peek_array($val, $name);
+    } elsif ($type eq 'HASH') {
+	$o->peek_hash($val, $name);
     } elsif ($type eq 'SCALAR') {
 	++ $o->{coverage};
 	$o->o($name);
     } else {
 	die "Unknown type '$type'";
     }
+}
+
+sub peek_array {
+    my ($o, $val, $name) = @_;
+    my $blessed = ref($val) ne ObjStore::reftype($val);
+    my $len = ($blessed and $val->can("_count"))? $val->_count : @$val;
+    $o->{coverage} += $len;
+    my $big = $len > $o->{width};
+    my $limit = $big? $o->{summary_width} : $len;
+    
+    $o->o($name . " [");
+    $o->nl;
+    ++$o->{level};
+    for (my $x=0; $x < $limit; $x++) {
+	$o->prefix;
+	$o->peek_any($val->[$x]);
+	$o->nl;
+    }
+    if ($big) {
+	$o->prefix;
+	$o->o("...");
+	$o->nl;
+    }
+    --$o->{level};
+    $o->prefix;
+    $o->o("],");
+    $o->nl;
+}
+
+sub peek_hash {
+    my ($o, $val, $name) = @_;
+    my @S;
+    my $x=0;
+    while (my($k,$v) = each %$val) {
+	++ $o->{coverage};
+	last if $x++ > $o->{width}+1;
+	push(@S, [$k,$v]);
+    }
+    @S = sort { $a->[0] cmp $b->[0] } @S;
+    my $big = @S > $o->{width}-1;
+    my $limit = $big ? $o->{summary_width}-1 : $#S;
+    
+    $o->o($name . " {");
+    $o->nl;
+    ++$o->{level};
+    for $x (0..$limit) {
+	my ($k,$v) = @{$S[$x]};
+	
+	$o->prefix;
+	$o->o("$k => ");
+	$o->{has_prefix}=1;
+	$o->peek_any($v);
+	$o->nl;
+    }
+    if ($big) {
+	$o->prefix;
+	$o->o("...");
+	$o->nl;
+    }
+    --$o->{level};
+    $o->prefix;
+    $o->o("},");
+    $o->nl;
 }
 
 1;

@@ -13,6 +13,11 @@ use test;
 try_update {
     my $left = $db->root('tripwire');
     ++ $left->{left};
+    warn "[2]left\n";
+
     my $right = $db->root('John');
+    $right->{right} = 0;
     $right->{right} = $left->{left};
+    warn "[2]right\n";
 };
+warn "[2]$@" if $@;

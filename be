@@ -23,19 +23,20 @@ $pk->post_help('1. Please set the following environment variables before compili
     
 # build just one target, i.e. 'be osp'
 my @scripts = qw(ospeek osp_copy posh);
-$pk->default_targets('blib', 'evo', 'osp', @scripts);
+$pk->default_targets('blib', 'osp',  @scripts);
 
 my $inst = {
-    bin =>    ['osp_evolve'],
+    bin =>    [], #['osp_evolve'],
     script => [@scripts],
     man3 =>   ['ObjStore.3'],
     lib =>    ['ObjStore.pm', 'ObjStore/',
 	       'ObjStore/Config.pm', 'ObjStore/GENERIC.pm',
-	       'ObjStore/Ref.pm', 'ObjStore/Cursor.pm',
+	       'ObjStore/Ref.pm', 'ObjStore/Cursor.pm', 'ObjStore/Table.pm',
 	       'ObjStore/AppInstance.pm',
 	       'ObjStore/Peeker.pm',
 	       'ObjStore/SetEmulation.pm',
-	       'ObjStore/PoweredByOS.gif', 'ObjStore/ObjStore.html'],
+	       'ObjStore/PoweredByOS.gif', 'ObjStore/ObjStore.html',
+	       ($] < 5.00450? 'base.pm':())],
 };
 
 if (&LINKAGE eq 'dyn') {
@@ -52,6 +53,7 @@ $r->opt(1);
 $r->flags('cxx', '-DOSP_DEBUG');
 #$r->flags('ossg', '-padc', '-arch','set1');
 $r->flags('ld-dl', '-ztext');   # SunPro specific?
+$r->flags('xsubpp', "-nolinenumbers"); #line numbers tickle a BUS error :-(
 my $build =
     new Maker::Seq(new Maker::Phase('parallel',
 				    (&LINKAGE eq 'static' ?
@@ -61,6 +63,7 @@ my $build =
 				    $r->objstore(&SCHEMA_DBDIR, 'osperl-07',
 						 ['collections']),
 				    $r->cxx('osperl.c'),
+				    $r->cxx('txn.c'),
 				    $r->xs('GENERIC.xs'),
 				    $r->xs('ObjStore.xs'),
 				    ),
@@ -90,7 +93,7 @@ $r = new Maker::Rules($pk, 'perl-module');
 $r->flags('cxx', "-I$Config{archlibexp}/CORE");
 $r->flags('cxx', $r->flags('cxx-dl')) if &LINKAGE eq 'dyn';
 $pk->a(new Maker::Seq(new Maker::Phase('parallel',
-				       $r->objstore(&SCHEMA_DBDIR, 'osp-evolve-01', [qw(evolution mop queries collections)]),
+				       $r->objstore(&SCHEMA_DBDIR, 'osp-evolve-02', [qw(evolution mop queries collections)]),
 				       $r->cxx('edit.c'),
 				       $r->embed_perl(),
 				       $r->cxx('osperl.c'),

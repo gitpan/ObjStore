@@ -1,51 +1,35 @@
-Name           DSLI  Description                                  Info
------------    ----  -------------------------------------------- -----
-ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
+ObjStore 1.19 (Haloween Edition)
+10-31-97
 
-Interface to ObjectStore OODBMS (http://www.odi.com).  Stores perl
-data directly in a database without flattening of either nested or
-cyclic structures.  Includes interactive perl shell for examining and
-editing arbitrary perl databases.  Virtual memory mechanism is used to
-make access nearly as fast as memory mapped files.
+
+* High performance relational engine using memory-mapped files.
+
+* Precomputes joins between multiple tables to reach over 20000
+complex inserts per minute (not using bcp!).
+
+* Terminate and stay resident SQL emulator written in perl.
+
+* Directly memory access 64-bit channels to Sybase, Informix, or Oracle
+relational databases.
+
+* Full duplex nested transactions now supported in native mode.
+
+* Automatic schema evolution.
+
+* Internet ready.
 
 Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
 
-           << This is the relational database killer app! >>
+
+see ./INSTALL for hints on installation
+see ./UPGRADE to evolve databases from prior releases
+see ./TODO for a list of stuff in the queue
+see ./CHANGES for a visionary perspective
 
 
 Perl-ObjectStore mailing list:
 
 majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
-
-
-see ./INSTALL for installation instructions
-see ./UPGRADE for hints on evolving databases from prior releases
-see ./TODO for a list of things to do
-see ./CHANGES for perspective
-
-
-### RECENT CHANGES ###
-
-
-** 10-18-97 Released 1.18
-
-- Fixed typos.
-
-
-** 10-11-97 Released 1.17
-
-- PERL / OBJECTSTORE SHELL !!
-
-- First-class cursors for collections.
-
-- osp_copy script to copy databases.  Source code included.
-
-- Support for cross database references.
-
-- Simplified API for 'open'.
-
-- Sets depreciated.  The interface is there, but they are
-re-implemented with hashes.
 
 
 -------------------------------------------------------------------

@@ -5,7 +5,7 @@ package Posh::View;
 use strict;
 BEGIN { require Cwd; *cwd = \&Cwd::fastcwd; }
 use IO::Pipe;
-use ObjStore ':ADV';
+use ObjStore;
 require ObjStore::Peeker;
 require ObjStore::Ref;
 use vars qw(@ISA $view $is_string);
@@ -113,7 +113,8 @@ sub cd_ufs {
     my ($o, $path) = ($view, @_);
     $path = $ENV{HOME} if !$path;
     if (-f $path) {
-	my $db = ObjStore::open($path, 0);
+	my $db = ObjStore::open($path, 'update'); #XXX
+	$db->sync_INC();
 	$o->{cdb} = $db->get_pathname;
 	$o->{cursor}->Push($db);
 	$o->{where} = 'os';

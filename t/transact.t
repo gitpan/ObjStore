@@ -1,90 +1,101 @@
 # test all transaction types for -*-perl-*-
-BEGIN { $| = 1; $tx=1; print "1..4\n"; }
+BEGIN { $| = 1; $tx=1; print "1..9\n"; }
 
 use strict;
 use ObjStore ':ALL';
+use ObjStore::Config;
 use lib './t';
 use test;
 
-rethrow_exceptions(0);
-set_transaction_priority(0);
+ObjStore::rethrow_exceptions(0);
+ObjStore::set_transaction_priority(0);
 
 &open_db;
-my @ret = try_update {
-    my $john = $db->root('John');
-    die "No db" if !$john;
-    
-    $john->{right} = 69;
 
-    'void context';
-};
-@ret ? not_ok : ok;
+if (1) {
+eval { my $b = ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
+$@ =~ m/does not exist/ ? ok: do {not_ok; warn $@;};
 
-try_abort_only {
-    my $john = $db->root('John');
-    $john->{right} = 3;
-};
-
-try_read {
-    my $john = $db->root('John');
-    
-    if (0) {
-	# NESTED EVAL BROKEN
-	reval(sub {
-	    my $b = ObjStore::lookup("bogus.db");
-	    warn $b;
-	});
-	warn $@;
-	$@ ? ok:not_ok;
-    }
-
-    $john->{right} == 69? ok : not_ok;
-
-    $john->{'write'} = 0;
-};
-if ($@) { warn $@ if $@ !~ m/Attempt to write during a read-only/; ok }
-else { not_ok; warn $@; }
-
-#ObjStore::_debug qw(deadlock);
-
-# retry deadlock
+# make sure the tripwire is ready
 try_update {
     $db->root("tripwire", sub {new ObjStore::HV($db->create_segment, 7)});
 };
 die if $@;
+
+my @ret = try_update {
+    my $john = $db->root('John');
+    $john->{right} = 69;
+    qw(void context for now);
+};
+@ret ? not_ok : ok;
+
+begin('read', sub {
+    my $john = $db->root('John');
+    
+    eval { my $b = ObjStore::lookup(TMP_DBDIR . "/bogus.db", 0); };
+    $@ =~ m/does not exist/ ? ok: do {not_ok; warn $@;};
+
+    eval { $john->{'write'} = 0; };
+    $@ =~ m/Attempt to write during a read-only/ ? ok : not_ok;
+
+    $john->{right} == 69? ok : not_ok;
+});
+$@ ? not_ok:ok;
+}
+
+if (1) {
+begin('update', sub {
+    my $j = $db->root('John');
+    begin('update', sub {
+	$j->{oopsie} = [1,2];
+	die 'undo';
+    });
+    warn $@ if $@ !~ m'^undo';
+    exists $j->{oopsie}? not_ok : ok;
+});
+$@ ? not_ok : ok;
+}
+
+if (1) {
+#ObjStore::debug qw(txn);
+my $debug =0;
+
+# retry deadlock
 set_max_retries(10);
+my $retry=0;
 my $attempt=0;
 try_update {
-    ++ $attempt;
+    ++ $retry;
 
     my $right = $db->root('John');
     ++ $right->{right};
+    warn "[1]right\n" if $debug;
 
     my $code = sub {
-#	warn "begin bogus code";
-	system("perl -Mblib t/deadlock.pl 2>/dev/null &");
-	sleep 3;
-#	warn "pre-deadlock";
+	warn "begin bogus code" if $debug;
+	my $quiet = 1? '2>/dev/null':'';
+	system("perl -Mblib t/deadlock.pl $quiet &");
+	warn "[1]sleep\n" if $debug;
+	sleep 5;
+	warn "[1]left\n" if $debug;
 	my $left = $db->root('tripwire');
+	$left->{left} = 0;
 	$left->{left} = $right->{right};
     };
-#    warn "attempt $attempt";
+    ++ $attempt;
+#    warn "attempt $attempt retry $retry";
     if ($attempt == 1) {
 	&$code;
-    } elsif ($attempt > 1) {
-	# fall through
+	die "Didn't get deadlock";
     } elsif ($attempt == 2) {
-	die 'not yet';
-	reval { &$code };
-#	warn $@;
+	eval { &$code };
 	die if $@;
     } elsif ($attempt == 3) {
-	die 'not yet';
 	try_update(\&$code);
-	warn $@;
 	die if $@;
-    } else { die "what?" }
+    } else { 1 }
 };
 warn $@ if $@;
-if ($attempt==3) {ok}
+if ($attempt==4) {ok}
 else {warn $attempt; not_ok; }
+}

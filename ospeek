@@ -1,4 +1,4 @@
-#!/nw/dev/perl/bin/perl -w
+#!/nw/dev/u/bin/perl -w
 
 use strict;
 use ObjStore ':ALL';
@@ -7,24 +7,27 @@ use Getopt::Long;
 use IO::Handle;
 
 sub usage {
-    print "ospeek [-all] [-addr] [-refcnt] <database>\n";
+    print "usage: ospeek [-I dir] [-all] [-addr] [-refcnt] <database>\n";
     exit;
 }
 
 my %opt=();
-GetOptions(\%opt, 'all', 'addr', 'refcnt') or &usage;
+GetOptions(\%opt, 'all', 'addr', 'refcnt', 'I=s@') or &usage;
 &usage if @ARGV != 1;
+
+for (@{$opt{I}}) { unshift(@INC, $_); }
 
 my $path = shift @ARGV;
 
 my $fh = new IO::Handle;
 $fh->fdopen(fileno(STDOUT),"w") or die "fdopen(STDOUT): $!";
 
-my $db = ObjStore::open($path, 1);
+my $db = ObjStore::open($path, 'mvcc');
 try_read {
 #    for my $r ($db->get_database_references) {
 #	print "Refers to: ".$r->get_name."\n";
 #    }
+    $db->sync_INC;
     my $pk = new ObjStore::Peeker(to => $fh, %opt);
     $pk->Peek($db);
     my $count = $pk->Coverage;

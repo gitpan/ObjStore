@@ -19,6 +19,7 @@ try_read {
     my $p = new ObjStore::Peeker(addr => 0, refcnt => 1);
     my $dump = $p->Peek($db);
     $dump =~ s/^.*junk_seg =>.*$//m;
+    $dump =~ s/^.*__VERSION__.*$//m;
     print $fh $dump;
     $count = $p->Coverage;
     print $fh "count = $count\n";

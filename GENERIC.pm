@@ -10,11 +10,12 @@ use Carp;
 
 sub new {
     my ($this, $loc, $rep, @REST) = @_;
+    $loc = $loc->segment_of;
     $class = ref($this) || $this;
     if (!defined $rep) {
 	&{$REP{splash_array}}($class, $loc, 7, @REST);
-    } elsif ($rep =~ /^\d+$/) {
-	&{$REP{splash_array}}(@_);
+    } elsif ($rep =~ /^\d+(\.\d+)?$/) {
+	&{$REP{splash_array}}($class, $loc, $rep, @REST);
     } elsif (!$rep) {
 	croak "$class->new(loc,rep): defined but false rep";
     } else {
@@ -31,15 +32,16 @@ use Carp;
 
 sub new {
     my ($this, $loc, $rep, @REST) = @_;
+    $loc = $loc->segment_of;
     $class = ref($this) || $this;
     if (!defined $rep) {
 	&{$REP{splash_array}}($class, $loc, 7, @REST);
-    } elsif ($rep =~ /^\d+$/) {
+    } elsif ($rep =~ /^\d+(\.\d+)?$/) {
 	confess "$rep < 1" if $rep < 1;
 	if ($rep < 25) {
-	    &{$REP{splash_array}}(@_);
+	    &{$REP{splash_array}}($class, $loc, $rep, @REST);
 	} else {
-	    &{$REP{os_dictionary}}(@_);
+	    &{$REP{os_dictionary}}($class, $loc, $rep, @REST);
 	}
     } elsif (!$rep) {
 	croak "$class->new(loc,rep): defined but false rep";

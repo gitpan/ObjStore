@@ -12,7 +12,7 @@ my $sid;
 try_update {
     my $seg = $db->create_segment;
     $sid = $seg->get_number;
-    $db->root("tripwire", sub {new ObjStore::HV($seg, 7)});
+    $db->root("tripwire", [1,2,3,'Oops, tripped!']);
 };
 
 try_update {

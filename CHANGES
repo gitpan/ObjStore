@@ -3,6 +3,22 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 10-11-97 Released 1.17
+
+- PERL / OBJECTSTORE SHELL !!
+
+- First-class cursors for collections.
+
+- osp_copy script to copy databases.  Source code included.
+
+- Support for cross database references.
+
+- Simplified API for 'open'.
+
+- Sets depreciated.  The interface is there, but they are
+re-implemented with hashes.
+
+
 ** 10-03-97 Released 1.16
 
 - All transient data related to persistent memory is now garbage

@@ -10,102 +10,65 @@ modify it under the same terms as Perl itself.
 
 /*--------------------------------------------- typemap services */
 
-// Can we croak if failure?  Try to factor more!  XXX
-
-ossv_bridge *osp::sv_2bridge(SV *nval)
+os_segment *osp_thr::sv_2segment(SV *sv)
 {
+  if (sv_isa(sv, "ObjStore::Segment")) return (os_segment*) SvIV((SV*)SvRV(sv));
+  croak("sv_2segment only accepts ObjStore::Segment");
+}
+
+ossv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
+{
+  dOSP ;
 // Is tied?  Examine tied object, extract ossv_bridge from '~'
 // Is OSSV in a PVMG?
 
-  assert(nval);
-  if (!SvROK(nval)) return 0;
-  nval = SvRV(nval);
-  assert(nval);
-
-  if (SvMAGICAL(nval) && (SvTYPE(nval) == SVt_PVHV || SvTYPE(nval) == SVt_PVAV)) {
-
-    MAGIC *magic = mg_find(nval, '~');
-    if (!magic) {
-      //      warn("~ magic missing");
-      return 0;
-    }
-    SV *mgobj = (SV*) magic->mg_obj;
-    assert(mgobj);
-    if (!sv_isobject(mgobj)) {
-      //      warn("junk attached via ~ magic");
-      return 0;
-    }
-    ossv_bridge *br = (ossv_bridge*) SvIV((SV*)SvRV(mgobj));
-    assert(br);
-    return br;
-
-  } else if (SvOBJECT(nval) && SvTYPE(nval) == SVt_PVMG) {
-
-    ossv_bridge *br = (ossv_bridge*) SvIV(nval);
-    assert(br);
-    return br;
-
+  assert(ref);
+  if (!SvROK(ref)) {
+    if (force) croak("sv_2bridge: expecting a reference");
+    return 0;
   }
-  return 0;
-}
+  SV *nval = SvRV(ref);
+  assert(nval);
 
-os_segment *osp::sv_2segment(SV *sv)
-{
-  if (sv_isa(sv, "ObjStore::Segment")) return (os_segment*) SvIV((SV*)SvRV(sv));
-  if (sv_isa(sv, "ObjStore::Database"))
-    return ((os_database*) SvIV((SV*)SvRV(sv)))->get_default_segment();
+  ossv_bridge *br = 0;
+  do {
+    if (SvMAGICAL(nval) && (SvTYPE(nval) == SVt_PVHV ||
+			    SvTYPE(nval) == SVt_PVAV)) {
+      MAGIC *magic = mg_find(nval, '~');
+      if (!magic) break;
+      SV *mgobj = (SV*) magic->mg_obj;
+      assert(mgobj);
+      if (!sv_isobject(mgobj)) { warn("Junk attached via ~ magic (bug?)");break;}
+      br = (ossv_bridge*) SvIV((SV*)SvRV(mgobj));
+    } else if (SvOBJECT(nval) && SvTYPE(nval) == SVt_PVMG) {
+      br = (ossv_bridge*) SvIV(nval);
+    }
+  } while (0);
 
-  ossv_bridge *br = osp::sv_2bridge(sv);
-  if (!br) croak("osp::sv_2segment(SV*): must be persistent object");
-  return os_segment::of(br->get_location());
-}
-
-SV *osp::stargate=0;
-ossv_bridge *osp::force_sv_2bridge(os_segment *seg, SV *nval)
-{
+  if (br) return br;
+  if (!force) return 0;
+  if (!seg) croak("sv_2bridge: expecting a persistent object");
+  
   dSP ;
-  // You must use ENTER / LEAVE around this function.
-  //  ENTER ;
-  //  SAVETMPS ;
   PUSHMARK(sp);
   XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Segment", seg));
-  XPUSHs(nval);
+  XPUSHs(ref);
   PUTBACK ;
-  assert(osp::stargate);
-  int count = perl_call_sv(osp::stargate, G_SCALAR);
+  assert(osp->stargate);
+  int count = perl_call_sv(osp->stargate, G_SCALAR);
   assert(count==1);
   SPAGAIN ;
-  ossv_bridge *br = osp::sv_2bridge(POPs);
+  br = osp->sv_2bridge(POPs, 0);
   PUTBACK ;
-  //  FREETMPS ;
-  //  LEAVE ;
-  if (!br) croak("ObjStore::stargate returned useless junk");
+  if (!br) croak("ObjStore::stargate: returned useless junk");
   //  warn("stargate returned:");
   //  br->dump();
   return br;
 }
 
-int osp::rethrow_exceptions;
-int osp::to_bless;
-HV* osp::CLASSLOAD;
-int osp::txn_is_ok;
-int osp::is_update_txn;
-long osp::debug;
-const char *osp::private_root = "_osperl_private";
-
-void osp::boot_thread()
+static SV *_wrap_object(OSSVPV *ospv)
 {
-  debug=0;
-  rethrow_exceptions = 1;
-  tie_objects = 1;
-  to_bless = 1;
-  CLASSLOAD = perl_get_hv("ObjStore::CLASSLOAD", FALSE);
-  assert(CLASSLOAD);
-}
-
-int osp::tie_objects;
-SV *osp::wrap_object(OSSVPV *ospv)
-{
+  dOSP ;
   char *CLASS = ospv->_blessed_to(1);
   assert(strNE(CLASS, "ObjStore::Bridge"));  //?? XXX
 
@@ -118,7 +81,7 @@ SV *osp::wrap_object(OSSVPV *ospv)
     break;
   case SVt_PVHV:
   case SVt_PVAV:{
-    // This typemap scares me.  Will it work everywhere? XXX
+    // This typemap scares me.  Will it work consistently? XXX
       SV *tied;
       if (ospv->get_perl_type() == SVt_PVHV) {
 	tied = sv_2mortal((SV*) newHV());	// %tied
@@ -132,7 +95,7 @@ SV *osp::wrap_object(OSSVPV *ospv)
       assert(stash);
       (void)sv_bless(rv, stash);
       
-      if (osp::tie_objects) {
+      if (osp->tie_objects) {
 	sv_magic(tied, rv, 'P', Nullch, 0);	// tie tied, CLASS, $rv
 	MAGIC *tie_mg = mg_find(tied, 'P');	// undo tie refcnt (yikes!)
 	assert(tie_mg);
@@ -140,7 +103,7 @@ SV *osp::wrap_object(OSSVPV *ospv)
 	--SvREFCNT(rv);
       }
 
-      // faster not to use an object XXX
+      // faster not to use an object? XXX
       SV *mgobj = sv_setref_pv(sv_newmortal(),	// magic %tied, '~', $mgobj
 			       "ObjStore::Bridge",
 			       bridge);
@@ -152,14 +115,14 @@ SV *osp::wrap_object(OSSVPV *ospv)
   return rv;
 }
 
-SV *osp::ospv_2sv(OSSVPV *pv)
+SV *osp_thr::ospv_2sv(OSSVPV *pv)
 {
   if (!pv) return &sv_undef;
-  return osp::wrap_object(pv);
+  return _wrap_object(pv);
 }
 
 //    if (GIMME_V == G_VOID) return 0;  // fold into ossv_2sv? XXX
-SV *osp::ossv_2sv(OSSV *ossv)
+SV *osp_thr::ossv_2sv(OSSV *ossv)
 {
   if (!ossv) return &sv_undef;
   switch (ossv->natural()) {
@@ -169,87 +132,37 @@ SV *osp::ossv_2sv(OSSV *ossv)
   case ossv_nv:    return newSVnv(((OSPV_nv*)ossv->vptr)->nv);
   case ossv_pv:
     return newSVpv((char*) ossv->vptr, ossv->xiv);
-  case ossv_obj:   return osp::wrap_object((OSSVPV*) ossv->vptr);
+  case ossv_obj:   return _wrap_object((OSSVPV*) ossv->vptr);
   default:
     warn("OSSV %s is not implemented", ossv->type_2pv());
     return &sv_undef;
   }
 }
 
-void osp::push_ospv(OSSVPV *pv)
+void osp_thr::push_ospv(OSSVPV *pv)
 {
+  dOSP ;
   if (!pv) return;
-  SV *sv = osp::ospv_2sv(pv);
+  SV *sv = osp->ospv_2sv(pv);
   dSP;
   PUSHs(sv);
   PUTBACK;
 }
 
-/*--------------------------------------------- ossv_bridge */
-
-// bridge is built from north to south
-ossv_bridge *osp::bridge_top = 0;
-
-void osp::destroy_bridge()
-{
-  while (bridge_top) { bridge_top->invalidate(); }
-  assert(bridge_top==0);
-}
-
-ossv_bridge::ossv_bridge(OSSVPV *_pv)
-  : pv(_pv)
-{
-  assert(pv);
-  DEBUG_bridge(warn("ossv_bridge 0x%x->new(%s=0x%x)",
-		    this, _pv->base_class(), _pv));
-  if (osp::is_update_txn) pv->REF_inc();
-
-  prev = 0;
-  if (osp::bridge_top) {
-    osp::bridge_top->prev = this;
-    next = osp::bridge_top;
-    osp::bridge_top = this;
-  } else {
-    next = 0;
-    osp::bridge_top = this;
-  }
-}
-
-// Must be able to remove itself from the list
-void ossv_bridge::invalidate()
-{
-  if (!pv) return;
-  DEBUG_bridge(warn("ossv_bridge 0x%x->invalidate(pv=0x%x) updt=%d ok=%d",
-		    this, pv, osp::is_update_txn, osp::txn_is_ok));
-  if (osp::is_update_txn && osp::txn_is_ok) pv->REF_dec();
-  pv=0;
-
-  if (next) next->prev = prev;
-  if (prev) prev->next = next;
-  if (osp::bridge_top == this) {
-    if (next) osp::bridge_top = next;
-    else osp::bridge_top = prev;
-  }
-}
-
-ossv_bridge::~ossv_bridge()
-{ invalidate(); }
-
-void ossv_bridge::dump()
-{ warn("ossv_bridge=0x%x pv=0x%x", this, pv); }
-
-OSSV *osp::plant_ospv(os_segment *seg, OSSVPV *pv)
+OSSV *osp_thr::plant_ospv(os_segment *seg, OSSVPV *pv)
 {
   assert(pv);
   OSSV *ossv = new(os_segment::of(pv), OSSV::get_os_typespec()) OSSV(pv);
   return ossv;
 }
 
-OSSV *osp::plant_sv(os_segment *seg, SV *nval)
+OSSV *osp_thr::plant_sv(os_segment *seg, SV *nval)
 {
+  dOSP ;
   OSSV *ossv=0;
-  ossv_bridge *br = osp::sv_2bridge(nval);
-  if (br) {
+  if (SvROK(nval)) {
+    ossv_bridge *br = osp->sv_2bridge(nval, 1, seg);
+    assert(br);
     OSSVPV *pv = br->ospv();
     assert(pv);
     ossv = new(os_segment::of(pv), OSSV::get_os_typespec()) OSSV(pv);
@@ -259,12 +172,6 @@ OSSV *osp::plant_sv(os_segment *seg, SV *nval)
   assert(ossv);
   return ossv;
 }
-
-OSSVPV *ossv_bridge::ospv()
-{ return pv; }
-
-void *ossv_bridge::get_location()
-{ return pv; }
 
 /*--------------------------------------------- OSSV */
 
@@ -320,15 +227,22 @@ OSSV *OSSV::operator=(int zero)
 // preserves precision.  Is this right?  XXX
 OSSV *OSSV::operator=(SV *nval)
 {
-  ossv_bridge *br = osp::sv_2bridge(nval);
-  if (br) { s(br); return this; }
-
+  dOSP ;
   char *tmp; unsigned tmplen;
 
-  if (SvIOKp(nval)) {
+  if (SvROK(nval)) {
+    ENTER ;
+    SAVETMPS ;
+    s(osp->sv_2bridge(nval, 1, os_segment::of(this)));
+    FREETMPS ;
+    LEAVE ;
+  } else if (SvIOKp(nval)) {
     s((os_int32) SvIV(nval));
   } else if (SvNOKp(nval)) {
-    s(SvNV(nval));
+    double nv = SvNV(nval);	//try to coerce doubles to int32 ? XXX
+    os_int32 i_nv = (os_int32)nv;
+    if (i_nv == nv) s(i_nv);
+    else s(nv);
   } else if (SvPOKp(nval)) {
     tmp = SvPV(nval, tmplen);
     s(tmp, tmplen);
@@ -342,11 +256,7 @@ OSSV *OSSV::operator=(SV *nval)
   } else if (! SvOK(nval)) {
     set_undef();
   } else {
-    ENTER ;
-    SAVETMPS ;
-    s(osp::force_sv_2bridge(os_segment::of(this), nval));
-    FREETMPS ;
-    LEAVE ;
+    croak("OSSV=(SV*): unknown type");
   }
   return this;
 }
@@ -606,10 +516,11 @@ int OSSVPV::_is_blessed()
 
 char *OSSVPV::_blessed_to(int load)
 {
+  dOSP ;
   char *CLASS = (char*) classname;  //must be null terminated!
-  if (CLASS && load && osp::to_bless) {
+  if (CLASS && load) {
     int len = strlen(CLASS);
-    SV **msv_p = hv_fetch(osp::CLASSLOAD, CLASS, len, 0);
+    SV **msv_p = hv_fetch(osp->CLASSLOAD, CLASS, len, 0);
     SV *msv=0;
     if (msv_p) msv = *msv_p;
     if (!msv || !SvPOK(msv)) {
@@ -636,7 +547,7 @@ char *OSSVPV::_blessed_to(int load)
       msv = POPs;
       if (!SvPOK(msv)) croak("$ObjStore::CLASSLOAD did not return a string");
       SvREFCNT_inc(msv);
-      hv_store(osp::CLASSLOAD, CLASS, len, msv, 0);
+      hv_store(osp->CLASSLOAD, CLASS, len, msv, 0);
       PUTBACK ;
       FREETMPS ;
       LEAVE ;
@@ -656,10 +567,36 @@ void OSSVPV::REF_inc() {
 }
 
 void OSSVPV::REF_dec() { 
-  if (_refs==0) croak("%p->REF_dec to -1", this);
+  if (_refs == 0) croak("%p->REF_dec to -1", this);
+  if (_refs == 1 && _weak_refs && !PvNOREFS(this)) {
+    dOSP ;
+    DEBUG_refcnt(warn("%x->enter NOREFS", this));
+    PvNOREFS_on(this); //protect from race condition
+    SV *me = osp->ospv_2sv(this);
+    dSP ;
+    ENTER ;
+    SAVETMPS ;
+    PUSHMARK(SP);
+    XPUSHs(me);
+    PUTBACK ;
+    perl_call_method("NOREFS", G_VOID);
+    ossv_bridge *br = osp->sv_2bridge(me, 0);
+    assert(br);
+    br->invalidate();  //don't trust perl GC to call this
+    SPAGAIN ;
+    FREETMPS ;
+    LEAVE ;
+    PUTBACK ;
+    PvNOREFS_off(this);
+    DEBUG_refcnt(warn("%x->exit NOREFS", this));
+  }
   _refs--;
   DEBUG_refcnt(warn("OSSVPV(0x%x)->REF_dec() to %d/%d", this, _refs,_weak_refs));
-  if (_refs + _weak_refs == 0) delete this;
+  if (_refs + _weak_refs == 0) {
+    DEBUG_refcnt(warn("%x: begin delete", this));
+    delete this;
+    DEBUG_refcnt(warn("%x: finish delete", this));
+  }
 }
 
 void OSSVPV::wREF_inc() {
@@ -669,7 +606,7 @@ void OSSVPV::wREF_inc() {
 }
 
 void OSSVPV::wREF_dec() { 
-  if (_weak_refs==0) croak("%p->wREF_dec to -1", this);
+  if (_weak_refs==0) return;  // weak_refs can be inaccurate
   _weak_refs--;
   DEBUG_refcnt(warn("OSSVPV(0x%x)->wREF_dec() to %d/%d",this,_refs,_weak_refs));
   if (_refs + _weak_refs == 0) delete this;
@@ -677,13 +614,6 @@ void OSSVPV::wREF_dec() {
 
 int OSSVPV::get_perl_type()
 { return SVt_PVMG; }
-
-void OSSVPV::install_rep(HV *hv, const char *file, char *name, XS_t mk)
-{
-  SV *rep = (SV*) newXS(0, mk, (char*) file);
-  sv_setpv(rep, "$$$");
-  hv_store(hv, name, strlen(name), newRV(rep), 0);
-}
 
 char *OSSVPV::base_class()
 { croak("OSSVPV(0x%x)->base_class() must be overridden", this); return 0; }
@@ -693,6 +623,13 @@ ossv_bridge *OSSVPV::_new_bridge(OSSVPV *_pv)
 { return new ossv_bridge(_pv); }
 
 // common to containers
+void OSPV_Container::install_rep(HV *hv, const char *file, char *name, XS_t mk)
+{
+  SV *rep = (SV*) newXS(0, mk, (char*) file);
+  sv_setpv(rep, "$$$");
+  hv_store(hv, name, strlen(name), newRV(rep), 0);
+}
+
 double OSPV_Container::_percent_filled()
 { return -1; }
 char *OSPV_Container::_get_raw_string(char *key)
@@ -746,7 +683,7 @@ OSPV_Ref::~OSPV_Ref()
 char *OSPV_Ref::base_class()
 { return "ObjStore::UNIVERSAL::Ref"; }
 
-os_database *OSPV_Ref::_get_database()
+os_database *OSPV_Ref::get_database()
 { return myfocus.get_database(); }
 
 int OSPV_Ref::_broken()

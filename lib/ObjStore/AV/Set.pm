@@ -6,11 +6,11 @@ use vars qw($VERSION);
 use Carp;
 use ObjStore;
 
-$VERSION = '0.03';
+$VERSION = '0.04';
 
 sub add {
     my ($o, $e) = @_;
-    $o->PUSH($e);
+    $o->PUSH($e) if !defined $o->where($e);
     $e;
 }
 
@@ -99,9 +99,12 @@ __END__;
 =head1 DESCRIPTION
 
 Implements an API very similar to C<ObjStore::Index>, except with an
-array implementation.  Elements are unsorted.  C<add> is O(1)
-complexity while C<remove> always scans the entire set.  C<add> does
-not check for duplicates, but C<remove> does.
+array implementation.  Elements are unsorted.  Both C<add> and
+C<remove> always scans the entire set.  
+
+This might seems like a joke, but keep in mind that this O(N)
+complexity algorithm takes constant time(Q) for all N<Q.  (Don't be
+too enamoured with computer-science theory.  :-)
 
 This class may be useful as a primary index for C<ObjStore::Table3>.
 

@@ -16,9 +16,9 @@ $nsys->set_queue_size(10);
 begin sub {
     my $j = $db->root('John');
     die "no db" if !$j;
-    subscribe();   #just testing...
-    subscribe($j);
-    $j->notify("bonk");
+    ObjStore::subscribe();   #just testing...
+    ObjStore::subscribe($j);
+    $j->notify("bonk",'commit');
     $j->notify(69, 'now');
 
     begin sub { $j->notify(69, 'bogus'); };
@@ -45,9 +45,9 @@ begin sub {
     my $j = $db->root('John');
     ok($n->focus == $j);
     ok($n->why eq 'bonk');
-    unsubscribe();
-    unsubscribe($j);
-    $j->notify("bonk");
+    ObjStore::unsubscribe();
+    ObjStore::unsubscribe($j);
+    $j->notify("bonk",'commit');
 };
 die if $@;
 

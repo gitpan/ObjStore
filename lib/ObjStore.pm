@@ -16,7 +16,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $SAFE_EXCEPTIONS
 	    );
 
-$VERSION = '1.31';
+$VERSION = '1.32';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -29,8 +29,7 @@ require DynaLoader;
 @ISA = qw(Exporter DynaLoader);
 {
     my @x_adv = qw(&peek &blessed &reftype &os_version &translate 
-		   &subscribe &unsubscribe &get_all_servers 
-		   &set_default_open_mode &lock_timeout
+		   &get_all_servers &set_default_open_mode &lock_timeout
 		   &get_lock_status &is_lock_contention 
 		  );
     my @x_tra = (qw(&fatal_exceptions &release_name
@@ -42,7 +41,7 @@ require DynaLoader;
 		    &PoweredByOS),
 		 # depreciated
 		 qw(&release_major &release_minor &release_maintenance
-		    &set_transaction_priority
+		    &set_transaction_priority &subscribe &unsubscribe
 		   ));
     my @x_old = qw(&schema_dir);
     my @x_priv= qw($DEFAULT_OPEN_MODE %CLASSLOAD $CLASSLOAD $EXCEPTION
@@ -66,8 +65,7 @@ $EXCEPTION = sub {
     warn $m if $ObjStore::REGRESS;
 
     # Due to bugs in perl, confess can cause a SEGV if the signal
-    # happens at the wrong time.  Threads will probably enable a
-    # work-around or a fix.  Even a simple die doesn't always work.
+    # happens at the wrong time.  Even a simple die doesn't always work.
     confess $m if !$ObjStore::SAFE_EXCEPTIONS;
     die $m;
 };
@@ -132,6 +130,9 @@ sub PoweredByOS {
 $FATAL_EXCEPTIONS = 1;   #happy default for newbies... (or my co-workers :-)
 sub fatal_exceptions {
     my ($yes) = @_;
+    if (!$FATAL_EXCEPTIONS and $yes) {
+	confess "sorry, the cat's already out of the bag";
+    }
     $FATAL_EXCEPTIONS = $yes;
 }
 
@@ -951,7 +952,8 @@ sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
 
 package ObjStore::Notification;
-use vars qw($DEBUG_RECEIVE);
+use Carp;
+use vars qw($DEBUG_RECEIVE); #experimental XXX
 
 # Should work exactly like ObjStore::lookup
 sub get_database {
@@ -965,6 +967,7 @@ sub get_database {
 }
 
 sub Receive {
+    carp "Receive: this API is experimental";
     #debugging? XXX
     my ($class, $max) = @_;
     while (my $note = ObjStore::Notification->receive(0) and $max--) {

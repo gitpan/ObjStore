@@ -1,12 +1,13 @@
 use strict;
-package ObjStore::HV::Database; # document more XXX
+package ObjStore::HV::Database;
 use ObjStore;
+use Carp;
 use base 'ObjStore::Database';
 use vars qw($VERSION);
 $VERSION = '1.00';
 
-sub ROOT() { 'hv' }  #DEPRECIATED XXX
-sub hash { $_[0]->root(&ROOT, sub {new ObjStore::HV($_[0], 25)} ); }
+sub ROOT() { carp "ROOT is depreciated, sorry"; 'hv' }
+sub hash { $_[0]->root('hv', sub {new ObjStore::HV($_[0], 25)} ); }
 
 sub STORE {
     my ($o, $k, $v) = @_;
@@ -54,7 +55,7 @@ class instead of roots:
 =item * PERFORMANCE
 
 You have no control over the implementation of roots.  Performance is
-unknown and cannot be changed.  
+unknown and cannot be improved or degraded.
 
 =item * FLEXIBILITY
 
@@ -70,6 +71,6 @@ C<ObjStore::HV::Database>.
 
 =head1 SEE ALSO
 
-C<ObjStore>
+C<ObjStore::ServerDB>
 
 =cut

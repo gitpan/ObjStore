@@ -1,5 +1,5 @@
-package ObjStore::AppInstance;
 use strict;
+package ObjStore::AppInstance;
 use Carp;
 use ObjStore;
 require ObjStore::HV::Database;
@@ -51,7 +51,7 @@ sub top {
 	$i->{ctime} = &now;
 	$h->{ $skey } = $i->new_ref($h, 'hard');
     }
-    $o->{'ref'} = $h->{ $skey }->focus()->new_ref();
+    $o->{'ref'} = $h->{ $skey }->focus()->new_ref('transient','hard');
     my $top = $o->{'ref'}->focus();
     $top;
 }
@@ -67,7 +67,7 @@ sub global {
 	my $s = $o->{wdb}->create_segment('GLOBAL');
 	$gl = $o->{wdb}->root('global', ObjStore::HV->new($s, 30));
     }
-    $o->{'gref'} = $gl->new_ref();
+    $o->{'gref'} = $gl->new_ref('transient','hard');
     $gl;
 }
 
@@ -92,7 +92,7 @@ sub prune {
 
   use ObjStore::AppInstance;
 
-  my $app = new ObjStore::AppInstance('posh', scalar(getpwuid($>)));
+  my $app = ObjStore::AppInstance->new('posh', scalar(getpwuid($>)));
 
   my $hash = $app->top();   # fetch the top level hash for this key
 

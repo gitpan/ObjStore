@@ -274,3 +274,12 @@ void osp_txn::commit()
   delete os;
   os=0;
 }
+
+void osp_txn::checkpoint()
+{
+  if (!os)
+    croak("ObjStore: no transaction to checkpoint");
+  if (os->is_aborted())
+    croak("ObjStore: cannot checkpoint an aborted transaction");
+  os_transaction::checkpoint(os);
+}

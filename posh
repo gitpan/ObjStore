@@ -119,9 +119,9 @@ sub enter {
 	    $db = ObjStore::lookup($dbname);
 	    my $path = $db->get_pathname;
 	    $o->{db} = $path;
-	    $o->{'cwd'} = $path;
 	    $path =~ s| / [^/]* $||x;
 	    $o->{'cwd'} = $path;
+	    # try POSH_ENTER XXX
 	}
     }
     chdir($o->{'cwd'}) or $o->{'cwd'} = cwd;

@@ -1,0 +1,84 @@
+#!/nw/dev/usr/bin/perl -w
+
+use strict;
+package osperlserver;
+use ObjStore;
+use vars qw($VERSION @DB $DAEMON);
+$VERSION = '0.01';
+$DAEMON = 1;
+
+# Getopt::* doesn't do it for me...vestiges of C programmers...like gills...
+for (my $arg=0; $arg < @ARGV; $arg++) {
+    my $o = $ARGV[$arg];
+    if ($o =~ m/^ -d (ebug)? $/x) {
+	# different flavors?
+	++$ObjStore::Notification::DEBUG_RECEIVE;
+    } elsif ($o =~ m/^ -F (ore(ground)?)? $/x) {
+	$DAEMON = 0;
+    } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
+	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
+	eval "require $m";
+	warn, next if $@;
+	if ($way eq 'M') {
+	    $m->import(@im);
+	} else {
+	    $m->unimport(@im);
+	}
+    } elsif ($o =~ m/^-I (\S*) $/x) {
+	my $dir = $1;
+	$dir = $ARGV[++$arg]
+	    if !$dir;
+	if ($dir =~ m{^ \/ }x) {
+	    unshift(@INC, $dir);
+	} else {
+	    require FindBin;
+	    die "osperlserver: can't find myself" if !$FindBin::Bin;
+	    unshift(@INC, "$FindBin::Bin/$dir");
+	}
+    } elsif ($o !~ m/^-/) {
+#	warn "osperlserver: database.db is boring" if $o =~ m/\.db$/;
+	push @DB, $o;
+    } elsif ($o =~ m/^-v$/) {
+	require ObjStore;
+	print("osperlserver $ObjStore::VERSION (Perl $] ".ObjStore::release_name().")\n");
+	exit;
+    } elsif ($o =~ m/^-h(elp)?$/) {
+	print q"
+Usage: osperlserver [switches] database[=Package] [databases...]
+  -F[oreground]    do not fork
+  -Idirectory      specify @INC directory (may be used more than once)
+  -[mM]module..    executes `use/no module...' (just like perl)
+  -v               print version number and patchlevel of osperlserver
+
+  (Also see ObjStore::notify, ObjStore::Process, and ObjStore::ServerDB)
+
+";
+	exit;
+    } else {
+	warn "unknown option '$o' (-h for usage)\n";
+    }
+}
+die "osperlserver: which db?\n" if @DB==0;
+
+for (@DB) {
+    no strict 'refs';
+    my @c = split m'/';
+    my $class = $1 if $c[$#c] =~ s,= ([^=]+) $,,x;
+    $class ||= 'ObjStore::ServerDB';
+    unless (defined %{"$class\::"}) {
+	my $file = $class;
+	$file =~ s,::,/,g;
+	require "$file.pm";
+    }
+    my $db = join '/', @c;
+    $class->new($db, 'update');
+}
+
+if ($DAEMON) {
+    require Proc::Daemon;          #available via CPAN
+    Proc::Daemon::init();
+}
+$SIG{HUP} = sub { warn "SIGHUP" if !$DAEMON };
+
+require ObjStore::Process;
+ObjStore::Process->Loop();

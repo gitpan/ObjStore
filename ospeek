@@ -1,5 +1,6 @@
 #!/nw/dev/usr/bin/perl -w
 
+package Posh;  #is this the right solution?
 use strict;
 use ObjStore ':ADV';
 use ObjStore::Peeker;

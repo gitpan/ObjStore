@@ -51,6 +51,7 @@ struct osp_txn {
   ~osp_txn();
   void abort();
   void commit();
+  void checkpoint();
   void post_transaction();
   int can_update(os_database *);
   int can_update(void *);

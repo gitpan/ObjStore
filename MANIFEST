@@ -43,6 +43,7 @@ lib/ObjStore/Process.pm
 lib/ObjStore/REP/FatTree.pm
 lib/ObjStore/REP/ODI.pm
 lib/ObjStore/REP/Splash.pm
+lib/ObjStore/ServerDB.pm
 lib/ObjStore/SetEmulation.pm
 lib/ObjStore/Table.pm
 lib/ObjStore/Table2.pm
@@ -50,6 +51,7 @@ lib/ObjStore/Table3.pm
 lib/ObjStore/Table3/Database.pm
 lib/ObjStore/Tutorial.pm
 lib/ObjStore/Tutorial.pod
+lib/ObjStore/notify.pm
 notes/10_threads_questions
 notes/calls_to_cleanup_after
 notes/database_overhead_per_object
@@ -67,6 +69,7 @@ ospeek
 osperl-11-schema.cc
 osperl.c
 osperl.h
+osperlserver
 patches/base.pm.copy
 posh
 splash.h

@@ -12,28 +12,35 @@ following in the body of your message:
 
 configure unique index duplicate row behavior?
 
+$ref->notify(['m1','m2',...], 'now'); ??
+
 transactions
-  keep only one transaction stack
+  keep a single transaction stack
   begin 'update', $string;
   begin('update!',...): force switch to update?
 
 posh
   'cd - ': go back to prior directory
-  resolve cd paths per component
-  cd to startup directory
+  resolve cd paths per component!
   autodetect @INC modifications and print help message
   factor eval stuff more
   display style?  web integration?  cgi-posh?
   qt-posh?
+
+document?
+  What does an ObjStore server look like?
+  What are stored procedures?
+
+
++ VAGUE POSSIBILITIES +
+
+split all the goodies into a separate package?
 
 switch representations dynamically
   cursor syncronization: check os_typespec
   do arrays first
   lock representation... hm...
   generate 'new' methods at compile time
-
-
-+ VAGUE POSSIBILITIES +
 
 typemap
   do large strings without copying?

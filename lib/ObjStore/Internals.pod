@@ -240,9 +240,14 @@ relocated when arrays need to grow.  C<OSSVPV>s are never relocated.
 
 =item * SIGNALS ARE UNRELIABLE
 
-Perl signal handlers are not bulletproof yet.  Since ObjectStore makes
-aggressive use of signals, failure is not uncommon.  Reliable signals
-will be available in perl 5.005.
+Perl signal handlers are not bulletproof.  Since ObjectStore makes
+aggressive use of signals, pathelogical failure is not uncommon.
+Various solutions are under consideration.
+
+Currently, we recommmend that you avoid causing lock timeouts or
+deadlocks.  This can be accomplished by restricting each database to a
+single writer, and using mvcc mode for readers.  (This is a good
+architecture anyway!)
 
 =item * MIXING WITH EVAL
 

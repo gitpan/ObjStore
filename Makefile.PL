@@ -33,7 +33,7 @@ osperl-'.$sver.'-osschema.c :: osperl-'.$sver.'-schema.cc $(H_FILES)
 	  -I$(PERL_INC) $(DEFINE) -showw -nout neutral-osperl \
 	  -asdb '.$sdir.'/osperl-'.$sver.'.adb \
 	  -assf osperl-'.$sver.'-osschema.c \
-	  osperl-'.$sver.'-schema.cc $(OS_LIBDIR)/liboscol.ldb
+	  osperl-'.$sver.'-schema.cc '.$OS_LIBDIR.'/liboscol.ldb
 
 clean ::
 	-rm -f osperl-'.$sver.'-osschema.c neutral-osperl avtv*[ch] dex2tv*[ch] tvcommon.*
@@ -89,10 +89,12 @@ WriteMakefile
     (
      NAME         => 'ObjStore',
      PREREQ_PM	  => { 'Tree::Fat' => 1.02, Test => 0.08,
-		       @PREREQ },
+		       @PREREQ
+		       # Proc::Daemon
+		     },
      VERSION_FROM => 'lib/ObjStore.pm',
      OPTIMIZE     => '-O2',
-     EXE_FILES  => [qw/ospeek posh osp_hack/],
+     EXE_FILES  => [qw/ospeek posh osperlserver osp_hack/],
      'LIBS'     => ["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losths"],
      'DEFINE'   => "-DOSP_DEBUG -DSCHEMADIR=$sdir",
      INC      => "-I. -I$OS_ROOTDIR/include",

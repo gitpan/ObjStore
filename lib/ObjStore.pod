@@ -28,8 +28,8 @@ Perl5 did not have a simple way of storing complex data persistently.
 =back
 
 I<Now there is an easy way to build database applications, especially
-if you are concerned about preserving your ideals of data
-encapsulation.  (See below!)>
+if you are concerned about preserving your ideals of encapsulation.
+(See below!)>
 
 =head1 PREREQUISITES
 
@@ -86,6 +86,28 @@ code and start molding it right now:
 
     ObjStore::peek($db);               #dump to stdout
   };
+
+=head2 TOOLS
+
+=over 4
+
+=item * ospeek
+
+Prints out databases in a style similar to Data::Dumper.
+
+=item * posh
+
+Like C<sh>/C<csh>, except that you can I<change directory> B<into>
+your database and walk around the data from the inside.  You can also
+invoke methods on your objects or write custom reports (in perl, of
+course :-).
+
+=item * osperlserver
+
+Run it against any database that inherits C<ObjStore::ServerDB> and it
+will provide a remote method invokation service.
+
+=back
 
 =head1 WHAT IS PERSISTENT PERL?
 
@@ -244,8 +266,7 @@ Where the following invariants hold:
 
 Be aware that index cursors may only be used by one thread at a time.
 Therefore, it is not particularly useful to store pre-created cursors
-in a database.  It's probably faster just to create them transiently
-when needed.
+in a database.  Just to create them transiently when needed.
 
 To eliminate the possibility of indices becoming out-of-sync with
 actual data, keys are marked read-only as they are indexed.  (Another
@@ -288,7 +309,7 @@ See the source code for details.
 
 =head1 DATABASE DESIGN
 
-The best I<design> is to be flexible!
+The best design is to be flexible!
 
 =head2 C<ospeek [-all] [-addr] [-refcnt] [-raw] E<lt>databaseE<gt>>
 
@@ -305,7 +326,7 @@ You can also get the same thing from within perl:
 morass of disorganization?
 
 How can a relational database scale?!  B<When you write down a central
-schema, you are violating the principle of encapsulation.>  This is
+schema, you are violating the principle of encapsulation.> This is
 dumb.  None of the usual database management operations require a
 central schema.  Why create artificial dependencies between your
 classes when you can avoid it?
@@ -322,10 +343,11 @@ compatibility.  (Database are essentially just a rich API.)
 Now, I'm not saying that data layouts never have to change.  When
 thinking about data, the first thing to consider is how to partition
 your data into manageable chunks.  Fortunately, databases interoperate
-and can be used simultaniously.  It is entirely unnecessary to store
-all data in one database.  By splitting your data into logical chunks,
-you should be able to minimize the impact of structural changes.
-(This is the same problem as designing good APIs.)
+and can be used simultaniously.  Therefore, it is entirely unnecessary
+to store all data in one database.  By splitting your data into
+logical chunks, you should be able to minimize the impact of
+structural changes.  (This is the same problem as designing good
+APIs.)
 
 The way you split up your database generally depends on three things
 (wisdom gleened from developing a real-time trading system):
@@ -339,9 +361,10 @@ perfect awareness of nothing.
 
 =item * REAL-TIME WRITERS
 
-It is usually good design to create a separate database for each
-real-time writer.  Consumers of real-time data can open the database
-in mvcc mode (no waiting for read locks), which is a real advantage.
+It is usually good design to create a separate database for each group
+of real-time writers.  Readers of real-time data can open databases in
+mvcc mode and writers will never encounter lock contention (which is a
+major performance advantage).
 
 =item * COUPLING TIGHTNESS
 
@@ -351,9 +374,10 @@ data close together. :-)
 
 =back
 
-That's about it.  The power and simplicity is hard to describe because
-there's just not much to it.  (Just the absolute minimum for
-correctness. :-)
+Additional considerations can be found in the C<ObjectStore>
+documentation, but that's about it.  The power and simplicity is hard
+to describe because there's just not much to it.  (Just the absolute
+minimum to meet every requirement. :-)
 
 (For extra integrity verification, see the C<iscorrupt> method.)
 
@@ -362,9 +386,9 @@ correctness. :-)
 Un-structured perl databases are probably under-constrained for most
 applications.  Fortunately, RDBMS style tables have been adapted,
 adopted, and included with this package.  While they are a little
-different from traditional tables, hopefully relational developers
-will feel right at home.  See C<ObjStore::Index> and
-C<ObjStore::Table3>.
+different from traditional tables, with a few doses of Prozac,
+relational developers should feel right at home.  See
+C<ObjStore::Index> and C<ObjStore::Table3>.
 
 =head1 API REFERENCE
 
@@ -375,7 +399,7 @@ mirrors the C<C++> API.  Refer to the C<ObjectStore> documentation for
 exact symantics.  The API for C<::UNIVERSAL> is probably of most
 interest to ex-C<C++> developers.  If you need an API that isn't
 available in OS/Perl, send your request to the mailing list (see the
-README).
+README).  If you are just getting started, skip to the next section.
 
 =head2 C<ObjStore>
 
@@ -438,11 +462,11 @@ See C<ObjStore::HV::Database>, C<ObjStore::Table3::Database>
 This is the recommended API for roots.  If the given root is not
 found, creates a new one.  Returns the root's current value.
 
-In general, you should try to avoid using more than one root.  Roots
-have an unnatural API for perl: normal hashes can nest but roots
-cannot.  It is good practice to use a generic
-C<ObjStore::HV::Database> (with perhaps an overridden C<new> method)
-and add all your stuff under that.
+In general, you should try to avoid using roots.  Roots have an
+unnatural API for perl: hashes can nest but roots cannot.  Roots are
+like a necessary but annoying accounting detail.  It is much better
+practice to use or inherit C<ObjStore::HV::Database> or
+C<ObjStore::ServerDB>.
 
 =item * $s = $db->get_segment($segment_number);
 
@@ -554,13 +578,15 @@ blindingly fast.
 =item * my $tm = ObjStore::lock_timeout($rw);
 
 C<$rw> should be either 'read' or 'write'.  Return value of 1 == 1
-second.  Undef means there is no timeout;
+second.  Undef indicates that there is no timeout.
 
 =item * ObjStore::lock_timeout($rw, $tm);
 
 Set lock timeouts.
 
 =back
+
+Dynamic transactions are also available.  See C<ObjStore::Process>.
 
 =head2 C<::Segment>
 
@@ -656,14 +682,16 @@ blessing).  (C<UNIVERSAL::can> remains un-modified.)
 
 Returns the version of the $baseclass (at the moment of blessing).
 
-=item * C<$o->subscribe()>
+=item * C<$o->subscribe()> and C<$o->unsubscribe()>
 
-=item * C<$o->unsubscribe()>
+These might not be available per-object.  Only per-segment or
+per-database.
 
-=item * C<$o->notify($why, ['now'])>
+=item * C<$o->notify($why, $when)>
 
-Sends a notification to subscribers.  Without the 'now' parameter,
-notification will take place immediately after commit.
+Sends a notification to subscribers.  When can be either 'now' or
+'commit'.  The $when parameter might be required.  Also being
+considered is a means to bunch notifications together for batch send.
 
 =item * C<$errs = $o-E<gt>iscorrupt($verbosity_level)>
 
@@ -749,7 +777,9 @@ C<os_database::set_fetch_policy>.)
 
 =item * THROW MONEY AT THE PROBLEM
 
-Get a more memory, more CPUs, and upgrade to your network.
+Get a more memory, more CPUs, upgrade to your network, or hire C<C++>
+programmers and redo your project in C<C++>.  Perl isn't the solution
+to everything (yet :-).
 
 =back
 
@@ -882,13 +912,13 @@ Customize by providing your own implementation for these methods:
 
 =over 4
 
+=item * C<$o->help();>
+
 =item * C<$o-E<gt>POSH_PEEK($peeker, $o_name);>
 
 =item * C<$o-E<gt>POSH_CD($path);>
 
 =item * C<$o-E<gt>POSH_ENTER();>
-
-=item * C<$o->help();>
 
 =back
 
@@ -948,10 +978,10 @@ Support for bit vectors (Bit::Vector) and matrices (PDL)?
 
 =head2 How Does CORBA Fit In?
 
-C<CORBA> standardizes remote method invokaction.  C<ObjectStore>
-greatly reduces the need for remote method invokaction and also
-provides a simple but effective RPC mechanism (see
-C<ObjStore::Notification> and C<ObjStore::Process>).  The two
+C<CORBA> standardizes remote method invokation (RMI).  C<ObjectStore>
+greatly reduces the need for remote method invokation and also
+provides a simple but effective RMI mechanism (see
+C<ObjStore::Notification> and C<ObjStore::ServerDB>).  The two
 technologies address different problems, but here is a rough
 comparison:
 
@@ -978,11 +1008,11 @@ comparison:
 
 When you write a structure declaration in C<C++> or C<Java> you are
 declaring field-names, field-types, and field-order.  Programs almost
-always require a re-compile to change such specific declarations.
-This is fine for small applications but becomes cumbersome quickly.
-It is too hard to change (brittle).  An C<SQL>-style language is
-needed.  When you create a table in C<SQL> you are declaring only
-field-names and field-types.
+always require a re-compile to change such rigid declarations.  This
+is fine for small applications but becomes cumbersome quickly.  It is
+too hard to change (brittle).  An C<SQL>-style language is needed.
+When you create a table in C<SQL> you are declaring only field-names
+and field-types.
 
   create table SQL_style
   (name varchar(80),
@@ -1059,7 +1089,7 @@ Just like C<C++>, the lack of a universal generic schema limits use to
 single applications.  Without some sort of C<tie> mechanism, I can't
 imagine how this could be remedied.  (Even with C<tie>, it might
 already be too late.  Java was not conceived to evolve quite as
-rapidly as is perl.)
+rapidly as is perl.  Imagine that: "designed to evolve"!)
 
 =item *
 
@@ -1097,11 +1127,11 @@ in transient memory and persistent memory
 without violating the principle of encapsulation or obstructing
 general ease of use.
 
-=head2 ETA: 3 Months
+=head2 ETA: 1-3 Months
 
-  dynamically loaded application schemas
-  kernel-managed perl threads
   perl compiler
+  kernel-managed perl threads
+  dynamically loaded application schemas
 
 =head1 EXPORTS
 
@@ -1120,8 +1150,9 @@ http://www.perl.com/perl/misc/Artistic.html)
 Perl / C<ObjectStore> extension is available via any CPAN mirror site.
 See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
-Portions of the collection code snapped from I<splash>, Jim Morris's
-delightful C<C++> library ftp://ftp.wolfman.com/users/morris/public/splash .
+Portions of the collection code were snapped from I<splash>, Jim
+Morris's delightful C<C++> library
+ftp://ftp.wolfman.com/users/morris/public/splash .
 
 Also, a poignant thanks to all the wonderful teachers with which I've
 had the opportunity of studying.  If you have never had a teacher, I

@@ -338,7 +338,10 @@ OSSVPV::notify(why, ...)
 	int now=0;
 	if (items == 3) {
 	  if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), na), "now")) now=1;
-	  else croak("%p->notify('%s', ['now'])", THIS, SvPV(why, na));
+	  else if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), na), "commit")) now=0;
+	  else croak("%p->notify('%s', $when)", THIS, SvPV(why, na));
+	} else {
+	  warn("%p->notify($string): assuming $when eq 'commit', please specify");
 	}
 	os_notification note;
 	if (SvNIOK(why)) {
@@ -356,8 +359,9 @@ OSSVPV::notify(why, ...)
 
 #-----------------------------# Transaction
 
-# It is not clear why perl should need access to any transaction that
-# is not the most deeply nested...
+# A stack of transactions is needed mostly to make sure
+# the nesting scheme makes sense.  Otherwise, you usually
+# care only about the most deeply nested transaction.
 
 MODULE = ObjStore	PACKAGE = ObjStore::Transaction
 
@@ -396,6 +400,9 @@ osp_txn::abort()
 
 void
 osp_txn::commit()
+
+void
+osp_txn::checkpoint()
 
 char *
 SEGV_reason()

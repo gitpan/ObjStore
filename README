@@ -18,18 +18,33 @@ decision for many applications; and perl5 did not have a simple way of
 storing complex data persistently.
 
 Now there is an easy way to build database applications, especially if
-you are concerned about preserving your ideals of data encapsulation.
+you are concerned about preserving your ideals of encapsulation.
 
-=head1 WHAT IS PERSISTENT PERL?
+=head2 INCLUDED TOOLS
 
-It's just like normal perl, except that you can create data that
-doesn't go away when your program exits.  This more permenant data
-lives in files or raw disk partitions that are divided into databases.
-And databases are comprised of...
+=over 4
+
+=item * ospeek
+
+Prints out databases in Data::Dumper style.
+
+=item * posh
+
+Like C<sh>/C<csh>, except that you can I<change directory> B<into>
+your database and walk around the data from the inside.  You can also
+invoke methods on your objects or write custom reports (in perl, of
+course :-).
+
+=item * osperlserver
+
+Run it against any database that inherits C<ObjStore::ServerDB> and it
+will provide a remote method invokation service.
+
+=back
 
 =head1 PREREQUISITES
 
-If you want to find out, you need:
+You will need:
 
 - ObjectStore OODBMS (see http://www.odi.com; evaluations are available!)
 
@@ -46,6 +61,16 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 ##################
 # RECENT CHAN@ES #
 ##################
+
+
+** 03-21-98 RELEASE 1.32
+
+- Major improvements to serverization code.  See osperlserver,
+ObjStore::ServerDB, and ObjStore::Process.  It is likely that not all
+changes are backward compatible to 1.30 (but I'm pretty sure
+improvements will outweigh breakage :-).
+
+- ObjStore::AV::Set now checks for duplicates.
 
 
 ** 03-13-98 RELEASE 1.31
@@ -68,34 +93,6 @@ perl-style lock_timeout API.
 compiler.  ObjStore::shutdown is now called in an END block to insure
 proper clean up (abort pending transactions, etc.) and initialization
 is now delayed until run-time (vs. compile-time).
-
-
-** 03-06-98 RELEASE 1.30
-
-- Instant, effortless event dispatching for network distributed perl
-objects using dynamic transactions.  (See ObjStore::Process :-)
-
-- Minor changes to ObjStore::Table3 to support multiple index types
-and the notion of a primary index.  Simplified the implementation of
-ObjStore::AV::Set.  Now can be used as an index in an
-ObjStore::Table3.  ObjStore::AV::Set changes are not backward
-compatible.
-
-- Persistent bless logic unnecessarily complains when blessing in
-multiple databases.  Temporarily disabled the imperfect assertion.
-
-- Added subscribe & unsubscribe to Databases & Segments.
-
-- Added 'nextKey' method to ObjStore::HV & ObjStore::Index.  Reserved
-the 'help' method of all persistent objects.
-
-- Tweaks to ObjStore::CSV.
-
-- Defect found and fixed in Tree::Fat.
-
-- Always adding -DDEBUGGING to CFLAGS is wrong.  Fixed.
-
-- posh now persists command history from prior sessions (5.004_58+).
 
 
 see ./INSTALL for hints on installation

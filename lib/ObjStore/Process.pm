@@ -3,23 +3,25 @@ use strict;
 package ObjStore::Process;
 use Carp;
 Carp->import('verbose');
+use Exporter ();
 use ObjStore;
 use Event; #0.02 or better recommended
 use IO::Handle;
 use IO::Poll '/POLL/';
 use Time::HiRes qw(gettimeofday tv_interval);
-use vars (qw(@ISA $VERSION),
-	  qw($HOST $EXE $PROCESS $NOTER),
+use vars (qw($VERSION @ISA @EXPORT_OK),
+	  qw($HOST $EXE $PROCESS $AUTONOTE $MAXPENDING %METERS),
 	  qw($Status $LoopLevel $ExitLevel),  #loop
 	 );
-$VERSION = '0.02';
+$VERSION = '0.04';
 @ISA = qw(ObjStore::HV Event);
+@EXPORT_OK = qw(meter checkpoint);  #Loop Exit ?XXX
 #
 # We actually sub-class Event so other processes could theortically
-# send messages that tweaked remote event loops (without addition
+# send messages that tweaked remote event loops (without additional
 # glue code).  Whether this is actually useful remains to be seen.
 #
-# Perhaps the real benefit is that is sort-of makes sense conceptually.
+# Perhaps the real benefit is that it sort-of makes sense conceptually.
 
 $EXE = $0;
 $EXE =~ s{^ .* / }{}x;
@@ -27,6 +29,7 @@ chop($HOST = `hostname`);
 
 $LoopLevel = 0;
 $ExitLevel = 0;
+$MAXPENDING = 0;
 
 # Need alternative because realtime updates are not retry'able.
 ObjStore::set_max_retries(0);
@@ -38,38 +41,81 @@ ObjStore::fatal_exceptions(0);
 $ObjStore::TRANSACTION_PRIORITY = 0x100;
 
 # Don't wait forever!
-for (qw(read write)) { ObjStore::lock_timeout($_,30); }
+for (qw(read write)) { ObjStore::lock_timeout($_,15); }
 
 # Signals will likely happens at strange times.  Be extra careful.
-++$ObjStore::SAFE_EXCEPTIONS;
+#++$ObjStore::SAFE_EXCEPTIONS;
 
 # Extra debugging.
 #++$ObjStore::REGRESS;
 
 sub new {
+    $ObjStore::TRANSACTION_PRIORITY = 0xf000 #kingly
+	if $ObjStore::TRANSACTION_PRIORITY == 0x100;
+
     my $o = shift->SUPER::new(@_);
     $$o{exe} = $EXE;
+    $$o{argv} = \@ARGV;
     $$o{host} = $HOST;
     $$o{pid} = $$;
     $$o{uid} = getpwuid($>);
+    $$o{chkpt_timer} = 2;
     $$o{mtime} = time;
-    # VERSION hash & overload compare XXX
-
-    $PROCESS = $o->new_ref('transient','hard'); #safe XXX
-    $ObjStore::TRANSACTION_PRIORITY = 0xf000 #kingly
-	if $ObjStore::TRANSACTION_PRIORITY == 0x100;
+    $PROCESS = $o->new_ref('transient','safe');
     $o;
 }
 
-sub autonotify {
-    carp "autonotify already invoked", return if $NOTER;
-    my $fh = IO::Handle->new();
-    $fh->fdopen(ObjStore::Notification->_get_fd(), "r");
-    $NOTER = Event->io(-handle => $fh, -events => POLLRDNORM,
-		       -callback => sub { ObjStore::Notification->Receive(3) });
+sub wait_for_commit {
+    my ($s) = @_;
+    confess "$s->wait_for_commit" if !ref $s;
+    my $mtime = $$s{mtime};
+    my $sref = $s->new_ref('transient','safe');
+    ObjStore::Process->Loop(sub { $sref->deleted or $sref->focus->{mtime} != $mtime });
 }
 
-sub debug {
+sub autonotify {
+    carp "autonotify already invoked", return if $AUTONOTE;
+    my $fh = IO::Handle->new();
+    $fh->fdopen(ObjStore::Notification->_get_fd(), "r");
+#    ObjStore::Notification->set_queue_size(512);
+    my $overflow = 0;
+    my $dispatcher = sub {
+	my ($sz, $pend, $over) = ObjStore::Notification->queue_status();
+	$MAXPENDING = $pend if $pend > $MAXPENDING;
+	if ($over != $overflow) {
+	    warn "lost ".($over-$overflow)." messages";
+	    $overflow = $over;
+	}
+	my $max = 10;
+	while (my $note = ObjStore::Notification->receive(0) and $max--) {
+	    my $why = $note->why();
+	    my $f = $note->focus();
+	    my @args = split /$;/, $why;
+	    my $call = shift @args;
+	    warn "$f->$call(".join(', ',@args).")\n"
+		if $ObjStore::Notification::DEBUG_RECEIVE;
+	    ++$METERS{ $call };
+	    my $mname = "do_$call";
+	    my $m = $f->can($mname);
+	    if (!$m) {
+		no strict 'refs';
+		if ($ { ref $f . "::UNLOADED" }) {
+		    warn "autonotify: attempt to invoke method '$mname' on unloaded class ".ref $f."\n";
+		} else {
+		    warn "autonotify: don't know how to $f->$mname(".join(', ',@args).") (ignored)\n";
+#		    warn "Loaded: ".join(" ",sort keys %INC)."\n";
+		}
+		next
+	    }
+	    $m->($f, @args);
+	    # search @{ blessed($m)."::NOTIFY" } ?XXX
+	}
+    };
+    $AUTONOTE = Event->io(-handle => $fh, -events => POLLRDNORM,
+			  -callback => $dispatcher);
+}
+
+sub do_debug {
     my ($o,$what) = @_;
     if ($what =~ m/^\s+$/) {
 	$ObjStore::Notification::DEBUG_RECEIVE = 0;
@@ -87,45 +133,85 @@ sub debug {
 
 # configure checkpoint policy?
 
-use vars qw($TXN $ABORT $TxnTime $Checkpoint $Elapsed
-	    @ONDIE @ONBEGIN @ONCOMMIT);
+use vars qw($TXN $ABORT $TxnTime $Checkpoint $Elapsed $TType
+	    @ONDIE);
 
-sub checkpoint {
+$TType = 'update';  #default to read XXX
+sub set_mode {
+    my ($o,$m) = @_;
+    $TType = $m;
+}
+
+# another API for full transaction commit?  do we run out of memory otherwise? XXX
+sub checkpoint { ++$Checkpoint }
+
+# WARNING: please do not call this directly!
+sub _checkpoint {
+    my ($class, $continue) = @_;
+    my $chkpt_timer = 2;
     if ($TXN) {
 	my $ok=0;
-	$ok = eval {
-	    if ($PROCESS) {
-		# keep a rolling history! XXX
-		my $s = $PROCESS->focus();
-		$$s{mtime} = $TxnTime->[0];
-		#		$$s{updates} = $rtupdates;
-		$$s{update} = tv_interval($TxnTime, [gettimeofday]);
-		$$s{commit} = $Elapsed if $Elapsed;
-	    }
-	    $TXN->post_transaction(); #1
-	    1;
-	};
-	warn if $@;
+	if (!$ABORT) {
+	    $ok = eval {
+		if ($PROCESS) {
+		    if ($PROCESS->deleted()) {
+			ObjStore::Process->Exit(0);
+			die "another server is starting up, exiting...";
+		    } 
+		    my $s = $PROCESS->focus();
+		    $chkpt_timer = $$s{chkpt_timer} if $$s{chkpt_timer};
+		    my $st = $$s{stats} ||= [];
+		    $st->[$#$st]{commit} = $Elapsed if @$st && $Elapsed;
+		    my $now = [gettimeofday];
+		    push @$st, { update => tv_interval($TxnTime, $now),
+				 pending => $MAXPENDING,
+				 meters => \%METERS };
+		    shift @$st if @$st > 10;
+		    %METERS = ();
+		    $$s{mtime} = $now->[0];
+		    #		$s->notify('was_commit'); #???
+		}
+		$TXN->post_transaction(); #1
+		1;
+	    };
+	    warn if $@;
+	}
 	my $t1 = [gettimeofday];
-	($ok and !$ABORT)? $TXN->commit() : $TXN->abort();
+	if ($ok and $continue) {
+	    $TXN->checkpoint();
+	} else {
+	    if ($ok) {
+		$TXN->commit();
+	    } else {
+		$TXN->abort();
+	    }
+	    $TXN->post_transaction(); #2
+	    confess "transaction mismatch"
+		if pop @ObjStore::TxnStack != $TXN;
+	    $TXN->destroy();
+	    undef $TXN;
+	}
 	$ABORT=0;
-	$TXN->post_transaction(); #2
-	if (pop @ObjStore::TxnStack != $TXN) { confess "transaction mismatch" }
-	$TXN->destroy();
-	undef $TXN;
 	$Elapsed = tv_interval($t1, [gettimeofday]);
     }
     $Checkpoint=0;
-    confess "cannot nest dynamic transaction" if @ObjStore::TxnStack;
-    $TXN = ObjStore::Transaction::new('update');
-    push @ObjStore::TxnStack, $TXN;
-    Event->timer(-after => 2, -callback => sub { ++$Checkpoint; });
-    $TxnTime = [gettimeofday];
+    if ($continue) {
+	if (!$TXN) {
+	    confess "cannot nest dynamic transaction" if @ObjStore::TxnStack;
+	    $TXN = ObjStore::Transaction::new($TType);
+	    push @ObjStore::TxnStack, $TXN;
+	}
+	$TxnTime = [gettimeofday];
+	Event->timer(-after => $chkpt_timer, -callback => sub { ++$Checkpoint; });
+	# don't acquire any unnecessary locks!
+    }
 }
 
 sub ondie { push @ONDIE, $_[1]; }
-#sub onbegin { push @ONBEGIN, $_[1] }
-#sub oncommit { push @ONCOMMIT, $_[1]; }
+
+sub meter {
+    ++ $METERS{ $_[$#_] };
+}
 
 sub Loop {
     my ($o,$waiter) = @_;
@@ -134,7 +220,7 @@ sub Loop {
     ++$ExitLevel;
 #    warn "Loop enter $LoopLevel $ExitLevel";
 
-    checkpoint() if !$TXN;
+    $o->_checkpoint(1) if !$TXN;
     while ($ExitLevel >= $LoopLevel) {
 	eval {
 	    if ($waiter and $waiter->()) {
@@ -159,8 +245,7 @@ sub Loop {
 	    @ONDIE=(); #??
 	    ++$ABORT, warn $err if !$ok;
 	}
-	checkpoint();
-#	for (@ONCOMMIT) { $_->($@) } @ONCOMMIT=();
+	$o->_checkpoint($ExitLevel);
     }
 
 #    warn "Loop exit $LoopLevel $ExitLevel = $Status";
@@ -173,6 +258,7 @@ sub Exit {
     --$ExitLevel;
 #    warn "Loop exit to $ExitLevel";
     if ($LoopLevel == 0) {
+	# this never happens? XXX
 	confess "CORE::exit";
 	CORE::exit($st? $st:0);
     } else {
@@ -198,43 +284,18 @@ $SIG{__WARN__} = sub { warn localtime()." $EXE($$): $_[0]" };
 $SIG{__DIE__} = sub { die localtime()." $EXE($$): $_[0]" };
 
 # END blocks need to run...
-for my $sig (qw(INT TERM)) {
-    $SIG{$_} = sub { 
-	my $why = "SIG$sig\n";
-	ObjStore::Process->Exit($why);
-    };
+if (!defined %Posh::) {
+    $SIG{HUP} = sub {};
+    for my $sig (qw(INT TERM)) {
+	$SIG{$sig} = sub { 
+	    my $why = "SIG$sig\n";
+	    ObjStore::Process->Exit($why);
+	    die "ABORT $why";
+	};
+    }
 }
 
 END{ warn "exiting...\n"; } #optional? generic? XXX
-
-#------------------------------------------------ ping protocol --
-#EXPERIMENTAL
-sub ping {
-    my ($o, $timeout) = @_;
-    return if time - ($$o{mtime} || 0) > 90;
-    $o->notify("pong $$o{pid}\@$$o{host}", "now");
-    # (can't notify via 'ping' because WE are ping!)
-
-    my $timer = $o->timer(-after => $timeout,
-			  -callback => sub { $o->Exit(0) });
-    my $ok = $o->Loop();
-#    warn $ok;
-    $timer->cancel;
-    $ok;
-}
-
-sub pong {
-    my ($o,$who) = @_;
-    my ($pid,$host) = split(/\@/, $who);
-    $o->notify("ok") if $pid == $$ && $host eq $HOST;
-}
-
-sub ok {
-    my ($o) = @_;
-    return if $$o{pid} == $$ and $$o{host} eq $HOST; #I AM HAPPY
-#    warn "$0 is already running ($$o{uid}:$$o{pid}\@$$o{host})\n";
-    $o->Exit(1);
-}
 
 1;
 
@@ -244,13 +305,7 @@ sub ok {
 
 =head1 SYNOPSIS
 
-    # $app is a persistent hash of application info
-
     ObjStore::Process->autonotify();
-
-    # exit if a server is already running
-    my $rabbit = $$app{process};
-    ObjStore::Process->Exit if $rabbit && $rabbit->ping(1);
 
     # store our process info
     $$app{process} = ObjStore::Process->new($app);
@@ -281,8 +336,6 @@ Research unix-style daemonization code
   default stderr/stdout redirect (or Tee) to /usr/tmp
 
 Proc::Daemon ?
-
-document ping protocol
 
 =head1 SEE ALSO
 

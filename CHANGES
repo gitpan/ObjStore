@@ -1,3 +1,31 @@
+** 03-06-98 RELEASE 1.30
+
+- Instant, effortless event dispatching for network distributed perl
+objects using dynamic transactions.  (See ObjStore::Process :-)
+
+- Minor changes to ObjStore::Table3 to support multiple index types
+and the notion of a primary index.  Simplified the implementation of
+ObjStore::AV::Set.  Now can be used as an index in an
+ObjStore::Table3.  ObjStore::AV::Set changes are not backward
+compatible.
+
+- Persistent bless logic unnecessarily complains when blessing in
+multiple databases.  Temporarily disabled the imperfect assertion.
+
+- Added subscribe & unsubscribe to Databases & Segments.
+
+- Added 'nextKey' method to ObjStore::HV & ObjStore::Index.  Reserved
+the 'help' method of all persistent objects.
+
+- Tweaks to ObjStore::CSV.
+
+- Defect found and fixed in Tree::Fat.
+
+- Always adding -DDEBUGGING to CFLAGS is wrong.  Fixed.
+
+- posh now persists command history from prior sessions (5.004_58+).
+
+
 ** 02-21-98 RELEASE 1.29
 
 - Complete, nesting, tied array support (5.004_58+).

@@ -64,7 +64,7 @@ int OSPV_splashheap::add(OSSVPV *pv)
   if (!osp->exam.load_target('x', pv)) return 0;
   int at = av.count();
   int pi;
-  while (at && osp->exam.compare(av[pi=(at-1)/2]) < 0) {
+  while (at && osp->exam.compare(av[pi=(at-1)/2], 0) < 0) {
     av[at].steal(av[pi]);
     at = pi;
   }
@@ -93,7 +93,7 @@ void OSPV_splashheap::SHIFT()
       int jx = at*2+1;
       int kx = jx+1;
       if (kx < av.count() && osp->exam.compare(av[kx], av[jx]) < 0) jx = kx;
-      if (osp->exam.compare(av[jx]) > 0) {
+      if (osp->exam.compare(av[jx], 0) > 0) {
 	av[at].steal(av[jx]);
 	at = jx;
 	continue;
@@ -111,7 +111,7 @@ void OSPV_splashheap::SHIFT()
 
 void OSPV_splashheap::FETCH(SV *sv)
 {
-  int xx = SvIV(sv);
+  int xx = osp_thr::sv_2aelem(sv);
   if (xx < 0 || xx >= av.count()) return;
   SV *ret = osp_thr::ospv_2sv(av[xx]);
   dSP;
@@ -146,7 +146,7 @@ int OSPV_avarray::get_perl_type()
 
 void OSPV_avarray::FETCH(SV *key)
 {
-  int xx = SvIV(key);
+  int xx = osp_thr::sv_2aelem(key);
   if (xx < 0 || xx >= av.count()) return;
   SV *ret = osp_thr::ossv_2sv(&av[xx]);
   dSP;
@@ -200,7 +200,7 @@ void OSPV_avarray::make_constant()
 
 void OSPV_avarray::STORE(SV *sv, SV *value)
 {
-  int xx = SvIV(sv);
+  int xx = osp_thr::sv_2aelem(sv);
   DEBUG_array(warn("OSPV_avarray(0x%x)->STORE(%d)", this, xx));
   if (xx < 0) croak("STORE(%d)", xx);
   av[xx] = value;

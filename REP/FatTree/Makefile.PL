@@ -1,7 +1,7 @@
 #!./perl -w
 use strict;
 use ExtUtils::MakeMaker;
-use lib '../../lib';
+use lib ('../../lib','.');
 use ObjStore::MakeMaker qw(add_os_args);
 
 my $v = '01';

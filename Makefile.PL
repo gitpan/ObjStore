@@ -15,9 +15,13 @@ Edit ./lib/ObjStore/Config.pm to change the following:
 
 ";
 
+my @PREFIX = (PREFIX => $ENV{PERL5PREFIX})
+    if exists $ENV{PERL5PREFIX};
+
 #$Verbose = 1;
 WriteMakefile
     (
+     @PREFIX,
      NAME         => 'ObjStore',
      PREREQ_PM	  => { 'Tree::Fat' => 1.03, Test => 1.03,
 		       # Proc::Daemon?
@@ -26,7 +30,6 @@ WriteMakefile
      LINKTYPE => 'dynamic',  # static not supported!!!
      VERSION_FROM => './lib/ObjStore.pm',
      EXE_FILES  => [qw/ospeek posh osperlserver qtposh/],
-     dist	=> {COMPRESS=>'gzip -9f', SUFFIX => 'gz'},
     );
 
 sub MY::linkext { 

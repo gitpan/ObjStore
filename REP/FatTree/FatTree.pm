@@ -64,6 +64,13 @@ sub configure {
     $o->ObjStore::REP::FatTree::Index::_conf_slot($c);
 }
 
+sub index_path {
+    my ($o) = @_;
+    my $c = $o->ObjStore::REP::FatTree::Index::_conf_slot();
+    return if !$c;
+    $c->[2]
+}
+
 package ObjStore::REP::FatTree::Index::Conf;
 use base 'ObjStore::AV';
 use vars qw($VERSION);

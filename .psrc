@@ -1,8 +1,10 @@
+#insure++.report_file insure.out
+
 gus_reload_dynamics_on_failure unsafe
 demangle_method filter c++filt
 interface_defaults none
 signal_ignore SEGV
-symbol_banner on
+#symbol_banner on
 
 #ignore_wild on
 

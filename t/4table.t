@@ -1,6 +1,5 @@
 # tables and tables of -*-perl-*-
-use Test;
-BEGIN { plan tests => 6 }
+use Test; plan tests => 13;
 
 use strict;
 use ObjStore;
@@ -45,5 +44,29 @@ begin 'update', sub {
     ok join('', sort map { $_->{id} } @m), '123';
 
     ok $tbl->fetch('id', 3)->{id}, 3;
+};
+die if $@;
+
+begin 'update', sub {
+    my $j = $db->root('John');
+    die if !$j;
+
+    my $tbl = ObjStore::Table3->new($j);
+
+    $tbl->add_index('test', ObjStore::Index->new($j, path => 'one,two'));
+    for my $one (1..5) {
+	for my $two (1..5) {
+	    $tbl->add({ one => $one, two => $two });
+	}
+    }
+
+    for my $one (0..6) {
+	my @got = $tbl->fetch('test', $one);
+	if ($one == 0 || $one == 6) {
+	    ok scalar @got, 0;
+	} else {
+	    ok join('', map { $_->{two} } @got), join('', 1..5);
+	}
+    }
 };
 die if $@;

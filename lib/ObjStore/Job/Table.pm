@@ -58,7 +58,7 @@ sub restart {
     Event->timer(-interval => 1, -callback => sub { $worker->again },
 		 -desc => "ObjStore::Job::Table timer");
     Event->timer(-interval => 3, -callback => sub {
-		     $worker->{callback}->() if !$work;
+		     $worker->now if !$work;
 		     $work = 0;
 		 },
 		 -desc => "ObjStore::Job::Table FORCE");

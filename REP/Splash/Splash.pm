@@ -42,6 +42,13 @@ sub configure {
     ObjStore::REP::Splash::Heap::_conf_slot($o, $c);
 }
 
+sub index_path {
+    my ($o) = @_;
+    my $c = ObjStore::REP::Splash::Heap::_conf_slot($o);
+    return if !$c;
+    $c->[1]
+}
+
 package ObjStore::REP::Splash::Heap::Conf;
 use base 'ObjStore::AV';
 

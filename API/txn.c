@@ -72,6 +72,7 @@ osp_thr *osp_thr::fetch()
 
 SV *osp_thr::stargate=0;
 HV *osp_thr::CLASSLOAD;
+HV *osp_thr::BridgeStash;
 SV *osp_thr::TXGV;
 AV *osp_thr::TXStack;
 
@@ -84,9 +85,11 @@ void osp_thr::boot()
   XSTHRBOOT(osp);
   tix_exception::set_unhandled_exception_hook(ehook);
   CLASSLOAD = perl_get_hv("ObjStore::CLASSLOAD", 1);
+  BridgeStash = gv_stashpv("ObjStore::Bridge", 1);
+  SvREFCNT_inc((SV*) BridgeStash);
   TXGV = (SV*) gv_stashpv("ObjStore::Transaction", 0);
   assert(TXGV);
-  // REFCNT_inc(TXGV) ??
+  // SvREFCNT_inc(TXGV) ??
   TXStack = perl_get_av("ObjStore::Transaction::Stack", 1);
 //  condpair_magic((SV*) TXStack); //init for later
   SvREADONLY_on(TXStack);

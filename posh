@@ -17,7 +17,7 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
     } elsif ($o =~ m/^-remote$/) {
 	#assume osperlserver is running; create a posh instance; etc...!
 	$open_mode = 'remote';
-    } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
+    } elsif ($o =~ m/^ \- (M|m) ([\w:]+) (\=\w+)? $/x ) {
 	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
 	eval "require $m";
 	warn, next if $@;
@@ -75,11 +75,31 @@ package input;
 use ObjStore ':ADV';
 use vars qw($at $db $cursor $view);
 
+package RedirSaver;
+# code mostly copied from SelectSaver
+use Carp;
+use Symbol;
+ 
+sub new {
+    @_ >= 1 && @_ <= 2 or croak 'usage: new RedirSaver [FILEHANDLE]';
+    my $fh = select;
+    my $self = bless [$fh], $_[0];
+    select qualify($_[1], caller) if @_ > 1;
+    $self;
+}
+ 
+sub DESTROY {
+    close select;
+    my $this = $_[0];
+    select $$this[0];
+}
+
 package Posh::View;
 BEGIN { require Cwd; *cwd = \&Cwd::fastcwd; }
 use ObjStore ':ADV';
 use ObjStore::Peeker;
 require ObjStore::Path::Ref;
+use Symbol;
 use base 'ObjStore::HV';
 use vars qw($VERSION);
 $VERSION = '1.00';
@@ -239,6 +259,17 @@ sub execute {
     local($input::db, $input::at, $input::view, $input::cursor);
     my ($o, $input) = @_;
 
+    my $redir;
+    if ($input =~ s/\s(\>\>?) \s* ([\w.\/-]+)$//x) {
+	my $out = gensym;
+	if (!open $out, "$1$2") {
+	    warn "open $1$2: $!";
+	} else {
+	    print "[Output ".($1 eq '>'?'redirected':'appended')." to '$2'...]\n";
+	    $redir = RedirSaver->new($out);
+	}
+    }
+    
     # Any commands that are not straight perl syntax are
     # parsed and executed here.  (cd, ls)
 
@@ -403,12 +434,18 @@ Inside of databases:
    raw                 # ignore special POSH_PEEK methods
    methods             # show available methods (perl 5.005 only)
    pwd
-   <or any perl statement!>
+   ...or any perl statement!
 
 Change transaction mode:
    read
    update
    abort_only
+
+Most commands support limited shell-style output redirection:
+   ... > snap          # send output to snap (overwrite)
+   ... >>snap          # append output to snap
+   ... | cmd           # not implemented!
+
 ';
     if ($at and $at->can('help')) {
 	my $h = $at->help;
@@ -517,9 +554,10 @@ use Carp;
 use IO::Handle;
 use ObjStore ':ADV';
 use ObjStore::AppInstance;
-use vars qw($term @ORINC @HistoryBuf);
+use vars qw($term @ORINC @HistoryBuf $Unloaded);
 
 @ORINC = @INC;
+$Unloaded = 0;
 
 sub new {
     my ($class) = @_;
@@ -617,6 +655,13 @@ sub run {
 		  }
 	});
 	die if $@;
+
+	if (@ObjStore::UNLOADED != $Unloaded) {
+	    my @n = @ObjStore::UNLOADED[$Unloaded .. $#ObjStore::UNLOADED];
+	    print "[*** posh: The following packages could not be auto-loaded: \n\t".
+		join("\n\t", map { "'$_'" } @n)."]\n";
+	    $Unloaded = @ObjStore::UNLOADED;
+	}
     }
     if (@HistoryBuf) {
 	begin 'update', sub {

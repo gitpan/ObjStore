@@ -6,7 +6,7 @@ use ObjStore ':ADV';
 #require ObjStore::AV::Set; #?
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-$VERSION = '1.04';
+$VERSION = '1.05';
 
 sub new {
     use attrs 'method';
@@ -72,7 +72,7 @@ sub fetch {
     } else {
 	my $pe = ObjStore::PathExam->new;
 	$pe->load_args(@_);
-	return if !$c->seek($pe);
+	$c->step(1) if !$c->seek($pe); # exact match not needed
 	my @got;
 	while (my $e = $c->at) {
 	    last if $pe->compare($e) != 0;
@@ -83,11 +83,15 @@ sub fetch {
     }
 }
 
-sub primary {
-    carp "primary is depreciated";
-    my ($o) = @_;
-    return if !$$o{_primary};
-    $o->index($$o{_primary});
+sub at {
+    my ($o, $iname, $where) = @_;
+    my $x = $o->{$iname};
+    croak "Can't find index '$iname'" if !$x;
+    my $len = @$x;
+    return if $len == 0;
+    my $c = $x->new_cursor;
+    $c->moveto($where eq 'last'? $len-1 : $where);
+    $c->at();
 }
 
 sub anyx {
@@ -152,6 +156,13 @@ sub compress {
 
 sub table { $_[0]; }
 
+sub primary {
+    carp "primary is depreciated";
+    my ($o) = @_;
+    return if !$$o{_primary};
+    $o->index($$o{_primary});
+}
+
 package ObjStore::Table3::Database;
 use Carp;
 use ObjStore;
@@ -186,7 +197,8 @@ __END__
 
 =head1 SYNOPSIS
 
-  cd table-test ObjStore::Table3::Database
+  my $table = ObjStore::Table3->new($near);
+  $table->add_index('name', sub { ObjStore::Index->new($table, path => 'name') }};
 
 =head1 DESCRIPTION
 
@@ -198,18 +210,9 @@ A table is no more than a collection of indices (as opposed to a some
 sort of heavy-weight object).  Think of it like an event manager for
 indices.
 
-Be aware that index cursors may only be used by one thread at a time.
-Therefore, it is not particularly useful to store pre-created cursors
-in a database.  It's probably faster just to create them transiently
-when needed.
-
 =head2 API
 
 =over 4
-
-=item * $t->primary()
-
-Returns the primary index.
 
 =item * $t->anyx
 
@@ -230,7 +233,11 @@ Returns the index named $index_name.
 =item * $t->fetch($index_name, @keys)
 
 Returns the record resulting from looking up @keys in the index named
-$index_name.
+$index_name.  Also works in an array context.
+
+=item * $t->at($index_name, $offset)
+
+The $offset should either be numeric or 'last'.
 
 =item * $t->add_index($name, $index)
 
@@ -245,35 +252,16 @@ Calls $coderef->($index) on each index.
 
 =back
 
-=head2 Representation Independent API
+=head2 CAVEAT
 
-A database can be seen as table, and/or tables can be stored within a
-database.  The implementation is only slightly different in either
-case.  To smooth things over, an accessor method is provided that
-always returns the top-level hash of the table.
-
-=over 4
-
-=item * $t->table
-
-Returns the top-level hash.
-
-=back
-
-=head1 MIGRATION
-
-Expand migration options?
+Be aware that index cursors may only be used by one process/thread at
+a time.  Therefore, it is usually not helpful to store pre-created
+cursors in a database.
 
 =head1 TODO
 
-=over 4
-
-=item * INTERFACE
-
-The interface will evolve as perl supports more overload-type
-features.
-
-=back
+I'm fairly satisfied at this point.  Some thing may still be improved.
+Ideas welcome!
 
 =head1 AUTHOR
 

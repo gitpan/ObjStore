@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { plan tests => 35 }
+BEGIN { plan tests => 37 }
 
 use ObjStore;
 use lib './t';
@@ -60,12 +60,26 @@ sub testify {
 require ObjStore::REP::Splash;
 require ObjStore::REP::FatTree;
 
+sub nest {
+    my ($j, $rep) = @_;
+
+    my $ary = &{"$rep\::new"}('ObjStore::AV', $j->segment_of, 7);
+    $ary->[0] = &{"$rep\::new"}('ObjStore::AV', $j->segment_of, 7);
+    for (0..5) {
+	$ary->[3][$_] = $_;
+	next if $_ == 3;
+	$ary->[$_] = $_;
+    }
+    ok 1;
+}
+
 for my $rep (keys %ObjStore::AV::REP) {
     begin 'update', sub {
 	my $john = $db->root('John');
 	$john or die "no db";
 	
 	testify($john, $rep);
+	nest($john, $rep);
     };
     die if $@;
 }

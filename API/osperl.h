@@ -210,7 +210,8 @@ public:
   OSPVptr() :rv(0) {}
   ~OSPVptr() { set_undef(); }
   void set_undef() { if (rv) { rv->REF_dec(); rv=0; } }
-  void operator=(OSSVPV *npv) { set_undef(); rv=npv; if (rv) rv->REF_inc(); }
+  void operator=(OSSVPV *npv)
+    { OSSVPV *old = rv; rv=npv; if (rv) rv->REF_inc(); if (old) old->REF_dec(); }
   operator OSSVPV*() { return rv; }
   OSSVPV *resolve() { return rv; }
   void steal(OSPVptr &nval) { set_undef(); rv = nval.rv; nval.rv=0; }
@@ -331,18 +332,15 @@ private:						\
   os_unsigned_int8 len;					\
   char ch[ W ];						\
 public:							\
-  osp_str##W() { len=0; }				\
+  osp_str##W() { set_undef(); }				\
+  void set_undef() { len=0xff; }			\
   void set(char *pv, STRLEN pvn) {			\
     len = (pvn > maxlen)? maxlen : pvn;			\
     memcpy(ch, pv, len);				\
   }							\
-  char *get(STRLEN *pvn) { *pvn=len; return ch; }	\
   void operator=(char *pv) { set(pv,strlen(pv)); }	\
-  void operator=(SV *sv) {				\
-    STRLEN tmp;						\
-    char *pv = SvPV(sv, tmp);				\
-    set(pv,tmp);					\
-  }							\
+  int is_undef() { return len == 0xff; }		\
+  char *get(STRLEN *pvn) { *pvn=len; return ch; }	\
 };							\
 OSP_INIT(int osp_str##W::maxlen = W;)
 
@@ -456,7 +454,7 @@ public:
   void push_keys();
   void set_conflict();
   void no_conflict();
-  int compare(OSSVPV *);
+  int compare(OSSVPV *, int partial);
   // both must be valid with respect to the loaded paths
   int compare(OSSVPV *d1, OSSVPV *d2);
 
@@ -485,6 +483,7 @@ struct osp_thr {
   static HV *CLASSLOAD;
   static SV *TXGV;
   static AV *TXStack;
+  static HV *BridgeStash;
 
   //methods
   static void register_schema(char *cl, _Application_schema_info *sch);
@@ -506,6 +505,7 @@ struct osp_thr {
   static SV *wrap(OSSVPV *ospv, SV *br);
   static OSSV *plant_sv(os_segment *, SV *);
   static OSSV *plant_ospv(os_segment *seg, OSSVPV *pv);
+  static unsigned long sv_2aelem(SV *);
 
   void push_ospv(OSSVPV *pv); //depreciated?
 };

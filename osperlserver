@@ -3,9 +3,10 @@
 use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
-use vars qw($VERSION @DB $DAEMON $Loop %Debug $Shutdown $AutoReloader);
+use vars qw($VERSION @DB $DAEMON $Loop $LoopMeth %Debug $Shutdown $AutoReloader);
 $VERSION = '1.01';
 $DAEMON = 1;
+$LoopMeth = 'defaultLoop';
 my $default_server = 'ObjStore::ServerDB';
 
 for (my $arg=0; $arg < @ARGV; $arg++) {
@@ -30,7 +31,7 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	    }
 	    ++$Debug{$d};
 	}
-    } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
+    } elsif ($o =~ m/^ \- (M|m) ([\w:]+) (\=\w+)? $/x ) {
 	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
         eval "require $m";
 	warn, next if $@;
@@ -39,6 +40,9 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	} else {
 	    $m->unimport(@im);
 	}
+    } elsif ($o =~ m/^-loop$/) {
+	$LoopMeth = $ARGV[++$arg];
+
     } elsif ($o =~ m/^-I (\S*) $/x) {
 	my $dir = $1;
 	$dir = $ARGV[++$arg]
@@ -186,27 +190,26 @@ if ($Shutdown) {
 eval q[ END{ warn "exiting...\n"; } ];
 warn '@ARGV = '.join(' ',@ARGV)."\n";
 warn "Started!!\n";
-if (!$Loop->can('Loop')) {
-    my $m = 'defaultLoop';
-    if ($Loop->can($m)) {
-	$Loop->$m()
-    } else {
-	die "fatal: $Loop can't Loop or $m";
-    }
-} else {
+
+if ($Loop->can('Loop')) {
     $Loop->Loop();
+} elsif ($Loop->can($LoopMeth)) {
+    $Loop->$LoopMeth()
+} else {
+    die "fatal: $Loop can't Loop or '$LoopMeth'";
 }
 
 sub usage {
     print "
 Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
-  -(no)reload       run Module::Reload every second (requires Event)
   -d\\w+
      b              enable boot diagnostics
      n              print notifications to STDERR
      F              do not fork
   -Idirectory       specify \@INC directory (may be used more than once)
+  -loop <method>    use a different event loop method [defaultLoop]
   -[mM]module..     executes `use/no module...' (just like perl)
+  -(no)reload       run Module::Reload every second (requires Event)
   -shutdown <when>  exit at <when> (requires Event & Date::Manip)
   -v                print version number (and exit)
 

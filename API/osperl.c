@@ -27,7 +27,7 @@ void osp_thr::register_schema(char *cl, _Application_schema_info *sch)
   assert(cl);
   assert(sch);
   STRLEN len = strlen(cl);
-  SV *sv = sv_setref_pv(newSViv(0), "ObjStore::Schema", sch);
+  SV *sv = sv_setref_pv(newSV(0), "ObjStore::Schema", sch);
   SvREADONLY_on(SvRV(sv));
   hv_store(Schema, cl, len, sv, 0);
 }
@@ -64,7 +64,7 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
   if (!SvROK(ref)) {
     if (force) {
       Perl_sv_dump(ref);
-      croak("sv_2bridge: expecting persistent data");
+      croak("sv_2bridge: Expecting persistent data");
     }
     return 0;
   }
@@ -72,18 +72,15 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
 
   ospv_bridge *br = 0;
   do {
-    if (SvOBJECT(nval) && (SvTYPE(nval) == SVt_PVHV ||
-			   SvTYPE(nval) == SVt_PVAV)) {
+    if (!SvOBJECT(nval)) break;
+    if (SvTYPE(nval) == SVt_PVHV || SvTYPE(nval) == SVt_PVAV) {
       MAGIC *magic = mg_find(nval, '~');
       if (!magic) break;
       SV *mgobj = (SV*) magic->mg_obj;
       if (!SvROK(mgobj)) break;
       br = (ospv_bridge*) SvIV((SV*)SvRV(mgobj));
-    } else if (SvROK(nval)) {
-      nval = SvRV(nval);
-      if (SvOBJECT(nval) && SvTYPE(nval) == SVt_PVMG) {
-	br = (ospv_bridge*) SvIV(nval);
-      }
+    } else if (SvTYPE(nval) == SVt_PVMG) {
+      br = (ospv_bridge*) SvIV(nval);
     }
   } while (0);
 
@@ -141,7 +138,7 @@ static SV *ospv_2bridge(OSSVPV *pv, int hold=0)
   }
   br->init(pv);
   if (hold) br->hold();
-  SV *rv = sv_setref_pv(newSViv(0), "ObjStore::Bridge", (void*)br);
+  SV *rv = sv_setref_pv(newSV(0), 0, (void*)br);
   return rv;
 }
 
@@ -150,10 +147,10 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
   HV *stash = ospv->get_stash();
   switch (ospv->get_perl_type()) {
   case SVt_PVMG:{
-    SV *rv = sv_2mortal(newRV_noinc(br));
-    (void)sv_bless(rv, stash);
+    sv_bless(br, stash);
+    sv_2mortal(br);
     DEBUG_wrap({ warn("mgwrap %p", ospv); Perl_sv_dump(br); });
-    return rv;}
+    return br;}
   case SVt_PVHV:
   case SVt_PVAV:{
     // Leaks XPVRV : unavoidable XXX
@@ -163,6 +160,7 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
     } else {
       tied = sv_2mortal((SV*) newAV());		// @tied
     }
+    sv_bless(br, BridgeStash);
     sv_magic(tied, br, '~', Nullch, 0);		// magic tied, '~', $mgobj
     --SvREFCNT(br);				// like ref_noinc
     SV *rv = newRV_noinc(tied);			// $rv = \tied
@@ -264,6 +262,20 @@ OSSV *osp_thr::plant_sv(os_segment *seg, SV *nval)
   }
   assert(ossv);
   return ossv;
+}
+
+unsigned long osp_thr::sv_2aelem(SV *sv)
+{
+  unsigned long xx;
+  if (SvIOK(sv)) {
+    xx = SvIVX(sv);
+  } else if (Perl_looks_like_number(sv)) {
+    xx = SvIV(sv);
+  } else {
+    warn("Argument \"%s\" isn't numeric in aelem", SvPV(sv,na));
+    xx = 0;
+  }
+  return xx;
 }
 
 /*--------------------------------------------- OSSV */
@@ -851,15 +863,15 @@ OSSVPV::~OSSVPV()
 }
 
 // C++ API for perl 'bless' (elaborate version)
-void OSSVPV::bless(SV *stash)
+void OSSVPV::bless(SV *stashname)
 {
-  DEBUG_bless(warn("0x%x->bless('%s')", this, SvPV(stash, na)));
+  DEBUG_bless(warn("0x%x->bless('%s')", this, SvPV(stashname, na)));
   SV *me = osp_thr::ospv_2sv(this, 1);
   dSP;
   // We must avoid the user-level bless if possible since the our
   // bless glue creates persistent objects.
   STRLEN cur1, cur2;
-  char *pv1 = SvPV(stash, cur1);
+  char *pv1 = SvPV(stashname, cur1);
   char *pv2 = os_class(&cur2);
   if (cur1 == cur2 && memcmp((void*)pv1, (void*)pv2, cur1) == 0) {
     // Can avoid storing the bless-to for 'unblessed' objects.
@@ -869,7 +881,7 @@ void OSSVPV::bless(SV *stash)
   }
   PUSHMARK(SP);
   XPUSHs(me);
-  XPUSHs(sv_mortalcopy(stash));
+  XPUSHs(sv_mortalcopy(stashname));
   PUTBACK;
   perl_call_pv("ObjStore::bless", G_SCALAR);
 }
@@ -945,8 +957,9 @@ HV *OSSVPV::load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo)
   SPAGAIN;
   SV *toclass = POPs;
   if (SvTRUE(ERRSV) || count != 1) {
-    croak("&$ObjStore::CLASSLOAD('%s', '%s') failure (count=%d)", 
-	  SvPV(sv1, na), SvPV(sv2, na), count);
+    /* need to print ERRSV again? */
+    croak("&$ObjStore::CLASSLOAD('%s', '%s') failure\t%s",
+	  SvPV(sv1, na), SvPV(sv2, na), SvPV(ERRSV,na));
   }
   sv_setsv(ERRSV, olderr);
   if (!SvPOK(toclass)) {
@@ -1078,7 +1091,7 @@ void OSSVPV::NOTFOUND(char *meth)
   // A dump of the reference can be used to examine the
   // exact memory in osverifydb or osinspector!  Very useful.
 
-  croak("OSSVPV%s @ 0x%p #%d: '%s' method unavailable for os_class='%s', rep_class='%s'", dump, this, _refs, meth, os_class(&len), rep_class(&len));
+  croak("OSSVPV%s @ 0x%p refcnt(%d): '%s' method unavailable for os_class='%s', rep_class='%s'", dump, this, _refs, meth, os_class(&len), rep_class(&len));
 }
 
 char *OSSVPV::os_class(STRLEN *len)  { RETURN_BADNAME(len); }
@@ -1445,7 +1458,7 @@ void osp_pathexam::push_keys()
   PUTBACK;
 }
 
-int osp_pathexam::compare(OSSVPV *dat)
+int osp_pathexam::compare(OSSVPV *dat, int partial)
 {
   if (!pathcnt) croak("no path loaded");
   if (dat->is_OSPV_Ref2()) dat = ((OSPV_Ref2*)dat)->focus();
@@ -1453,9 +1466,12 @@ int osp_pathexam::compare(OSSVPV *dat)
   int cmp;
   for (int kx=0; kx < pathcnt; kx++) {
     OSSV *k1 = keys[kx];
-    if (!k1) return descending? 1 : -1;  //? XXX
+    if (!k1) {
+	if (partial) return 0;
+	return descending? 1 : -1;
+    }
     OSSV *k2 = path_2key(kx, dat);
-    if (!k2) return descending? -1 : 1;  //? XXX
+    if (!k2) return descending? -1 : 1;
     cmp = k1->compare(k2);
     if (cmp) break;
   }

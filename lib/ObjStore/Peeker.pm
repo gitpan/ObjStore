@@ -1,4 +1,5 @@
 # factor to TIEHANDLE?
+# factor regex for detecting numbers
 
 package ObjStore::Peeker;
 use strict;
@@ -289,8 +290,9 @@ sub POSH_PEEK {
 	last if $x++ > $o->{width}+1;
 	push(@S, [$k,$v]);
     }
-    @S = sort { $a->[0] cmp $b->[0] } @S;
     my $big = @S > $o->{width}-1;
+    @S = sort { $a->[0] cmp $b->[0] } @S
+	if !$big;
     my $limit = $big ? $o->{summary_width}-1 : $#S;
     
     $o->o($name . " {");
@@ -322,18 +324,30 @@ sub POSH_PEEK {
 
     $o->o("$name ");
     $val->configure()->POSH_PEEK($o);
+    my $exam = ObjStore::PathExam->new();
+    my $path = $val->index_path();
+    $exam->load_path($path)
+	if $path;
+    my $elem = sub {
+	my ($x, $at) = @_;
+	$exam->load_target($at);
+	$o->o("[$x] ".join(', ',map {
+	    if (/^-?\d+(\.\d+)?$/) { $_  }
+	    else { "'$_'" }
+	} $exam->keys())." => ");
+	$o->peek_any($at);
+    };
     $o->o(" [");
     $o->nl;
     $o->indent(sub {
-		   # factor ObjStore::peek_array XXX
 		   for (my $x=0; $x < $limit; $x++) {
-		       $o->peek_any($val->[$x]);
+		       $elem->($x, $val->[$x]);
 		       $o->nl;
 		   }
 		   if ($big) {
 		       $o->o("...");
 		       $o->nl;
-		       $o->peek_any($val->[$len-1]);
+		       $elem->($len-1, $val->[$len-1]);
 		       $o->o(" (at ".($len-1).")");
 		       $o->nl;
 		   }

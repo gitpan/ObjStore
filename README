@@ -14,7 +14,7 @@ You will need:
 
 - ObjectStore 5.1 (see http://www.odi.com; evaluations are available!)
 
-- Perl 5.005 (perl 5.004_04 might still work)
+- Perl 5.005 (5.004_04 might still work too)
 
 - Tree::Fat perl extension
 
@@ -27,64 +27,44 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 =head1 R!CENT CHANGES
 
 
-** 08-05-98 RELEASE 1.44
+** 09-12-98 RELEASE 1.46
 
-- Improved backward compatibility with respect to blessings in old
-databases.  (Now that we have old databases...  :-)
+- Use PERL5PREFIX to install into a different directory tree.
 
-- As threatened, new_ref() without arguments now creates a hard
-reference instead of a protected reference.
+- Improved ObjStore::Index::POSH_PEEK.  Made pretty.
 
-- Fixed a nasty pathexam problem exposed by ObjStore::REP::HashRecord.
-Sort comparisons were being botched.
+- Shell-style output redirection >> for posh.
+
+- Improved the design of the ObjStore::Serve::defaultLoop.  Reduced
+excessive statistics.
+
+- Improved ObjStore::Table3::fetch in an array context.
+
+- Added cast-to-integer overloading for ObjStore::UNIVERSAL.  For
+example, $hash{ 0+$object }=1.
+
+- Fixed posh reporting of forced-loaded packages.
+
+- Reduced the number of potential "Attempt to free unreferenced scalar
+during global destruction" warnings (hopefully!).
+
+- Improved various diagnostic messages.
+
+- Documentation corrections & updates.
 
 
-** 07-28-98 RELEASE 1.43
+** 08-22-98 RELEASE 1.45
 
-- Fixed index bugs.  The lexicographical ordering logic was broken.
-Also there was a potential memory corruption problem.
+- The == and != operators could give incorrect results in some cases.
+Fixed.
 
-
-** 07-27-98 RELEASE 1.42
-
-- ObjectStore 5.1 is required.  Static linkage is no longer supported.
-OTOH, it is now easy to create persistent C++ objects that are
-seemlessly integrated into perl databases.  Raw C++ performance must
-be sacrificed no longer!  As there is no longer any application
-schema, APIs to configure it have been removed.  A new environment
-variable, OSPERL_SCHEMA_DBDIR, overrides the default schema directory.
-
-Indu Strypundit is quoted as calling this release a tour-de-force of
-technical bravada.  "We suspected that the number forty-two in the
-version might be significant.  It was."
-
-- Many of the core API classes have been through yet another round of
-extensive polishing in preparation for a binary API freeze (or at
-least a chill :-).  The pathexam apparatus has been entirely rewritten
-and is now available at the perl level as ObjStore::PathExam.
-
-- Various osperlserver enhancements including: a -shutdown <when>
-option, an -reload option, and a automatic snapshotting of all
-VERSIONs on startup (see ObjStore::Serve).
-
-- Simplified read-only protocol for indices.  Either keys are
-indexable just once or they must be read-only.
-
-- A few more problems with exception handling were fixed.  Errors were
-not being reported properly in rare circumstances.
-
-- Use the 'methods' command to enquire about available methods in
-posh (5.005 only).
-
-- Schema support for non-ObjStore::Index cursors and ObjStore::Set
-have been dropped.  sync_INC/get_INC is no longer supported.  The
-readonly method is no longer implemented (but you can still check
-easily with eval).
+- Fixed nested destruction of Tree::Fat representations.  (Cursors were
+being shared between levels!  Gack!)
 
 
 see ./INSTALL for hints on installation
-see ./UPGRADE to evolve databases from prior releases
-see ./TODO for a list of stuff in the queue
+see ./UPGRADE if you are starting from a prior releases
+see ./TODO for a list of stuff in the tuit queue
 see ./CHANGES for a visionary perspective
 
 

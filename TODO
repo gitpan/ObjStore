@@ -10,24 +10,75 @@ following in the body of your message:
 
 + IDEAS +
 
-think about avoiding string copies again?
-can BLESS be faster? (at least the first time?)
+ObjStore::ServerDB::Top
+  POSH_PEEK - maybe try to require stuff before UNLOADED can happen?
+
+bizarre bus error:
+  cd ~/tmp; perl fillanl.pl baskdesk2.lst
+  posh eqprod13:/export/brain/pkey/19980824
+  BF.B BFI BGE BGG BHI BK BKB
+
+struct OSPV2 : os_virtual_behavior {
+  int can_update(void *vptr);
+  void NOTFOUND(char *meth);
+  void fwd2rep(char *methname, SV **top, int items);
+  HV *load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo);
+
+  virtual ~OSPV2();
+  virtual void REF_inc();
+  virtual void REF_dec();
+  virtual int is_blessed();
+  virtual void bless(SV *);
+  virtual HV *get_stash();
+  virtual int get_perl_type();
+  virtual void make_constant();
+  virtual void _debug1(void *); //whatever you want
+
+  // must be NULL terminated
+  virtual char *os_class(STRLEN *len);
+  virtual char *rep_class(STRLEN *len);
+
+  // C++ cast hacks
+  virtual int is_OSPV_Ref2();
+  virtual int is_OSPV_Generic();
+
+  //--------- should be under OSPV_Container but casting is tiresome -||
+  virtual void POSH_CD(SV *to);
+  virtual int FETCHSIZE();
+
+  // osp_pathexam support (containers only!)
+  virtual OSSVPV *traverse1(osp_pathexam &exam);
+  virtual OSSV *traverse2(osp_pathexam &exam);
+
+  // OSPV_Generic: internal index configuration, etc
+  virtual OSSV *avx(int xx);
+  virtual OSSV *hvx(char *key);
+  //--------- should be under OSPV_Container but casting is tiresome -||
+};
+
+KEEP INHERITANCE AS FLAT AS POSSIBLE
+
+test case for freeze bug using databases on multiple hosts
+
+read the installed ObjStore::Config for defaults
 
 tests
   pathexam.t - test all comparison branches
   each POSH_PEEK method
-  todo test for unsuccessful path traversals (yuck!)
 
 any traverse2 should check for RV (&die)
 
 performance
+  think about avoiding string copies again?
   modification counters?
+  can BLESS be faster? (at least the first time?)
   bless: should cache transient refs?
   AVHV: should create a transient ref to the layout?
   can easily cache whether object needs AVHV style traverse
+  _private_root_data XS? XXX
 
 Index
-  PUSH & UNSHIFT: just verify the order is correct
+  PUSH & UNSHIFT: just verify the order is correct?
 
 RE-THINK:
   sub isa { _isa(@_, 1); }
@@ -41,6 +92,8 @@ patches
   fold osp_croak back into perl
   MakeMaker patch for blib shared libraries
 
+arrays using a doubly-linked list representation
+
 Mike Guy writes: How about "die if in a void context"?  That would get
 the best of both worlds.  I'd like to see that style used much more in
 Perl.  Or the variant of "warn if in a void context".  Unchecked
@@ -53,21 +106,13 @@ more support for DLL schemas?
   generic scalar object typemap?  XPVMG abstraction?
   Bit::Vector?
 
-arrays using a doubly-linked list representation
-
 threads
   optional transaction-level mutex to debug data accesses?
-
-fatal_exceptions(0) by default?
 
 pathexam
   It is feasible to skip load_path if the index matches...?  Hm.
 
 make all depreciated stuff autoloaded
-
-perl magic should be non-lazy?
-
-_private_root_data XS? XXX
 
 -MObjStore=-Dflags ?
 
@@ -75,39 +120,40 @@ transactions
   prevent more than one thread from using a local transaction? (safe mode?)
   begin('update!',...): force switch to update?
 
+fatal_exceptions(0) by default?  Hard to change!  :-(
+
 qtposh
   AVHV looks different depending whether it goes through resolve??!
-  resolve failures seem not to get reported
+  resolve failures seem not to get reported?
   share more code between posh & qtposh
+  hyperlink interface!
 &
-  optionally distinguish between return and enter keys
   word wrap, but it doesn't seem to be supported
+  optionally distinguish between return and enter keys?
 
 posh
+  -e
   merge with ObjStore::Posh::Cursor
-  $HOME/.poshrc
   display style?  web integration?  cgi-posh?
+  hyperlink interface!
 
 ~magic ownership check?
 
 $ref->notify('m1', 'batch'); ???
 
-configure unique index duplicate row behavior?
+ObjStore::Index configure
+  unique index duplicate row behavior?
+  read-only keys?
 
 configure(...) : relax parameter limitation
 
 split all the server goodies into a separate package?
 
-switch representations dynamically
-  cursor syncronization: check os_typespec
+switch representations dynamically?
+  cursor syncronization: check os_typespec?
   do arrays first
-  lock representation... hm...
-  generate 'new' methods at compile time
-
-typemap
-  do large strings without copying?
-  SV set magic?
-  there are still some mysterious problems?
+  lock representation... hm...?
+  generate 'new' methods at compile time?
 
 permutation magic for AVHV
   ObjStore::Index::_(un)protect?
@@ -121,10 +167,7 @@ move ObjStore::subscribe back into ObjStore::Notification?
 
 optimize splash suite
   hash performance sucks
-  arrays are inefficient
-
-ObjStore::Index
-  $t->select(['*'], sub { my $r = shift; ... }); ??why
+  arrays are inefficient?
 
 get_database
   factor
@@ -139,8 +182,6 @@ Peeker
   fix comma - $o->comma, then check in $o->nl
   fix for "$at = " prefix ?
 
-cache last lookup to avoid gv_fetchmethod(NOREFS)?
-
 script to insure consistent podding? (get Pod::Parser?)
 
 assignment to $SIG{SEGV} should not reset SEGV handler
@@ -149,7 +190,7 @@ transaction hooks?
 
 factor error messages like diagnostics.pm?
 
-ObjStore::File!  Use a FatTree of 4K buffers?
+ObjStore::File - Use a FatTree of 4K buffers?
 
 automatically spooge $ObjStore::RUN_TIME if @ISA changes?
 

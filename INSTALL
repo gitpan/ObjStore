@@ -1,7 +1,7 @@
 ------------------------------------------------------------ INSTALLATION
 
 *** IF DO NOT HAVE (AND CANNOT UPGRADE) TO OBJECTSTORE 5.1, YOU SHOULD ***
-*** STICK WITH VERSION 1.41 OF THIS EXTENSION!!                        ***
+*** STICK WITH VERSION 1.41 OF THIS EXTENSION!  THANKS.                ***
 
 
 Tested Configurations:
@@ -15,11 +15,14 @@ Tested Configurations:
   SC4.0 18 Oct 1995 C++ 4.1 / ObjectStore 5.1
 
   ** REQUIRED: ODI fix #13866 (_Rep_desc_type_table::dope_compatible
-  forgets to fixup name key in name hash table)
+               forgets to fixup name key in name hash table)
 
 
 -------------------------------------------------------------------------
 *** BUILD STEPS
+
+0. If you want to install into a non-default directory tree, set the
+PERL5PREFIX environment variable.
 
 1. edit ./lib/ObjStore/Config.pm
 
@@ -68,6 +71,6 @@ cont
 -------------------------------------------------------------------------
 
 Once you succeed on a system not listed (above) please send a note to
-the mailing list announcing your success!
+perl-objectstore@parallax.co.uk announcing your success!
 
 -------------------------------------------------------------------------

@@ -10,7 +10,7 @@ use Time::HiRes qw(gettimeofday tv_interval);
 use ObjStore;
 use base 'ObjStore::HV';
 use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $SERVE %METERS $Init $TXOpen $VERSION);
-$VERSION = '0.02';
+$VERSION = '0.03';
 push @ISA, 'Exporter', 'osperlserver';
 @EXPORT_OK = qw(&txqueue &txretry &meter &exitloop &seconds_delta
 		$LoopLevel $ExitLevel &init_signals);
@@ -118,8 +118,7 @@ sub init_signals {
 
 ################################################# STATS
 
-use vars qw($BeforeCheckpoint $ChkptTime $TxnTime $Aborts $Commits
-	    $LoopTime @Commit);
+use vars qw($Aborts $Commits $LoopTime @Commit);
 $LoopTime = 2;
 
 my $LoopState;
@@ -133,10 +132,10 @@ sub before_checkpoint {
     $t ||= ObjStore::Transaction::get_current();
     if ($SERVE and !$t->is_aborted) {
 	eval {
-	    my $now = [gettimeofday];
+	    my $now = time;
 
 	    # make sure we're still in charge
-	    ObjStore::Server->touch($$now[0]);
+	    ObjStore::Server->touch($now);
 
 	    # update various stats
 	    my $o = $SERVE->focus;
@@ -144,43 +143,18 @@ sub before_checkpoint {
 	    for (@Commit) { $_->($o, $now) }
 
 	    my $r = $o->{history}[0];
-	    
-	    my ($max_commit,$max_loop) = (0)x2;
-	    $max_commit = $r->{max_commit}[0]{commit_time} if
-		$r->{max_commit};
-	    $max_loop = $r->{max_loop}[0]{loop_time} if $r->{max_loop};
-
 	    my $recent = $$r{recent};
-	    my $prior = $recent->[$#$recent] if @$recent;
-	    if ($prior) {
-		$prior->{commit_time} = $ChkptTime;
-		if ($ChkptTime > $max_commit) {
-		    my $ar = $r->{max_commit} ||= [];
-		    $ar->UNSHIFT($prior);
-		    $ar->[0]{at} = $$now[0];
-		    pop @$ar if @$ar > 10;
-		}
-	    }
-	    my $loop_time = tv_interval($TxnTime, $now);
-	    push @$recent, { loop_time=> $loop_time, %METERS };
+	    push @$recent, \%METERS;
 	    shift @$recent if @$recent > 10;
 
-	    if ($loop_time > $max_loop) {
-		my $ar = $r->{max_loop} ||= [];
-		$ar->UNSHIFT($recent->[$#$recent]);
-		$ar->[0]{at} = $$now[0];
-		pop @$ar if @$ar > 10;
-	    }
-	    
-	    if ($prior) {
+	    do {
 		local $^W=0; #lexical warnings XXX
 		my $tot = $$r{total};
-		while (my($k,$v) = each %$prior) { $tot->{$k} += $v; }
+		while (my($k,$v) = each %METERS) { $tot->{$k} += $v; }
 		if ($Aborts) { $tot->{aborts} += $Aborts; $Aborts = 0; }
 		if ($Commits) { $tot->{commits} += $Commits; $Commits = 0; }
-	    }
-	    $$r{mtime} = $$now[0];
-	    $BeforeCheckpoint = $now;
+	    };
+	    $$r{mtime} = $now;
 	    
 	    $LoopTime = $$o{looptm} ||= 2;
 	    %METERS = ();
@@ -194,8 +168,6 @@ sub before_checkpoint {
 sub after_checkpoint {
     confess $LoopState if $LoopState ne 'before';
     $LoopState = 'after';
-
-    $ChkptTime = tv_interval($BeforeCheckpoint) if $BeforeCheckpoint;
 }
 
 sub start_transaction {
@@ -203,27 +175,81 @@ sub start_transaction {
     confess $LoopState if $LoopState ne 'after';
     $LoopState = 'start';
 
-    $TxnTime = [gettimeofday];
     $TXOpen = 1;
     push @TXready, @TXtodo;
     @TXtodo = ();
 }
 
+use vars qw($TXN $UseOSChkpt);
 sub dotodo {
     confess "no transaction" if !lock $TXOpen;
     my @c = @TXready;
     @TXready = ();
-    for my $j (@c) {
-	if (ref $j ne 'HASH') { warn "ignoring $j"; next; } #XXX
-	my $c = $$j{code};
-        if ($$j{retry}) { push @TXtodo, $j if !$c->(); }
-        else { $c->(); }
+    while (@c) {
+	my $j = shift @c;
+	eval {
+	    my $c = $$j{code};
+	    if ($$j{retry}) { push @TXtodo, $j if !$c->(); }
+	    else { $c->(); }
+	};
+	if ($@) { $TXN->abort; warn }  # is this correct? XXX
     }
+    unshift @TXtodo, @c;
+}
+
+sub checkpoint {
+    my ($continue) = @_;
+    $continue = 1 if !defined $continue;
+    if ($TXN) {
+	before_checkpoint($TXN);
+        if (!$TXN->is_aborted and $continue and $UseOSChkpt) {
+            # This will not work properly until Object Design
+	    # fixes the checkpoint code. XXX
+            $TXN->checkpoint();
+        } else {
+            $TXN->commit();
+            undef $TXN;
+        }
+        after_checkpoint();
+    }
+    if ($continue) {
+        if (!$TXN) {
+            confess "cannot nest dynamic transactions"
+                if @ObjStore::Transaction::Stack;
+            $TXN = ObjStore::Transaction->new($SERVE? 'update' : 'read');
+        }
+        start_transaction();
+    }
+    dotodo();
 }
 
 ################################################# default
+use vars qw($Chkpt);
 
 sub defaultLoop {
+    Event->VERSION(0.11);
+    require ObjStore::Serve::Notify;
+    ObjStore::Serve::Notify::init_autonotify();
+    if (!$Init) { &init_signals; ++$Init; }
+    checkpoint(1);
+    $Chkpt = Event->timer(desc => "ObjStore::Serve checkpoint", priority => -1,
+			  interval => \$LoopTime, callback => \&checkpoint);
+    Event->add_hooks(asynccheck => sub {
+			 $Chkpt->now() if ObjStore::Transaction::is_aborted($TXN)
+		     });
+    $Event::DIED = sub {
+	my ($e,$err) = @_;
+	$TXN->abort;
+	warn "Event '$e->{desc}' died: $err";
+	$Chkpt->now();
+    };
+    Event::Loop::Loop();
+}
+
+################################################# old
+
+sub oldLoop {
+    warn "exitloop is broken for oldLoop; sorry";
     require ObjStore::Serve::Notify;
     ObjStore::Serve::Notify::init_autonotify();
     *Loop = \&Loop_single;
@@ -239,7 +265,24 @@ if ($Event::VERSION >= .03) {
 }
 
 ################################################# without threads
-use vars qw($TXN $Checkpoint);
+
+# WARNING: please do not call this directly!
+use vars qw($Timer $Checkpoint);
+sub indir_checkpoint {
+    my ($class, $continue) = @_;
+    checkpoint($continue);
+    $Checkpoint=0;
+    if ($continue) {
+	if (!$Timer) {
+	    $Timer = Event->timer(after => $LoopTime,
+				  callback => sub { ++$Checkpoint },
+				  desc => "ObjStore::Serve checkpoint");
+	} else {
+	    $Timer->again;
+	}
+        # don't acquire any unnecessary locks!
+    }
+}
 
 sub Loop_single {
     my ($o,$waiter) = @_;
@@ -249,10 +292,9 @@ sub Loop_single {
 #    warn "Loop enter $LoopLevel $ExitLevel";
     if (!$Init) { &init_signals; ++$Init; }
 
-    $o->_checkpoint(1) if !$TXN;
+    $o->indir_checkpoint(1) if !$TXN;
     while ($ExitLevel >= $LoopLevel) {
         eval {
-            dotodo();
             if ($waiter and $waiter->()) {
 		exitloop('ok');
             } else {
@@ -260,46 +302,11 @@ sub Loop_single {
             }
         };
         if ($@) { warn; $TXN->abort }
-        $o->_checkpoint($ExitLevel);
+        $o->indir_checkpoint($ExitLevel);
     }
 
 #    warn "Loop exit $LoopLevel $ExitLevel = $Status";
     $Status;
-}
-
-# WARNING: please do not call this directly!
-use vars qw($UseOSChkpt $Timer);
-sub _checkpoint {
-    my ($class, $continue) = @_;
-    if ($TXN) {
-	before_checkpoint($TXN);
-        if (!$TXN->is_aborted and $continue and $UseOSChkpt) {
-            # This will not work properly until the bridge code
-            # is rewritten. XXX
-            $TXN->checkpoint();
-        } else {
-            $TXN->commit();
-            undef $TXN;
-        }
-        after_checkpoint();
-    }
-    $Checkpoint=0;
-    if ($continue) {
-        if (!$TXN) {
-            confess "cannot nest dynamic transactions"
-                if @ObjStore::Transaction::Stack;
-            $TXN = ObjStore::Transaction->new($SERVE? 'update' : 'read');
-        }
-        start_transaction();
-	if (!$Timer) {
-	    $Timer = Event->timer(-after => $LoopTime,
-				  -callback => sub { ++$Checkpoint },
-				  -desc => "ObjStore::Serve checkpoint");
-	} else {
-	    $Timer->again;
-	}
-        # don't acquire any unnecessary locks!
-    }
 }
 
 ################################################# threads (single)
@@ -398,17 +405,7 @@ sub async_checkpoint {
 
 ################################################# Exit
 
-sub exitloop {
-    my ($o,$st) = @_;
-    $st ||= 0;
-    --$ExitLevel;
-    if ($LoopLevel == 0 or $st eq 'FORCE') {
-        exit($st? int $st:0);
-    } else {
-        $st=0 if !defined $st;
-        $Status = $st;
-    }
-}
+*exitloop = \&Event::Loop::exitLoop;
 
 1;
 __END__

@@ -66,7 +66,7 @@ int OSPV_fattree_av::FETCHSIZE()
 
 void OSPV_fattree_av::FETCH(SV *key)
 { 
-  OSSV *val = avx(SvIV(key));
+  OSSV *val = avx(osp_thr::sv_2aelem(key));
   SV *ret = osp_thr::ossv_2sv(val);
   dSP;
   XPUSHs(ret);
@@ -85,7 +85,7 @@ OSSV *OSPV_fattree_av::avx(int xx)
 
 void OSPV_fattree_av::STORE(SV *where, SV *value)
 {
-  int xx = SvIV(where);
+  int xx = osp_thr::sv_2aelem(where);
   if (xx < 0) croak("STORE(%d)", xx);
   dGCURSOR(&ary);
   tc_moveto(&gl->tc, xx);
@@ -210,11 +210,13 @@ void OSPV_fattree_av::SPLICE(int offset, int length, SV **base, int count)
 void OSPV_fattree_av::CLEAR()
 {
   OSSV *ret;
-  dGCURSOR(&ary);
-  tc_moveto(&gl->tc, 0);
-  while (TvFILL(&ary)) {
-    avtc_delete(&gl->tc);
-  }
+  XPVTC tc;     //keep our own cursor for nesting
+  init_tc(&tc);
+  tc_refocus(&tc, &ary);
+  tc_moveto(&tc, 0);
+  while (TvFILL(&ary))
+    avtc_delete(&tc);
+  free_tc(&tc);
 }
 
 //--------------------------- ---------------------------
@@ -245,18 +247,21 @@ void OSPV_fatindex2::CLEAR()
     return;
   }
   dOSP;
-  osp_pathexam *exam = &osp->exam;
-  exam->init();
-  exam->load_path(conf_slot->avx(2)->safe_rv());
-  dGCURSOR(&tv);
-  tc_moveto(&gl->tc, 0);
+  osp_pathexam exam;  //keep our own cursor for nesting
+  exam.init();
+  exam.load_path(conf_slot->avx(2)->safe_rv());
+  XPVTC tc;
+  init_tc(&tc);     //keep our own cursor for nesting
+  tc_refocus(&tc, &tv);
+  tc_moveto(&tc, 0);
   OSSVPV *pv;
-  while (dex2tc_fetch(&gl->tc, &pv)) {
-    exam->load_target('u', pv);
+  while (dex2tc_fetch(&tc, &pv)) {
+    exam.load_target('u', pv);
     pv->REF_dec();
-    tc_step(&gl->tc, 1);
+    tc_step(&tc, 1);
   }
   dex2tv_clear(&tv);
+  free_tc(&tc);
 }
 
 int OSPV_fatindex2::add(OSSVPV *target)
@@ -289,7 +294,7 @@ int OSPV_fatindex2::add(OSSVPV *target)
 	dex2tc_fetch(&gl->tc, &obj);
 	if (obj == target) return 0; //already added
 	int cmp;
-	cmp = exam->compare(obj);
+	cmp = exam->compare(obj, 0);
 	if (cmp != 0) {
 	  tc_step(&gl->tc, -1); //none match; must backup and add it
 	  break;
@@ -334,7 +339,7 @@ void OSPV_fatindex2::remove(OSSVPV *target)
       if (!tc_step(&gl->tc, 1))
 	croak("%s->remove: (%s) not found", os_class(&na), exam->kv_string());
       int cmp;
-      cmp = exam->compare(obj);
+      cmp = exam->compare(obj, 0);
       if (cmp != 0)
 	croak("%s->remove: (%s) not found", os_class(&na), exam->kv_string());
     }
@@ -382,7 +387,7 @@ void OSPV_fatindex2::SHIFT()
 void OSPV_fatindex2::FETCH(SV *key)
 {
   if (!conf_slot) return;
-  unsigned long xx = SvIV(key);
+  unsigned long xx = osp_thr::sv_2aelem(key);
   dGCURSOR(&tv);
   tc_moveto(&gl->tc, xx);
   OSSVPV *pv=0;

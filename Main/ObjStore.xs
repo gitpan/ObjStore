@@ -101,7 +101,9 @@ osperl_schema_loader::load_DLL(const char *what, os_boolean error_if_not_found)
   strcpy(s2, ".pm");
 //  warn("require %s", file);
   perl_require_pv(file);
-  if (SvTRUE(ERRSV)) croak(SvPV(ERRSV,na));
+  if (SvTRUE(ERRSV))
+	croak("Attempt to load schema '%s' (via %s) failed: %s",
+		what, file, SvPV(ERRSV,na));
   return file;
 }
 
@@ -1004,6 +1006,17 @@ osp_bridge::DESTROY()
 
 MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL
 
+void
+DESTROY(sv)
+	SV *sv
+	CODE:
+	// This is a bit sloppy but it will be fixed when the typemap
+	// is re-implemented.
+	if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVMG) {
+	  ospv_bridge *br = osp_thr::sv_2bridge(sv, 1);
+	  br->leave_perl();
+	}
+
 bool
 _is_persistent(sv)
 	SV *sv;
@@ -1039,15 +1052,47 @@ _pstringify(THIS, ...)
 	}
 	XPUSHs(sv_2mortal(ret));
 
+void
+_pnumify(...)
+	PPCODE:
+	int max = items <= 2? items : 2;
+	IV ret=0;
+	for (int sx=0; sx < max; sx++) {
+	  SV *sv = ST(sx);
+	  if (SvGMAGICAL(sv))
+	    mg_get(sv);
+	  if (!SvOK(sv))
+	    continue;
+	  if (!SvROK(sv)) {
+	    if (SvIOKp(sv) || SvIOK(sv)) {
+	      ret += SvIV(sv);
+	      continue;
+	    }
+	    else {
+	      sv_dump(sv);
+	      croak("_pnumify: argument #%d not a reference", sx);
+	    }
+	  }
+ 	  else {
+	    ospv_bridge *br = osp_thr::sv_2bridge(sv, 0);
+	    if (!br) {
+	      ret = (IV) SvRV(sv);
+	    } else {
+	      ret = (IV) br->ospv();
+	    }
+	  }
+	}
+	XPUSHs(sv_2mortal(newSViv(ret)));
+
 bool
 _peq(a1, a2, ign)
 	SV *a1
 	SV *a2
 	SV *ign
 	CODE:
-	if (!SvOK(a1) || !SvOK(a2)) XSRETURN_NO;
-	ospv_bridge *b1 = osp_thr::sv_2bridge(a1, 1);
-	ospv_bridge *b2 = osp_thr::sv_2bridge(a2, 1);
+	ospv_bridge *b1 = osp_thr::sv_2bridge(a1, 0);
+	ospv_bridge *b2 = osp_thr::sv_2bridge(a2, 0);
+	if (!b1 || !b2) XSRETURN_NO;
 	//warn("b1=%p b2=%p", b1->ospv(), b2->ospv());
 	RETVAL = b1->ospv() == b2->ospv();
 	OUTPUT:
@@ -1059,9 +1104,9 @@ _pneq(a1, a2, ign)
 	SV *a2
 	SV *ign
 	CODE:
-	if (!SvOK(a1) || !SvOK(a2)) XSRETURN_YES;
-	ospv_bridge *b1 = osp_thr::sv_2bridge(a1, 1);
-	ospv_bridge *b2 = osp_thr::sv_2bridge(a2, 1);
+	ospv_bridge *b1 = osp_thr::sv_2bridge(a1, 0);
+	ospv_bridge *b2 = osp_thr::sv_2bridge(a2, 0);
+	if (!b1 || !b2) XSRETURN_YES;
 	//warn("b1=%p b2=%p", b1->ospv(), b2->ospv());
 	RETVAL = b1->ospv() != b2->ospv();
 	OUTPUT:
@@ -1092,7 +1137,7 @@ OSSVPV::_blessto_slot(...)
 	  OSPvBLESS2_on(THIS);
 	  THIS->classname = (char*)nval;
 	}
-	if (!(!OSPvBLESS2(THIS) || GIMME_V == G_VOID)) {
+	if (OSPvBLESS2(THIS) && GIMME_V != G_VOID) {
 	  SV *ret = osp_thr::ospv_2sv((OSSVPV*)THIS->classname);
 	  SPAGAIN;
 	  XPUSHs(ret);
@@ -1231,7 +1276,7 @@ int
 osp_pathexam::compare(to)
 	OSSVPV *to
 	CODE:
-	RETVAL = THIS->compare(to);
+	RETVAL = THIS->compare(to, 1);
 	OUTPUT:
 	RETVAL
 

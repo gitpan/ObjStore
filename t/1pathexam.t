@@ -1,6 +1,5 @@
-# the path to -*-perl-*- databases!
-use Test;
-BEGIN { plan tests => 15 }
+# path to -*-perl-*-
+use Test; plan tests => 15;
 use ObjStore;
 
 srand(0);  # de-randomize
@@ -8,13 +7,14 @@ my @C = ('a'..'z');
 sub dolevel {
     my ($level, $obj) = @_;
     $obj ||= ObjStore::AV->new('transient');
-    for (0..8) {
-	if ($level and $_ == 0) {
-	    $obj->STORE($_, dolevel($level-1, ObjStore::AV->new($obj)));
-	} elsif ($level and $_ == 1) {
-	    $obj->STORE($_, dolevel($level-1, ObjStore::HV->new($obj)));
+    for my $at (0..8) {
+	if ($level and $at == 0) {
+	    my $below = dolevel($level-1, ObjStore::AV->new($obj));
+	    $obj->STORE($at, $below);
+	} elsif ($level and $at == 1) {
+	    $obj->STORE($at, dolevel($level-1, ObjStore::HV->new($obj)));
 	} else {
-	    $obj->STORE($_, $C[int rand @C].$C[int rand @C]);
+	    $obj->STORE($at, $C[int rand @C].$C[int rand @C]);
 	}
     }
     $obj;

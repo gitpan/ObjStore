@@ -12,12 +12,12 @@ use Carp;
 use vars
     qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS 
        %sizeof $INITIALIZED $RUN_TIME $OS_CACHE_DIR),
-    qw($FATAL_EXCEPTIONS $SAFE_EXCEPTIONS $REGRESS),           # exceptional
-    qw($CLIENT_NAME $CACHE_SIZE $TRANSACTION_PRIORITY),        # tied
-    qw($DEFAULT_OPEN_MODE),                                    # simulated
-    qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
+    qw($SAFE_EXCEPTIONS $REGRESS @UNLOADED),                        # exceptional
+    qw($CLIENT_NAME $CACHE_SIZE $TRANSACTION_PRIORITY),             # tied
+    qw($DEFAULT_OPEN_MODE),                                         # simulated
+    qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.44';
+$VERSION = '1.46';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -153,7 +153,7 @@ sub PoweredByOS {
     "$Config::Config{sitelib}/ObjStore/PoweredByOS.gif"; #give it a shot... XXX
 }
 
-$FATAL_EXCEPTIONS = 1;   #happy default for newbies... (or my co-workers :-)
+my $FATAL_EXCEPTIONS = 1;   #happy default for newbies... (or my co-workers :-)
 sub fatal_exceptions {
     my ($yes) = @_;
     if (!$FATAL_EXCEPTIONS and $yes) {
@@ -208,8 +208,7 @@ set_stargate(\&DEFAULT_STARGATE);
 sub bless ($;$) {
     my ($ref, $class) = @_;
     $class ||= scalar(caller);
-    my $old = blessed $ref;
-    $ref->BLESS($class) if $old;
+    $ref->BLESS($class) if blessed $ref;
     $class->BLESS($ref);
 }
 # When CORE::GLOBAL works -
@@ -247,6 +246,8 @@ sub force_load {
 #    warn "force_load $class $isa";
 
     $ {"${class}::UNLOADED"} = 1;
+    push @UNLOADED, $class;
+
     for (my $x=0; $x < @$isa; $x+=2) {
 	push @{"${class}::ISA"}, $isa->[$x];
 	force_load($isa->[$x], $isa->[$x+1]);
@@ -278,15 +279,17 @@ sub _isa_loader {
 	    ($class,$isa) = @$isa;
 	}
 	require_isa_tree($class, $isa);
-	while (!$class->isa($base) and @$isa) {
-	    # pop classes until we get a winner
-	    ($class,$isa) = @$isa;
-	}
 	if (!$class->isa($base)) {
-	    # oops!  hope this works...
-	    return $base;
+	    force_load($class, $isa);
+	    while (!$class->isa($base) and @$isa) {
+		# pop classes until we get a winner
+		($class,$isa) = @$isa;
+	    }
+	    if (!$class->isa($base)) {
+		# oops!  hope this works...
+		return $base;
+	    }
 	}
-	force_load($class, $isa);
     }
 #    warn $class;
     $class;
@@ -597,6 +600,7 @@ sub _versionof {
 
 sub _is_evolved {
     my ($o, $txn) = @_;
+    warn "is_evolved might be depreciated";
     croak("is_evolved($o) is only meaningful on real objects") if !ref $o;
     my $x = sub {
 	my $bs = $o->_blessto_slot;
@@ -661,6 +665,7 @@ sub _engineer_blessing {
 
 sub iscorrupt {
     my ($o, $vlev) = @_;
+    warn "iscorrupt might be depreciated";
     $vlev = 'all' if !defined $vlev;
     if ($vlev !~ m/^\d+$/) {
 	if ($vlev eq 'quiet') { $vlev = 0; }
@@ -1072,6 +1077,8 @@ $VERSION = '1.00';
 use Carp;
 use overload ('""' => \&_pstringify,
 	      'bool' => sub () {1},
+	      '0+' => \&_pnumify,
+	      '+' => \&_pnumify,
 	      '==' => \&_peq,
 	      '!=' => \&_pneq,
 #	      'nomethod' => sub { croak "overload: ".join(' ',@_); }
@@ -1368,11 +1375,21 @@ use vars qw($VERSION @ISA %REP);
 $VERSION = '1.01';
 @ISA='ObjStore::AV';
 
-for (qw(configure add remove)) {
+for (qw(configure add remove index_path)) {
     ObjStore::_mark_method($_)
 }
 
 sub new { require ObjStore::REP; &ObjStore::REP::load_default }
+
+sub index_path {
+    # make generic? "forward to rep_class" XXX
+    my $o = $_[0];
+    my $rep = $o->rep_class;
+    my $m = $rep->can('index_path');
+    croak "$rep does not support 'index_path' yet"
+	if !$m;
+    $m->(@_);
+}
 
 #----------- ----------- ----------- ----------- ----------- -----------
 

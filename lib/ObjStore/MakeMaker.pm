@@ -71,6 +71,8 @@ sub add_os_args {
 	    # if your not part of the main dist, you're on your own
 	    symlink "$top/hints", "hints" or warn "symlink hints: $!";
 	}
+	$arg{PREFIX} = $ENV{PERL5PREFIX}
+	    if exists $ENV{PERL5PREFIX};
     }
     $arg{DEFINE} .= ' -DOSP_DEBUG' if DEBUG;
     $arg{INC} .= " -I$OS_ROOTDIR/include";
@@ -86,6 +88,9 @@ sub add_os_args {
 	}
     } else {
 	# must build to libosperl\d\d.so for a clean link
+	my $installsitearch = $Config{sitearch};
+	$installsitearch =~ s,$Config{prefix},$ENV{PERL5PREFIX}, if
+	    exists $ENV{PERL5PREFIX};
 	if ($top) {
 	    $arg{INC} .= " -I$top/API";
 	    push @{ $arg{TYPEMAPS} }, "$top/API/typemap";
@@ -93,17 +98,17 @@ sub add_os_args {
 #	    push @M, BLIB_LIBS=>{ '-losperl'.&ObjStore::Config::API_VERSION =>
 #				  ["-L$top/blib/arch/auto/ObjStore",
 #				   "-L$Config{sitearch}/auto/ObjStore"] };
-	    my $ospdir = "-L$Config{sitearch}/auto/ObjStore";
+	    my $ospdir = "-L$installsitearch/auto/ObjStore";
 	    for (@{$arg{LIBS}}) {
 		$_ .= (" $strip ".join(' ',@$libs)." $ospdir -losperl".
 		       &ObjStore::Config::API_VERSION);
 	    }
 	} else {
-	    $arg{INC} .= " -I$Config{sitearch}/auto/ObjStore";
-	    push @{$arg{TYPEMAPS}}, "$Config{sitearch}/auto/ObjStore/typemap";
+	    $arg{INC} .= " -I$installsitearch/auto/ObjStore";
+	    push @{$arg{TYPEMAPS}}, "$installsitearch/auto/ObjStore/typemap";
 	    for (@{$arg{LIBS}}) {
 		$_ .= (" $strip ".join(' ', @$libs).
-		       " -L$Config{sitearch}/auto/ObjStore -losperl".
+		       " -L$installsitearch/auto/ObjStore -losperl".
 		       &ObjStore::Config::API_VERSION);
 	    }
 	}

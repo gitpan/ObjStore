@@ -41,12 +41,15 @@ my $tests=q[
 0/0/0/0/0/0/0/0/0	/too long/
 ];
 
+#ObjStore::debug('txn');
 my $exam = ObjStore::PathExam->new();
 
 for my $test (split /\n/, $tests) {
     next if !$test;
     my ($path, $expect, $keys) = split /\t+/, $test;
+#    begin sub {
     eval {
+#	warn scalar @ObjStore::Transaction::Stack;
 	my $p = ObjStore::PathExam::Path->new('transient', $path);
 	$exam->load_path($p);
 	$exam->load_target($junk);

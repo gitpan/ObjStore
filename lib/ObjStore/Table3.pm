@@ -21,10 +21,9 @@ sub add_index {
     my ($o, $name, $index) = @_;
     croak "keys starting with underscore are reserved"
 	if $name =~ m/^_/;
-    if (ref $index eq 'CODE') {
-	return $o->{$name} if $o->{$name};
-	$index = $index->();
-    }
+    $index = $index->()
+	if ref $index eq 'CODE';
+    return $o->{$name} if $o->{$name};
     croak "'$index' doesn't look like a real index" if !blessed $index;
 
     my $any = $o->anyx;

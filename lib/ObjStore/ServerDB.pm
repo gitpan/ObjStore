@@ -48,7 +48,7 @@ use Carp;
 use ObjStore;
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-$VERSION = '0.04';
+$VERSION = '0.06';
 
 sub DELETE {
     my ($h,$k) = @_;
@@ -99,7 +99,7 @@ sub do_boot_class {
 
 sub boot {
     my $o = shift;
-    map { $o->do_boot_class($_) } @_;
+    for (@_) { $o->do_boot_class($_) }
 }
 
 1;

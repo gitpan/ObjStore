@@ -1,6 +1,6 @@
 //
 // ALERT:  EVERYTHING IN THIS FILE IS PROBABLY MISORGANIZED
-// OR OF DUBIOUS VALUE.
+// OR OF DUBIOUS VALUE?
 //
 
 #include "osp-preamble.h"
@@ -77,6 +77,37 @@ void OSPV_Cursor::next()
 { NOTFOUND("next"); }
 
 // These APIs should be non-type specific! XXX
+
+MODULE = ObjStore::CORE	PACKAGE = ObjStore
+
+void
+_inuse_bridges(...)
+	PROTOTYPE: ;$
+	PPCODE:
+	IV show = items>0? sv_true(ST(0)) : 0;
+	IV cnt=0;
+#if OSP_BRIDGE_TRACE
+	osp_bridge *br = (osp_bridge*) osp_bridge::All.next_self();
+	while (br) {
+	  if (show) {
+	    SV *sv = sv_2mortal(newSVpv("",0));
+	    sv_catpvf(sv,"[%d]osp_bridge 0x%x\n", cnt, br);
+	    sv_catpvf(sv,"  refs         : %d\n", br->refs);
+	    sv_catpvf(sv,"  detached     : %d\n", br->detached);
+	    sv_catpvf(sv,"  manual_hold  : %d\n", br->manual_hold);
+	    sv_catpvf(sv,"  holding      : %d\n", br->holding);
+	    sv_catpvf(sv,"  txsv         : 0x%x\n", br->txsv);
+	    if (br->where)
+	      sv_catpvf(sv,"  created%s\n", SvPV(br->where, PL_na));
+	    XPUSHs(sv);
+	  }
+	  ++cnt;
+	  br = (osp_bridge*) br->al.next_self();
+	}
+#else
+	if (show) warn("_inuse_bridges detail is not available");
+	XPUSHs(sv_2mortal(newSViv(osp_bridge::Inuse)));
+#endif
 
 MODULE = ObjStore::CORE	PACKAGE = ObjStore::UNIVERSAL
 

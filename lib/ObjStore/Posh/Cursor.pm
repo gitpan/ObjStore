@@ -32,8 +32,13 @@ sub do_configure {
 sub myeval {
     my ($o, $perl) = @_;
 
-    my $w = $o->{where}[ $$o{at} ];
-    my @c = map { $_->focus } @$w;
+    # observe care!
+    my $w = $o->{where}[ $$o{at} ]->HOLD;
+    my @c;
+    for my $tmp (@$w) {
+	my $got = $tmp->focus;
+	push @c, $got;
+    }
     local($input::db, $input::at, $input::cursor) = 
 	($o->database_of, @c? $c[$#c] : $o->database_of, \@c);
 
@@ -181,9 +186,8 @@ sub do_execute {
 			$err .= $warn.$@;
 		    } else {
 			my $p = ObjStore::Peeker->new(depth => 10, vareq => 1);
-			my $out=$warn;
-			for (@r) { $out .= $p->Peek($_) }
-			$$o{out} = $out;
+			my $out = $$o{out} = [$warn];
+			for (@r) { push @$out, $p->Peek($_) }
 		    }
 		};
 	    }

@@ -31,29 +31,15 @@ void osp_croak(const char* pat, ...)
 // get an unhandled exception when ObjectStore dies.
 DEFINE_EXCEPTION(perl_exception,"Perl/ObjectStore Exception!",0);
 
-// And here is our dynamically allocated tix_handler...!
+// Constructor for our dynamically allocated tix_handler
 dytix_handler::dytix_handler() : hand(&perl_exception) {}
-
-static void osp_unwind_part2(void *vptr)
-{
-  osp_thr *osp = (osp_thr*) vptr;
-#ifndef _OS_CPP_EXCEPTIONS
-  osp->hand->hand._unwind_part_2();
-#endif
-  // this is just a NOP when using C++ exceptions?
-  delete osp->hand;
-  osp->hand = new dytix_handler();
-}
 
 static void ehook(tix_exception_p cause, os_int32 value, os_char_p report)
 {
   dOSP;
-  DEBUG_txn(warn("before sighandler(SEGV): %s", report));
+  osp->cause = cause;
+  osp->value = value;
   osp->report = report;
-#ifndef _OS_CPP_EXCEPTIONS
-  osp->hand->hand._unwind_part_1(cause, value, report);
-#endif
-  SAVEDESTRUCTOR(osp_unwind_part2, osp);
   Perl_sighandler(SIGSEGV);
 }
 
@@ -84,6 +70,9 @@ void osp_thr::boot()
   int items; 
   XSTHRBOOT(osp);
   tix_exception::set_unhandled_exception_hook(ehook);
+  HV *feat = perl_get_hv("ObjStore::FEATURE", 1);
+  hv_store(feat, "bridge_trace", 12, boolSV(OSP_BRIDGE_TRACE), 0);
+  hv_store(feat, "safe_bridge", 11, boolSV(OSP_SAFE_BRIDGE), 0);
   CLASSLOAD = perl_get_hv("ObjStore::CLASSLOAD", 1);
   BridgeStash = gv_stashpv("ObjStore::Bridge", 1);
   SvREFCNT_inc((SV*) BridgeStash);
@@ -112,8 +101,8 @@ osp_thr::osp_thr()
 
 osp_thr::~osp_thr()
 {
-  while (!ospv_freelist.empty()) {
-    ospv_bridge *br = (ospv_bridge*) ospv_freelist.next->self;
+  ospv_bridge *br;
+  while (br = (ospv_bridge*) ospv_freelist.next_self()) {
     delete br;
   }
   // OS_END_FAULT_HANDLER;
@@ -168,9 +157,11 @@ void osp_txn::post_transaction()
   DEBUG_txn(warn("%p->post_transaction", this));
 
   osp_bridge *br;
-  while (br = (osp_bridge*) link.pop()) {
+  while (br = (osp_bridge*) link.next_self()) {
     br->leave_txn();
+    assert(br->link.empty());
   }
+  assert(link.empty());
 }
 
 int osp_txn::can_update(os_database *db)
@@ -242,18 +233,43 @@ void osp_txn::checkpoint()
 
 /*--------------------------------------------- osp_bridge */
 
+IV osp_bridge::Instances=0;
+IV osp_bridge::Inuse=0;
+osp_ring osp_bridge::All(0);
+
 osp_bridge::osp_bridge()
   : link(this)
-{}
+#if OSP_BRIDGE_TRACE
+     , al(this), where(0)
+#endif
+{
+  ++Instances;
+}
 
 void osp_bridge::init(dynacast_fn dcfn)
 {
+  assert(link.empty());
   dynacast = dcfn;
   detached = 0;
   holding = 0;
   manual_hold = 0;
   refs = 1;
   txsv = 0;
+  
+#if OSP_BRIDGE_TRACE
+  SvREFCNT_dec(where);
+  dSP;
+  PUSHSTACK;
+  PUSHMARK(SP);
+  XPUSHs(&PL_sv_no);
+  perl_call_pv("Carp::longmess", G_SCALAR);
+  SPAGAIN;
+  where = SvREFCNT_inc(POPs);
+  PUTBACK;
+  POPSTACK;
+  al.attach(All);
+#endif
+  ++Inuse;
 }
 
 void osp_bridge::cache_txsv()
@@ -280,8 +296,11 @@ void osp_bridge::enter_txn(osp_txn *txn)
   mysv_lock(osp_thr::TXGV);
   // should be per-thread
   assert(link.empty());
-  link.attach(&txn->link);
+  assert(txn);
+  link.attach(txn->link);
   ++refs;
+  //  DEBUG_bridge(this, warn("osp_bridge(%p)->enter_txn refs=%d link=%d",
+  //			  this, refs, link.empty()));
 }
 
 void osp_bridge::leave_perl()
@@ -294,6 +313,7 @@ void osp_bridge::leave_txn()
 {
   if (!detached) {
     unref();
+  //DEBUG_bridge(this,warn("osp_bridge(%p) detach link=%d", this, link.empty()));
     if (!link.empty()) {
       mysv_lock(osp_thr::TXGV);
       // should be per-thread
@@ -307,7 +327,14 @@ void osp_bridge::leave_txn()
     detached=1;
   }
   assert(refs >= 0);
-  if (refs == 0) freelist();
+  DEBUG_bridge(this, warn("osp_bridge(%p)->leave_txn(refs=%d)", this, refs));
+  if (refs == 0) {
+    freelist();
+    --Inuse;
+#if OSP_BRIDGE_TRACE
+    al.detach();
+#endif
+  }
 }
 int osp_bridge::invalid()
 { return detached; }
@@ -315,7 +342,11 @@ void osp_bridge::freelist() //move to freelist
 { delete this; }
 osp_bridge::~osp_bridge()
 {
-  DEBUG_bridge(this, warn("bridge(%p)->DESTROY", this));
+  --Instances;
+  DEBUG_bridge(this, warn("osp_bridge(%p)->DESTROY", this));
+#if OSP_BRIDGE_TRACE
+  SvREFCNT_dec(where);
+#endif
 }
 
 void osp_bridge::hold()

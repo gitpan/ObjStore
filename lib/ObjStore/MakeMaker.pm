@@ -74,7 +74,22 @@ sub add_os_args {
 	$arg{PREFIX} = $ENV{PERL5PREFIX}
 	    if exists $ENV{PERL5PREFIX};
     }
-    $arg{DEFINE} .= ' -DOSP_DEBUG' if DEBUG;
+    $arg{DEFINE} .= ' '.
+	join(' ',
+	     (DEBUG? '-DOSP_DEBUG':()),
+
+	     # Turning these on has a very significant
+	     # impact on performance:
+	     ###########################################################
+
+	     # Increment refcnts on reads?
+	     '-DOSP_SAFE_BRIDGE=0',
+
+	     # Helps figure out memory leaks.
+	     # However, it causes map {} to blow up in some cases.
+	     '-DOSP_BRIDGE_TRACE=0',
+
+	    );
     $arg{INC} .= " -I$OS_ROOTDIR/include";
     $arg{LIBS} ||= [''];
 

@@ -411,8 +411,8 @@ continuously and/or predictably.  It seems like most people I meet are
 only certain that they can experience the lack of perfection or at
 best that they can experience perfection once in a while with a great
 deal of preparation and set up.  Maybe you don't care?  Maybe you
-don't believe it's possible?  That's okay.  You are welcome to use
+don't believe it's possible?  That's okay!  You are welcome to use
 this software anyway (it will work wonders :-).  Enlightenment is
-impersonal!
+impersonal.
 
 =cut

@@ -60,6 +60,22 @@ among database architectures.
 =head1 R!CENT CHANGES
 
 
+** 11-23-98 RELEASE 1.51
+
+- Added more assertions to the API.  A new (transient) memory leak
+debugging mode is available.  See ObjStore::MakeMaker.
+
+- os_smart_object tweaks for ObjStore-Lib-PDL.
+
+- Fixed a bug that caused the save-stack to become corrupted during
+exceptions.  Yikes!
+
+- Fixed transient memory leak trigger when an SV holding a persistent
+object has non-transaction scope.
+
+- Minor fixes to qtposh.
+
+
 ** 11-05-98 RELEASE 1.50
 
 - Fixed order of PUTBACK/POPSTACK.
@@ -78,19 +94,6 @@ serious name conflict by renaming ObjStore::Server to
 ObjStore::ServerInfo (Gack!!).
 
 - Various tweaks & fixes.
-
-
-** 10-13-98 RELEASE 1.48
-
-- The transient memory leak is finally fixed!!  A patch for 5.005_02
-is bundled with this distribution (see patches/leak.fix).  The patch
-is also planned to be included by default in 5.005_5x.
-
-- Many updates for Event 0.20+.
-
-- Integrated osp_keypack1 into the API.
-
-- Reduced maximum number of keys from eight to four.
 
 
 see ./INSTALL for hints on installation

@@ -11,13 +11,13 @@ use strict;
 use Carp;
 use vars
     qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS 
-       %sizeof $INITIALIZED $RUN_TIME $OS_CACHE_DIR),
+       %sizeof $INITIALIZED $RUN_TIME $OS_CACHE_DIR %FEATURE),
     qw($SAFE_EXCEPTIONS $REGRESS @UNLOADED),                        # exceptional
     qw($CLIENT_NAME $CACHE_SIZE $TRANSACTION_PRIORITY),             # tied
     qw($DEFAULT_OPEN_MODE),                                         # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.50';
+$VERSION = '1.51';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -61,14 +61,14 @@ require DynaLoader;
 for (qw(ObjStore::Server ObjStore::Database ObjStore::Root
 	ObjStore::Schema ObjStore::Segment ObjStore::PathExam)) {
     no strict 'refs';
-    *{$_.'::DESTROY'} = \&typemap_any_destroy;
+    *{$_.'::DESTROY'} = \&_typemap_any_destroy;
 }
 
 $EXCEPTION = sub {
     my $m = shift;
 #    local $Carp::CarpLevel = $Carp::CarpLevel + 1;  # too ambitious
     if ($m eq 'SEGV') {
-	$m = ObjStore::Transaction::SEGV_reason();
+	$m = &_SEGV_reason();
 	if ($m) {
 	    if ($ObjStore::REGRESS) {
 		my $buf = "[ObjStore::REGRESS output for '$m':\n";
@@ -164,7 +164,7 @@ sub PoweredByOS {
 }
 
 sub begin {
-    my $code = pop @_;
+    my $code = pop;
     croak "last argument must be CODE" if !ref $code eq 'CODE';
     my $wantarray = wantarray;
     my @result=();
@@ -206,9 +206,8 @@ use vars qw(%STARGATE);
 
 sub DEFAULT_STARGATE {
     my ($seg, $sv) = @_;
-    my $type = reftype $sv;
     my $class = ref $sv;
-    my $code = $STARGATE{$class} || $STARGATE{$type};
+    my $code = $STARGATE{$class} || $STARGATE{ reftype($sv) };
 
     croak("ObjStore::DEFAULT_STARGATE: Don't know how to translate $sv")
 	if !$code;
@@ -349,27 +348,27 @@ sub debug {  # autoload
     my $mask=0;
     for (@_) {
 	/^off/      and last;
-	/^refcnt/   and $mask |= 1, next;
-	/^assign/   and $mask |= 2, next;
-	/^bridge/   and $mask |= 4, next;
-	/^array/    and $mask |= 8, next;
-	/^hash/     and $mask |= 16, next;
-	/^set/      and $mask |= 32, next;
-	/^cursor/   and $mask |= 64, next;
-	/^bless/    and $mask |= 128, next;
-	/^root/     and $mask |= 0x100, next;
-	/^splash/   and $mask |= 0x200, next;
-	/^txn/      and $mask |= 0x400, next;
-	/^ref/      and $mask |= 0x800, next;
+	/^refcnt/   and $mask |= 0x0001, next;
+	/^assign/   and $mask |= 0x0002, next;
+	/^bridge/   and $mask |= 0x0004, next;
+	/^array/    and $mask |= 0x0008, next;
+	/^hash/     and $mask |= 0x0010, next;
+	/^set/      and $mask |= 0x0020, next;
+	/^cursor/   and $mask |= 0x0040, next;
+	/^bless/    and $mask |= 0x0080, next;
+	/^root/     and $mask |= 0x0100, next;
+	/^splash/   and $mask |= 0x0200, next;
+	/^txn/      and $mask |= 0x0400, next;
+	/^ref/      and $mask |= 0x0800, next;
 	/^wrap/     and $mask |= 0x1000, next;
 	/^thread/   and $mask |= 0x2000, next;
 	/^index/    and $mask |= 0x4000, next;
 	/^norefs/   and $mask |= 0x8000, next;
-	/^decode/   and $mask |= 0x10000, next;
-	/^schema/   and $mask |= 0x20000, next;
-	/^pathexam/ and $mask |= 0x40000, next;
-	/^compare/  and $mask |= 0x80000, next;
-	/^dynacast/ and $mask |= 0x100000, next;
+	/^decode/   and $mask |= 0x00010000, next;
+	/^schema/   and $mask |= 0x00020000, next;
+	/^pathexam/ and $mask |= 0x00040000, next;
+	/^compare/  and $mask |= 0x00080000, next;
+	/^dynacast/ and $mask |= 0x00100000, next;
 	/^PANIC/  and $mask = 0xfffff, next;
 	die "Snawgrev $_ tsanik brizwah dork'ni";
     }
@@ -1145,6 +1144,7 @@ sub clone_to { croak($_[0]."->clone_to() unimplemented") }
 
 # Do fancy argument parsing to make creation of unsafe references a
 # very intentional endevour.  Maybe the default should be 'unsafe'? XXX
+my $noise_count=3;
 sub new_ref {
     use attrs 'method';
     my ($o, $seg, $safe) = @_;
@@ -1155,7 +1155,11 @@ sub new_ref {
     if (!defined $safe) {
 	$type = 1;
     }
-    elsif ($safe eq 'safe') { $type=0; }
+    elsif ($safe eq 'safe') {
+	$type=0;
+	Carp::cluck "os_reference_protected is depreciated"
+	    if $noise_count-- >= 0;
+    }
     elsif ($safe eq 'unsafe' or $safe eq 'hard') { $type=1; }
     else { croak("$o->new_ref($safe,...): unknown type"); }
     $o->_new_ref($type, $seg);

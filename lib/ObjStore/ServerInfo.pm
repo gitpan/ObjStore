@@ -25,18 +25,13 @@ sub new {
     $$o{pid} = $$;
     $$o{uid} = getpwuid($>);
     $$o{mtime} = time;
-    $SELF = $o->new_ref('transient','safe');
+    $SELF = $o->new_ref;
     $o;
 }
 
 sub touch {
     my ($class, $time) = @_;
     $time ||= time;
-    if ($SELF and $SELF->deleted()) {
-	return if defined wantarray;
-	warn "another server started up";
-	exit;
-    }
     my $s = $SELF->focus;
     $$s{mtime} = $time;
     $s;
@@ -54,5 +49,9 @@ sub touch {
 
 The minimum amount of database code to reasonably represent a Unix
 process.  Patches for non-Unixen welcome.
+
+=head1 TODO
+
+'time' should come from Event?
 
 =cut

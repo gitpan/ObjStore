@@ -28,7 +28,8 @@ extern void osp_croak(const char* pat, ...);
 #undef U16
 #define U16 os_unsigned_int16
 
-#define OSPERL_API_VERSION 8
+#define OSPERL_API_VERSION \
+	(13 | OSP_SAFE_BRIDGE<<16 | OSP_BRIDGE_TRACE<<17)
 
 // OSSV has only 16 bits to store type information.  Yikes!
 
@@ -533,18 +534,15 @@ public:
   OSSV *get_tmpkey() { return &tmpkeys[tmpkey++]; }
 };
 
-struct osp_bridge_ring {
-  const void *self;
-  osp_bridge_ring *next, *prev;
-  osp_bridge_ring(void *_self) :self(_self) { next = prev = this; }
-  ~osp_bridge_ring() { detach(); }
+class osp_ring {
+  void *vp;
+  osp_ring *next, *prev;
+public:
+  osp_ring(void *_self) :vp(_self) { next = prev = this; }
+  ~osp_ring() { detach(); }
+  void *self() { return vp; }
+  void *next_self() { return next->vp; }
   int empty() { return next == this; }
-  void *pop() {
-    assert(!self);
-    osp_bridge_ring *rg = next;
-    rg->detach();
-    return (void*) rg->self;
-  }
   void detach() {
     if (next != this) {
       next->prev = prev;
@@ -552,13 +550,15 @@ struct osp_bridge_ring {
       next = prev = this;
     }
   }
-  void attach(osp_bridge_ring *r1) {
+  void attach(osp_ring &r1) {
+    assert(r1.next);
     assert(next == this);
-    next = r1->next;
-    prev = r1;
+    next = r1.next;
+    prev = &r1;
     next->prev = this;
     prev->next = this;
   }
+  void verify();
 };
 
 // ODI seemed to want to restrict tix_handlers to lexical scope.
@@ -590,8 +590,10 @@ struct osp_thr {
   long signature;
   long debug;
   dytix_handler *hand;
+  tix_exception_p cause;
+  os_int32 value;
   char *report;
-  osp_bridge_ring ospv_freelist;
+  osp_ring ospv_freelist;
   osp_pathexam exam;
 
   //glue methods
@@ -634,19 +636,22 @@ struct osp_txn {
   os_transaction::transaction_scope_enum ts;
   os_transaction *os;
   U32 owner;   //for local transactions; not yet XXX
-  osp_bridge_ring link;
+  osp_ring link;
 };
 
 struct typemap_any {
+  static IV Instances;
   static HV *MyStash;
   dynacast_fn dynacast;
   void *ptr;
 
   static void *my_dynacast(void *obj, HV *stash, int failok);
   static void *decode(SV *, int nuke=0);
+  static void *try_decode(SV *sv, dynacast_fn want, int nuke=0);
 
-  typemap_any(void *vp) { set(vp); dynacast = my_dynacast; }
+  typemap_any(void *vp) { ++Instances; set(vp); dynacast = my_dynacast; }
   void set(void *vp) { assert(vp); ptr = vp; }
+  ~typemap_any() { --Instances; }
 };
 
 #define dOSP osp_thr *osp = osp_thr::fetch()
@@ -667,13 +672,21 @@ struct typemap_any {
  */
 
 struct osp_bridge {
+  static IV Instances, Inuse;
+  static osp_ring All;
+
   dynacast_fn dynacast;
-  osp_bridge_ring link;
+  osp_ring link;
   int refs;
   int detached;
   int manual_hold;
   int holding;  //true if changed REFCNT
   SV *txsv;				// my transaction scope
+
+#if OSP_BRIDGE_TRACE
+  osp_ring al; /* not thread-safe XXX */
+  SV *where;
+#endif
 
 #ifdef OSP_DEBUG  
   int br_debug;
@@ -702,6 +715,7 @@ struct osp_bridge {
 };
 
 struct osp_smart_object {
+  virtual void unref();
   virtual void freelist();
   virtual ~osp_smart_object();
 };
@@ -711,6 +725,8 @@ struct ospv_bridge : osp_bridge {
   OSSVPV *pv;
   osp_smart_object *info;  // for cursors & such
 
+  ospv_bridge();
+  virtual ~ospv_bridge();
   virtual void init(OSSVPV *_pv);
   virtual void unref();
   virtual void hold();

@@ -248,7 +248,7 @@ sub checkpoint {
     }
     if ($continue) {
         if (!$TXN) {
-            confess "cannot nest dynamic transactions"
+            confess "Cannot nest dynamic transactions"
                 if @ObjStore::Transaction::Stack;
             $TXN = ObjStore::Transaction->new($SERVE? 'update' : 'read');
         }

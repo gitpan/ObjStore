@@ -3,7 +3,6 @@
 # REQUIRES:
 #
 # PerlQt 1.06 + various patches
-# Event 0.01 + various patches
 #
 # This probably wont work out of the box yet.  Sorry!
 
@@ -67,29 +66,24 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 package QtREAPER;
 use Qt;
 use QObject;
-use Event;
-use IO::Poll '/POLL/';
-use vars qw(@ISA $VERSION @E);
+use Event 0.24;
+use vars qw(@ISA $VERSION);
 @ISA = 'QObject';
 $VERSION = '1.02';
 
 use slots 'shutdown()';
 sub shutdown { 
-    for (@E) { $_->cancel }
-    ObjStore::Serve->exitloop();
+    Event::unloop();
 }
 
 my $reaper = QtREAPER->new->immortal;
 $reaper->connect($qApp, 'lastWindowClosed()', 'shutdown()');
 
 my $fd = QApplication::xfd();
-push @E, Event->io(-handle => IO::Handle->new_from_fd($fd,'r'),
-		   -events => POLLRDNORM,
-		   -callback => sub { $qApp->processEvents(3000); });
-
-# and for ToolTips...
-push @E, Event->timer(-interval => 1,
-		      -callback => sub { $qApp->processEvents(3000); });
+Event->io(handle => $fd,
+	  timeout => 1,
+	  events => 'r',
+	  callback => sub { $qApp->processEvents(3000); });
 
 package QApplication;
 use Qt;
@@ -100,7 +94,7 @@ sub enter_loop {
     local $nested_exit=0;
     while (!$nested_exit) {
 	$qApp->processEvents(3000);
-	Event->DoOneEvent();
+	Event::one_event();
     }
 }
 sub exit_loop { $nested_exit=1; }
@@ -226,7 +220,7 @@ sub new {
     $l->activate;
 
     $$o{gui} = \@w;
-    $$o{timer} = Event->timer(-interval => 1, -callback => sub { $o->refresh() });
+    $$o{timer} = Event->timer(interval => 1, callback => [$o,'refresh']);
     $o->show;
     $o->immortal;
 }
@@ -263,7 +257,8 @@ sub refresh {
 	}
 	# check every time through XXX
 	my $top = $$o{db}->hash;
-	my $server = $top->{'ObjStore::Server'};
+	my $server = $top->{'ObjStore::ServerInfo'};
+	die "Can't find ServerInfo" if !$server;
 	my $d = time - ($$server{mtime} or 0);
 	if (!$server or $d > 30) {
 	    my $str = do {
@@ -305,7 +300,11 @@ sub refresh {
 	if ($@) { warn; $c->init; }
     }
     $t .= "died: ".$$c{why} if $$c{why};
-    $t .= $$c{out} if $$c{out};
+    if (ref $$c{out}) {
+	$t .= join("\n", @{ $$c{out} });
+    } elsif ($$c{out}) {
+	$t .= $$c{out}
+    }
     $$o{out}->setText($t);
 }
 
@@ -387,4 +386,4 @@ use Qt;
 Editor->new($DB);
 
 require ObjStore::Serve;
-ObjStore::Serve->Loop_single();
+ObjStore::Serve->defaultLoop;

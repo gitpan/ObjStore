@@ -114,6 +114,19 @@ osperl_schema_loader::equal_DLL_identifiers_same_prefix(const char* id1,
 							const char* id2)
 { return strcmp(id1,id2)==0; }
 
+//----------------------------- Exceptions
+
+static void osp_unwind_part2(void *vptr)
+{
+  osp_thr *osp = (osp_thr*) vptr;
+#ifndef _OS_CPP_EXCEPTIONS
+  osp->hand->hand._unwind_part_2();
+#endif
+  // this is just a NOP when using C++ exceptions?
+  delete osp->hand;
+  osp->hand = new dytix_handler();
+}
+
 //----------------------------- ObjStore
 
 MODULE = ObjStore	PACKAGE = ObjStore
@@ -197,6 +210,21 @@ _debug(mask)
 	osp->debug = mask;
 	XSRETURN_IV(old);
 
+
+char *
+_SEGV_reason()
+	PPCODE:
+	dOSP;
+	if (!osp->report) XSRETURN_UNDEF;
+#ifndef _OS_CPP_EXCEPTIONS
+	osp->hand->hand._unwind_part_1(osp->cause, osp->value, osp->report);
+#endif
+	SAVEDESTRUCTOR(osp_unwind_part2, osp);
+	XPUSHs(sv_2mortal(newSVpv(osp->report, 0)));
+	osp->cause = 0;
+	osp->value = 0;
+	osp->report = 0;
+
 SV *
 set_stargate(code)
 	SV *code
@@ -256,10 +284,20 @@ network_servers_available()
 	RETVAL
 
 void
-typemap_any_destroy(obj)
+_typemap_any_destroy(obj)
 	SV *obj
 	CODE:
 	typemap_any::decode(obj,1);
+
+int
+_typemap_any_count()
+	PPCODE:
+	XPUSHs(sv_2mortal(newSViv(typemap_any::Instances)));
+
+int
+_bridge_count()
+	PPCODE:
+	XPUSHs(sv_2mortal(newSViv(osp_bridge::Instances)));
 
 void
 get_page_size()
@@ -500,22 +538,14 @@ osp_txn::name(...)
 	  delete str;
 	}
 
-char *
-SEGV_reason()
-	PPCODE:
-	dOSP;
-	if (!osp->report) XSRETURN_UNDEF;
-	XPUSHs(newSVpv(osp->report, 0));
-	osp->report = 0;
-
 void
 osp_txn::post_transaction()
 
 void
 get_current()
 	PPCODE:
-	if (AvFILL(osp_thr::TXStack) == -1) XSRETURN_UNDEF;
-	SV **tsv = av_fetch(osp_thr::TXStack, AvFILL(osp_thr::TXStack), 0);
+	if (av_len(osp_thr::TXStack) == -1) XSRETURN_UNDEF;
+	SV **tsv = av_fetch(osp_thr::TXStack, av_len(osp_thr::TXStack), 0);
 	assert(tsv);
 	XPUSHs(sv_mortalcopy(*tsv));
 
@@ -1022,7 +1052,7 @@ OSSVPV::DELETED(...)
 	if (items == 1)
 	  XPUSHs(boolSV(OSPvDELETED(THIS)));
 	else if (items == 2) {
-	  if (SvTRUEx(ST(1)))
+	  if (sv_true(ST(1)))
 	    OSPvDELETED_on(THIS);
 	  else if (OSPvDELETED(THIS))
 	    croak("Cannot undelete OSSVPV=0x%p os_class='%s' rep_class='%s'",

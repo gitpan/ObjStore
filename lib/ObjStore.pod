@@ -211,18 +211,15 @@ they remain valid across transaction boundries.
 
 Be aware that references can return garbage if they point to data in a
 database that is not open.  You will need explicitly C<open> them if
-in doubt (see C<ObjStore::Ref::POSH_ENTER>).  Currently, there are two
-types of references supported.  They correspond to C<os_reference> and
-C<os_reference_protected>.  The type passed to C<new_ref> should be
-either 'unsafe' or 'safe' respectively.  For example,
+in doubt (see C<ObjStore::Ref::POSH_ENTER>). For example,
 
-  $r = $o->new_ref('transient', 'unsafe');
+  $r = $o->new_ref('transient');
 
   $r = $o->new_ref();    # same as above
 
 This creates an C<os_reference>.  Care must to taken that these hard
-reference do not point to objects that have already been deleted.
-A C<SEGV> (if you're lucky) or garbled data can result.
+reference do not point to objects that have already been deleted.  A
+C<SEGV> (if you're lucky) or garbled data can result.
 
 Fortunately, it is always safe to use hard references in the case that
 they are used to merely to avoid circular references within a single

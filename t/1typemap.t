@@ -28,9 +28,14 @@ begin 'update', sub {
 die if $@;
 
 # maybe move to a different test XXX
-my $o = ObjStore::AV->new('transient');;
+my $o = ObjStore::AV->new('transient');
 ok !$o->DELETED;
 $o->DELETED(1);
 ok $o->DELETED;
-eval { $o->DELETED(0) };
+#ObjStore::debug('txn');
+#begin sub {
+eval {
+    $o->DELETED(0)
+};
+#warn $@;
 ok $@, '/undelete/';

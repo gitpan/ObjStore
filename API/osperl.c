@@ -18,8 +18,22 @@
 void osp_thr::use(const char *YourName, int ver)
 {
   if (ver != OSPERL_API_VERSION)
-    croak("ObjStore API mismatch (%d != %d); please recompile '%s'\n",
-	  OSPERL_API_VERSION, ver, YourName);
+    croak("ObjStore API mismatch; please recompile '%s'\n", YourName);
+}
+
+void osp_ring::verify()
+{
+  // still doubly linked correctly?
+  osp_ring *cs = next;
+  while (cs != this) {
+    assert(cs);
+    cs = cs->next;
+  }
+  cs = prev;
+  while (cs != this) {
+    assert(cs);
+    cs = cs->prev;
+  }
 }
 
 /* CCov: on */
@@ -41,6 +55,7 @@ void osp_thr::register_schema(char *cl, _Application_schema_info *sch)
 /*--------------------------------------------- typemap services */
 
 HV *typemap_any::MyStash=0;
+IV typemap_any::Instances=0;
 
 SV *osp_thr::any_2sv(void *any, char *CLASS)
 {
@@ -65,6 +80,25 @@ void *typemap_any::my_dynacast(void *obj, HV *stash, int failok)
 {
   if (failok) return 0;
   croak("Don't know how to convert ObjStore object to a '%s'", HvNAME(stash));
+  return 0;
+}
+
+void *typemap_any::try_decode(SV *sv, dynacast_fn want, int nuke)
+{
+  SV *orig = sv;
+  if (SvROK(sv)) {
+    sv = SvRV(sv);
+    if (SvOBJECT(sv) && SvTYPE(sv) == SVt_PVMG) {
+      typemap_any *ta = (typemap_any*) SvIV(sv);
+      void *ret = ta->ptr;
+      assert(ret);
+      if (ta->dynacast != want) return 0;
+      if (nuke) delete ta;
+      return ret;
+    }
+  }
+  Perl_sv_dump(orig);
+  croak("ObjStore typemap_any");
   return 0;
 }
 
@@ -133,7 +167,8 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
     } else if (SvTYPE(nval) == SVt_PVMG) {
       br = (ospv_bridge*) SvIV(nval);
       if (br->dynacast != osp_thr::default_dynacast) {
-	DEBUG_dynacast(warn("Trying dynacast(0x%x)", br->dynacast));
+	DEBUG_dynacast(warn("Trying dynacast(0x%x) to ObjStore::Bridge",
+			    br->dynacast));
 	/* unfortunately this will give an illegal instruction
 	   exception (or worse) if the dynacast isn't a function pointer */
 	br = (ospv_bridge*) (br->dynacast)(br, BridgeStash, 1);
@@ -146,7 +181,7 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
     if (br->invalid()) {
       croak("sv_2bridge: persistent data out of scope");
     }
-#ifdef OSP_SAFE_BRIDGE
+#if OSP_SAFE_BRIDGE
     if (br->holding && !br->manual_hold && br->is_weak()) {
       warn("sv_2bridge: HOLD needed; a transient variable has the only reference to a persistent object");
     }
@@ -161,10 +196,10 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
   {
     dSP;
     PUSHSTACK;
-    PUSHMARK(sp);
+    PUSHMARK(SP);
     XPUSHs(sv_2mortal(osp_thr::any_2sv(near, "ObjStore::Segment")));
     XPUSHs(ref);
-    PUTBACK ;
+    PUTBACK;
     assert(osp_thr::stargate);
     int count = perl_call_sv(osp_thr::stargate, G_SCALAR);
     assert(count==1);
@@ -182,9 +217,9 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
 static SV *ospv_2bridge(OSSVPV *pv, int hold=0)
 {
   dOSP;
-  ospv_bridge *br;
-  if (!osp->ospv_freelist.empty()) {
-    br = (ospv_bridge*) osp->ospv_freelist.pop();
+  ospv_bridge *br = (ospv_bridge*) osp->ospv_freelist.next_self();
+  if (br) {
+    br->link.detach();
   } else {
     br = new ospv_bridge;
   }
@@ -1179,11 +1214,22 @@ int OSSVPV::is_OSPV_Ref2() { return 0; }
 
 /*--------------------------------------------- ospv_bridge */
 
+void osp_smart_object::unref() {}
 void osp_smart_object::freelist() { delete this; }
 osp_smart_object::~osp_smart_object() {}
 
+ospv_bridge::ospv_bridge()
+{ pv=0; }
+
+ospv_bridge::~ospv_bridge()
+{
+  assert(!pv);
+  assert(!info);
+}
+
 void ospv_bridge::init(OSSVPV *_pv)
 {
+  assert(!pv); // one at a time please!
   osp_bridge::init(_pv->get_dynacast_meth());
   // optimize! XXX
   info = 0;
@@ -1205,7 +1251,7 @@ void ospv_bridge::init(OSSVPV *_pv)
     cache_txsv();
   }
 
-#ifdef OSP_SAFE_BRIDGE
+#if OSP_SAFE_BRIDGE
   osp_txn *txn = get_transaction();
   holding = txn->can_update(pv);
   if (holding) {
@@ -1240,7 +1286,7 @@ int ospv_bridge::is_weak()
 void ospv_bridge::unref()
 {
   if (!pv) return;
-  if (info) { info->freelist(); info=0; }
+  if (info) info->unref();
 
   // avoid single thread race condition
   OSSVPV *copy = pv; pv=0;
@@ -1260,7 +1306,9 @@ void ospv_bridge::unref()
 void ospv_bridge::freelist()
 {
   dOSP;
-  link.attach(&osp->ospv_freelist);
+  //DEBUG_bridge(this, warn("ospv_bridge 0x%x->freelist info=0x%x", this, info));
+  if (info) { info->freelist(); info=0; }
+  link.attach(osp->ospv_freelist);
 }
 
 //---------------------------------------------- OSPV INTERFACES --

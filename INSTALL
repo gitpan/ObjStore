@@ -47,9 +47,9 @@ place.  (There must be a better way?)
 - ./t/zpeek.t is very sensitive to the success of the other tests.
 
 - Keep running 'make test' until the database size matches.  It takes
-me about three trials.  If it will not match, there is probably a
-serious REFCNT problem.  If you are feeling paranoid, you can check
-that object counts do not increase between runs with 'ossize -c
+me about three tries.  If it will not match, there is probably a
+serious reference count problem.  If you are feeling paranoid, you can
+check that object counts do not increase between runs with 'ossize -c
 <database>'.
 
 -------------------------------------------------------------------------
@@ -62,10 +62,15 @@ not seem to be necessary on Solaris 2.X.
 - If you need to get a stack trace of an ObjectStore exceptions,
 you'll need to use the following breakpoints:
 
-stop in `ObjStore.so`XS_ObjStore__Transaction_SEGV_reason
-stop in `libc.so.1`abort
-ignore SEGV
-cont
+  # optional
+  stop in osp_croak
+  stop in Perl_croak
+  stop in `libc.so.1`abort
+
+  # manditory
+  stop in `ObjStore.so`XS_ObjStore__SEGV_reason
+  ignore SEGV
+  cont
 
 - Send any problem reports to the mailing list!
 

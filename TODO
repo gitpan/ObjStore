@@ -12,9 +12,9 @@ following in the body of your message:
 
 $hash->{seg} = $db->create_segment('foo'); #blows up (get_number missing!)
 
-sort tests into appropriate directories?
+sort tests into appropriate directories
 
-MAKEMAKEROPT
+PERL_MM_OPT?
 
 split ObjStore::Serve stuff into its own tarball?
   + improve organization
@@ -22,7 +22,7 @@ split ObjStore::Serve stuff into its own tarball?
   - annoying to install
 
 disable autoload per class via some API
-  depreciate _fake:: junk
+  deprecate _fake:: junk
 
 die with a ref!
 
@@ -60,10 +60,10 @@ patches
   fold osp_croak back into perl?
   MakeMaker patch for blib shared libraries?
 
-Mike Guy writes: How about "die if in a void context"?  That would get
-the best of both worlds.  I'd like to see that style used much more in
-Perl.  Or the variant of "warn if in a void context".  Unchecked
-results of open comes particularly to mind.
+ObjectStore 6.0
+  version info should be stored in a separate root with a fixed data structure
+  make OSPV pure virtual
+  unions?
 
 
 + VAGUE POSSIBILITIES +
@@ -120,9 +120,6 @@ permutation magic for AVHV
   ObjStore::Index::_(un)protect?
 
 translate('transient', $persistent) ??
-
-The ObjStore version should be stored in a separate root with a
-fixed data structure like double[10]?
 
 move ObjStore::subscribe back into ObjStore::Notification?
 

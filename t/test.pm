@@ -4,7 +4,7 @@ package test;
 #use Carp qw(verbose carp croak);
 use Carp;
 use Test;
-use Cwd;
+#use Cwd;
 #use DynaLoader ();
 #BEGIN { unshift @DynaLoader::dl_library_path, getcwd."blib/arch/auto/ObjStore"; }
 use ObjStore;
@@ -37,20 +37,7 @@ sub open_db() {
 
 END { 
 #    $db->close;
-    
-    my $ok=1;
-    if (0) {
-	use IO::Pipe;
-	$pipe = new IO::Pipe;
-	$pipe->reader("osverifydb", TMP_DBDIR . "/perltest");
-	while (defined(my $l = <$pipe>)) {
-	    if ($l =~ /illegal value/) {
-		print $l;
-		$ok=0;
-	    }
-	}
-    }
-    ok($ok);
+    ok(1);
 }
 
 1;

@@ -1,5 +1,3 @@
-// Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
-//
 // While this file is currently available for inclusion outside of
 // the main ObjStore distribution, you should not assume that this
 // state of affairs will continue.  Please roll your own.
@@ -58,7 +56,7 @@ your compiler to shut-up, and send me a patch. :-) */
 #define DEBUG_index(a)	  if (osp_thr::fetch()->debug & 0x4000) a
 #define DEBUG_norefs(a)	  if (osp_thr::fetch()->debug & 0x8000) a
 #define DEBUG_decode(a)	  if (osp_thr::fetch()->debug & 0x10000) a
-#define DEBUG_schema(a)	  if (osp_thr::fetch()->debug & 0x20000) a
+//#define DEBUG_schema(a)	  if (osp_thr::fetch()->debug & 0x20000) a
 #define DEBUG_pathexam(a) if (osp_thr::fetch()->debug & 0x40000) a
 #define DEBUG_compare(a)  if (osp_thr::fetch()->debug & 0x80000) a
 #define DEBUG_dynacast(a) if (osp_thr::fetch()->debug & 0x100000) a
@@ -80,7 +78,7 @@ your compiler to shut-up, and send me a patch. :-) */
 #define DEBUG_index(a)
 #define DEBUG_norefs(a)
 #define DEBUG_decode(a)
-#define DEBUG_schema(a)
+//#define DEBUG_schema(a)
 #define DEBUG_pathexam(a)
 #define DEBUG_compare(a)
 #define DEBUG_dynacast(a)

@@ -33,8 +33,8 @@ struct OSPV_avarray : OSPV_Generic {
   virtual void STORE(SV *xx, SV *value);
   virtual void POP();
   virtual void SHIFT();
-  virtual void PUSH(SV **base, int items);
-  virtual void UNSHIFT(SV **base, int items);
+  virtual void PUSH(int ax, int items);
+  virtual void UNSHIFT(int ax, int items);
   virtual void SPLICE(int offset, int length, SV **base, int count);
   virtual void CLEAR();
   virtual int FETCHSIZE();
@@ -43,6 +43,25 @@ struct OSPV_avarray : OSPV_Generic {
   virtual OSSV *traverse2(osp_pathexam &exam);
   virtual void make_constant();
   virtual double _percent_filled();
+};
+
+struct OSPV_av2array : OSPV_Generic {
+  static os_typespec *get_os_typespec();
+  SPList < OSPVptr > av;
+  OSPV_av2array(int);
+  virtual ~OSPV_av2array();
+  virtual char *os_class(STRLEN *);
+  virtual char *rep_class(STRLEN *);
+  virtual int get_perl_type();
+  virtual void FETCH(SV *xx);
+  virtual void STORE(SV *xx, SV *value);
+  virtual void POP();
+  virtual void SHIFT();
+  virtual void PUSH(int ax, int items);
+  virtual void UNSHIFT(int ax, int items);
+  virtual void SPLICE(int offset, int length, SV **base, int count);
+  virtual void CLEAR();
+  virtual int FETCHSIZE();
 };
 
 struct OSPV_hvarray2 : OSPV_Generic {

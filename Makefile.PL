@@ -23,9 +23,7 @@ WriteMakefile
     (
      @PREFIX,
      NAME         => 'ObjStore',
-     PREREQ_PM	  => { 'Tree::Fat' => 1.03, Test => 1.03,
-		       # Proc::Daemon?
-		     },
+     PREREQ_PM	  => { Test => '1.03' },
 #     OPTIMIZE => '-g',
      LINKTYPE => 'dynamic',  # static not supported!!!
      VERSION_FROM => './lib/ObjStore.pm',

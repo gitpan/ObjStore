@@ -3,18 +3,18 @@ use strict;
 package ObjStore::Serve;
 use Carp;
 use Exporter ();
-use Event 0.17 qw(loop unloop);
+use Event 0.28 qw(loop unloop_all);
 use ObjStore;
 use base 'ObjStore::HV';
 use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $SERVE %METERS $Init $TXOpen $VERSION);
 $VERSION = '0.04';
 push @ISA, 'Exporter', 'osperlserver';
-@EXPORT_OK = qw(&txqueue &txretry &meter &exitloop &seconds_delta
-		&init_signals);
+@EXPORT_OK = qw(&txqueue &txretry &seconds_delta
+		&init_signals &meter &exitloop );
 
 my $meter_warn=0;
 sub meter {
-    carp "meter is depreciated" if ++$meter_warn > 5;
+    carp "meter is deprecated" if ++$meter_warn > 5;
 #    ++ $METERS{ $_[$#_] };
 }
 use vars qw(@TXready @TXtodo);
@@ -106,14 +106,8 @@ sub restart {
 		warn $_[0];
 	    }
 	};
-    $SIG{__DIE__} =
-	sub {
-	    if ($_[0] !~ /$epat/) {
-		die '['.format_time()." $$]: $_[0]"
-	    } else {
-		die $_[0];
-	    }
-	};
+
+    # $SIG{__DIE__} can wreck havoc on the exception system
 
     # If we made it here, our assumption is that the database
     # is not currently being serviced by a live server.
@@ -138,15 +132,13 @@ sub VERSION {
     } else { $v }
 }
 
-ObjStore::fatal_exceptions(0);
-
 # Don't wait forever! XXX
 for (qw(read write)) { ObjStore::lock_timeout($_,15); }
 
 sub init_signals {
     for my $sig (qw(INT TERM)) {
-	Event->signal(desc => "ObjStore::Serve $sig handler", signal => $sig,
-		      callback => sub { unloop("SIG$sig\n"); });
+	Event->signal(e_desc => "ObjStore::Serve $sig", e_signal => $sig,
+		      e_cb => sub { unloop_all("SIG$sig\n"); });
     }
 }
 
@@ -264,7 +256,7 @@ sub safe_checkpoint {
     if ($@) {
 	warn;
 	$Chkpt->cancel;
-	Event::unloop_all();
+	unloop_all();
     }
 }
 
@@ -274,18 +266,18 @@ sub defaultLoop {
     ObjStore::Serve::Notify::init_autonotify();
     if (!$Init) { &init_signals; ++$Init; }
     checkpoint(1);
-    $Chkpt = Event->timer(desc => "ObjStore::Serve checkpoint", nice => -1,
-			  interval => \$LoopTime, callback => \&safe_checkpoint);
+    $Chkpt = Event->timer(e_desc => "ObjStore::Serve checkpoint", e_nice => -1,
+			  e_interval => \$LoopTime, e_cb => \&safe_checkpoint);
     Event->add_hooks(asynccheck => sub {
 			 $Chkpt->now() if ObjStore::Transaction::is_aborted($TXN)
 		     });
     $Event::DIED = sub {
 	my ($e, $why) = @_;
 	$TXN->abort;
-	my $m = "Event '$e->{desc}' died: $why";
+	my $m = "Event '$e->{e_desc}' died: $why";
 	$m .= "\n" if $m !~ m/\n$/;
 	warn $m;
-	$Chkpt->{callback}->();
+	$Chkpt->{e_cb}->();
     };
     loop();
 }
@@ -391,7 +383,10 @@ sub async_checkpoint {
 
 ################################################# Exit
 
-*exitloop = \&Event::Loop::exitLoop; #depreciated
+sub exitloop {
+    carp "exitloop is deprecated";
+    unloop_all();
+}
 
 1;
 __END__

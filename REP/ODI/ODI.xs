@@ -205,16 +205,12 @@ BOOT:
   osp_thr::use("ObjStore::REP::ODI", OSPERL_API_VERSION);
   osp_thr::register_schema("ObjStore::REP::ODI",
 	&ObjStore_REP_ODI_dll_schema_info);
-  HV *hvrep = perl_get_hv("ObjStore::HV::REP", TRUE);
-  hv_store(hvrep, "ObjStore::REP::ODI::HV", 22, newSViv(1), 0);
   os_index_key(hkey, hkey::rank, hkey::hash);
 #ifdef USE_THREADS
   os_collection::set_thread_locking(1);
 #else
   os_collection::set_thread_locking(0);
 #endif
-  HV *szof = perl_get_hv("ObjStore::sizeof", TRUE);
-  hv_store(szof, "OSPV_hvdict", 11, newSViv(sizeof(OSPV_hvdict)), 0);
 
 MODULE = ObjStore::REP::ODI		PACKAGE = ObjStore::REP::ODI::HV
 

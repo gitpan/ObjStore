@@ -1,6 +1,6 @@
 use strict;
 package ObjStore::Serve::Notify;
-use Event;
+use Event 0.28;
 use ObjStore;
 use ObjStore::Serve;
 use vars qw($OVERFLOW);
@@ -13,9 +13,9 @@ sub init_autonotify {
     my $cb = ($Q? sub { $Q->enqueue(DATA => \&dispatch_notifications,
 				    PRIORITY => 2) }
 	      : \&dispatch_notifications);
-    $notifyEv = Event->io(desc => 'ObjStore::Serve::Notify',
-			  handle => ObjStore::Notification->_get_fd(),
-			  events => 'r', callback => $cb);
+    $notifyEv = Event->io(e_desc => 'ObjStore::Serve::Notify',
+			  e_fd => ObjStore::Notification->_get_fd(),
+			  e_poll => 'r', e_cb => $cb);
 }
 
 #    ObjStore::Notification->set_queue_size(512);
@@ -39,7 +39,6 @@ sub dispatch_notifications {
 	    my $call = shift @args;
 	    warn "$f->$call(".join(', ',@args).")\n"
 		if $osperlserver::Debug{n};
-	    #meter(ref($f)."->".$call);
 	    my $mname = "do_$call";
 	    my $m = $f->can($mname);
 	    if (!$m) {

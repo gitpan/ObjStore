@@ -20,15 +20,6 @@ Makefile.PL
 QtPosh
 README
 README.haloween
-REP/FatTree/FatTree.h
-REP/FatTree/FatTree.pm
-REP/FatTree/FatTree.xs
-REP/FatTree/Makefile.PL
-REP/FatTree/REP-FatTree-01.sch
-REP/FatTree/avtv.tmpl
-REP/FatTree/dex2tv.tmpl
-REP/FatTree/tvcommon0.h
-REP/FatTree/typemap
 REP/Makefile.PL
 REP/ODI/Makefile.PL
 REP/ODI/ODI.h
@@ -38,7 +29,7 @@ REP/ODI/REP-ODI-01.sch
 REP/ODI/osp_hkey.c
 REP/ODI/osp_hkey.h
 REP/Splash/Makefile.PL
-REP/Splash/REP-Splash-01.sch
+REP/Splash/REP-Splash-02.sch
 REP/Splash/Splash.h
 REP/Splash/Splash.pm
 REP/Splash/Splash.xs
@@ -89,6 +80,7 @@ lib/ObjStore/Table.pm
 lib/ObjStore/Table2.pm
 lib/ObjStore/Table3.pm
 lib/ObjStore/Table3/Database.pm
+lib/ObjStore/Test.pm
 lib/ObjStore/notify.pm
 notes/10_threads_questions
 notes/calls_to_cleanup_after
@@ -110,7 +102,6 @@ qtposh
 t/.psrc
 t/0illuminate.t
 t/1av.t
-t/1avsplice.t
 t/1data.t
 t/1hv.t
 t/1hvbugs.t
@@ -122,7 +113,6 @@ t/1stargate.t
 t/1typemap.t
 t/2bless.t
 t/2heap.t
-t/2index.t
 t/2ref.t
 t/2root.t
 t/2transact.t
@@ -132,7 +122,6 @@ t/3notify.t
 t/4csv.t
 t/4noinit.t
 t/4stash.t
-t/4table.t
 t/9set.t
 t/9table.t
 t/PTest.pm

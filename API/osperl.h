@@ -1,5 +1,4 @@
 //                                                              -*-C++-*-
-// Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
 
 #ifndef __osperl_h__
 #define __osperl_h__
@@ -181,7 +180,7 @@ struct OSSVPV : os_virtual_behavior {
 
   //  int can_update(void *vptr);
   void NOTFOUND(char *meth);
-  void fwd2rep(char *methname, SV **top, int items);
+  void fwd2rep(char *methname, int ax, int items);
   HV *get_stash();
   HV *load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo);
 
@@ -339,13 +338,13 @@ struct OSPV_Generic : OSPV_Container {
   // array
   virtual void POP();
   virtual void SHIFT();
-  virtual void PUSH(SV **base, int items);
-  virtual void UNSHIFT(SV **base, int items);
+  virtual void PUSH(int ax, int items);
+  virtual void UNSHIFT(int ax, int items);
   virtual void SPLICE(int offset, int length, SV **top, int count);
   // index
   virtual int add(OSSVPV *);
   virtual int remove(OSSVPV *);
-  virtual void configure(SV **top, int items);
+  virtual void configure(int ax, int items);
 
   // the idea is to load in the index's configured path; why do I want this?
   // virtual void load_path(osp_pathexam *); ???
@@ -512,7 +511,7 @@ public:
   void init(int _desc = 0);
   void set_descending(int yes);
   void load_path(OSSVPV *_paths);
-  void load_args(SV **top, int items);
+  void load_args(int ax, int items);
   int load_target(char _mode, OSSVPV *target);
   void load_keypack1(OSSVPV *dat, osp_keypack1 &kpk);
   OSSV *mod_ossv(OSSV *sv);
@@ -576,6 +575,7 @@ struct osp_thr {
   static void boot();
   static HV *Schema;
   static osp_thr *fetch();
+  static int DEBUG_schema();
   static SV *stargate;
   static HV *CLASSLOAD;
   static SV *TXGV;
@@ -613,7 +613,7 @@ struct osp_thr {
   static OSSV *plant_ospv(os_segment *seg, OSSVPV *pv);
   static unsigned long sv_2aelem(SV *);
 
-  void push_ospv(OSSVPV *pv); //depreciated?
+  void push_ospv(OSSVPV *pv); //deprecated
 };
 
 struct osp_txn {

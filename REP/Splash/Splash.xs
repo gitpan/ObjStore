@@ -242,18 +242,18 @@ void OSPV_avarray::SHIFT()
   }
 }
 
-void OSPV_avarray::PUSH(SV **base, int items)
+void OSPV_avarray::PUSH(int ax, int items)
 {
-  for (int xx=0; xx < items; xx++) {
-    av[av.count()] = base[xx];
+  for (int xx=1; xx < items; xx++) {
+    av[av.count()] = ST(xx);
   }
 }
 
-void OSPV_avarray::UNSHIFT(SV **base, int items)
+void OSPV_avarray::UNSHIFT(int ax, int items)
 {
-  av.insert(0, items);
-  for (int xx=0; xx < items; xx++) {
-    av[xx] = base[xx];
+  av.insert(0, items-1);
+  for (int xx=0; xx < items-1; xx++) {
+    av[xx] = ST(1+xx);
   }
 }
 
@@ -334,6 +334,140 @@ void OSPV_avarray_cs::next()
   if (cs < cnt) ++cs;
 }
 */
+
+/*--------------------------------------------- */
+/*--------------------------------------------- AV splash_array OSPVptr */
+
+OSPV_av2array::OSPV_av2array(int sz)
+  : av(sz,8)
+{}
+
+OSPV_av2array::~OSPV_av2array()
+{}
+
+int OSPV_av2array::FETCHSIZE()
+{ return av.count(); }
+
+char *OSPV_av2array::os_class(STRLEN *len)
+{ *len = 12; return "ObjStore::AV"; }
+
+char *OSPV_av2array::rep_class(STRLEN *len)
+{ *len = 28; return "ObjStore::REP::Splash::ObjAV"; }
+
+int OSPV_av2array::get_perl_type()
+{ return SVt_PVAV; }
+
+void OSPV_av2array::FETCH(SV *key)
+{
+  int xx = osp_thr::sv_2aelem(key);
+  if (xx < 0 || xx >= av.count()) return;
+  SV *ret = osp_thr::ospv_2sv(av[xx]);
+  dSP;
+  XPUSHs(ret);
+  PUTBACK;
+}
+
+void OSPV_av2array::STORE(SV *sv, SV *value)
+{
+  int xx = osp_thr::sv_2aelem(sv);
+  if (xx < 0) croak("STORE(%d)", xx);
+  av[xx] = osp_thr::sv_2bridge(value,1)->ospv();
+  dTHR;
+  if (GIMME_V == G_VOID) return;
+  SV *ret = osp_thr::ospv_2sv(av[xx]);
+  djSP;
+  XPUSHs(ret);
+  PUTBACK;
+}
+
+void OSPV_av2array::POP()
+{	
+  int n= av.count()-1;
+  if (n >= 0) {
+    dTHR;
+    if (GIMME_V != G_VOID) {
+      SV *ret = osp_thr::ospv_2sv(av[n]);
+      djSP;
+      XPUSHs(ret);
+      PUTBACK;
+    }
+    av.compact(n);
+  }
+}
+
+void OSPV_av2array::SHIFT()
+{	
+  SV *ret = &PL_sv_undef;
+  if (av.count()) {
+    dTHR;
+    if (GIMME_V != G_VOID) {
+      SV *ret = osp_thr::ospv_2sv(av[0]);
+      djSP;
+      XPUSHs(ret);
+      PUTBACK;
+    }
+    av.compact(0);
+  }
+}
+
+void OSPV_av2array::PUSH(int ax, int items)
+{
+  for (int xx=1; xx < items; xx++) {
+    av[av.count()] = osp_thr::sv_2bridge(ST(xx),1)->ospv();
+  }
+}
+
+void OSPV_av2array::UNSHIFT(int ax, int items)
+{
+  av.insert(0, items-1);
+  for (int xx=0; xx < items-1; xx++) {
+    av[xx] = osp_thr::sv_2bridge(ST(1+xx),1)->ospv();
+  }
+}
+
+void OSPV_av2array::SPLICE(int offset, int length, SV **base, int count)
+{
+  if (length) {
+    dTHR;
+    if (GIMME_V == G_ARRAY) {
+      SV **sv = new SV*[length];
+      for (int xx=0; xx < length; xx++) {
+	sv[xx] = osp_thr::ospv_2sv(av[offset+xx]);
+      }
+      dSP;
+      EXTEND(SP, length);
+      for (xx=0; xx < length; xx++) PUSHs(sv[xx]);
+      PUTBACK;
+      delete [] sv;
+    } else if (GIMME_V == G_SCALAR) {
+      SV *ret = osp_thr::ospv_2sv(av[offset]);
+      dSP;
+      XPUSHs(ret);
+      PUTBACK;
+    }
+  }
+  int overlap = MIN(length,count);
+  if (overlap) {
+    for (int xx=offset; xx < offset+overlap; xx++) {
+      av[xx] = osp_thr::sv_2bridge(base[xx-offset],1)->ospv();
+    }
+  }
+  if (length > count) {
+    while (length-- > count) av.compact(offset+count);
+  } else if (length < count) {
+    av.insert(offset + overlap, count - overlap);
+    for (; overlap < count; overlap++) {
+      av[offset + overlap] = osp_thr::sv_2bridge(base[overlap],1)->ospv();
+    }
+  }
+}
+
+void OSPV_av2array::CLEAR()
+{
+  for (int xx=0; xx < av.count(); xx++) { av[xx].set_undef(); }
+  av.reset();
+  assert(av.count() == 0);
+}
 
 /*--------------------------------------------- */
 /*--------------------------------------------- HV splash array #2 */
@@ -533,10 +667,6 @@ BOOT:
   osp_thr::use("ObjStore::REP::Splash", OSPERL_API_VERSION);
   osp_thr::register_schema("ObjStore::REP::Splash",
 	&ObjStore_REP_Splash_dll_schema_info);
-  HV *avrep = perl_get_hv("ObjStore::AV::REP", TRUE);
-  hv_store(avrep, "ObjStore::REP::Splash::AV", 25, newSViv(1), 0);
-  HV *hvrep = perl_get_hv("ObjStore::HV::REP", TRUE);
-  hv_store(hvrep, "ObjStore::REP::Splash::HV", 25, newSViv(1), 0);
 
 MODULE = ObjStore::REP::Splash	PACKAGE = ObjStore::REP::Splash::AV
 
@@ -556,6 +686,24 @@ OSPV_avarray::new(seg, sz)
 	}
 	OSSVPV *pv;
 	NEW_OS_OBJECT(pv, area, OSPV_avarray::get_os_typespec(), OSPV_avarray(sz));
+	pv->bless(CSV);
+	return;
+
+MODULE = ObjStore::REP::Splash	PACKAGE = ObjStore::REP::Splash::ObjAV
+
+static void
+OSSVPV::new(seg, sz)
+	SV *seg;
+	int sz;
+	PPCODE:
+	SV *CSV = ST(0);
+	os_segment *area = osp_thr::sv_2segment(ST(1));
+	PUTBACK;
+	if (sz <= 0) {
+	  croak("Non-positive cardinality");
+	}
+	OSSVPV *pv;
+	NEW_OS_OBJECT(pv, area, OSPV_av2array::get_os_typespec(), OSPV_av2array(sz));
 	pv->bless(CSV);
 	return;
 

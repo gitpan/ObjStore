@@ -66,24 +66,24 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 package QtREAPER;
 use Qt;
 use QObject;
-use Event 0.24;
+use Event 0.28 qw(unloop);
 use vars qw(@ISA $VERSION);
 @ISA = 'QObject';
 $VERSION = '1.02';
 
 use slots 'shutdown()';
 sub shutdown { 
-    Event::unloop();
+    unloop();
 }
 
 my $reaper = QtREAPER->new->immortal;
 $reaper->connect($qApp, 'lastWindowClosed()', 'shutdown()');
 
 my $fd = QApplication::xfd();
-Event->io(handle => $fd,
-	  timeout => 1,
-	  events => 'r',
-	  callback => sub { $qApp->processEvents(3000); });
+Event->io(e_fd => $fd,
+	  e_timeout => 1,
+	  e_poll => 'r',
+	  e_cb => sub { $qApp->processEvents(3000); });
 
 package QApplication;
 use Qt;
@@ -126,7 +126,7 @@ sub new {
 
     $w = QLabel->new(
 q[
-Copyright © 1998 Joshua Nathaniel Pritikin.  All rights reserved.
+Copyright © 1998-1999 Joshua Nathaniel Pritikin.  All rights reserved.
 
 qtposh is part of the ObjStore perl extension.  This package is free
 software and is provided "as is" without express or implied warranty.
@@ -220,7 +220,7 @@ sub new {
     $l->activate;
 
     $$o{gui} = \@w;
-    $$o{timer} = Event->timer(interval => 1, callback => [$o,'refresh']);
+    $$o{timer} = Event->timer(e_interval => 1, e_cb => [$o,'refresh']);
     $o->show;
     $o->immortal;
 }

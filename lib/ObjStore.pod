@@ -249,20 +249,16 @@ SQL has this fantastic facility called indices.  C<ObjStore> does too!
   $c->step(1);
   warn $c->at()->{name}; # Triangular
 
-All the index representations supplied by default do not copy records'
-keys.  The keys are used in-place and are (usually) marked read-only.
-Since the keys are not copied, the index is stored in less space and
-can be accessed faster.  Or at least until it grows larger than the
-client-side cache.  None of the indices support key copying at the
-present but the change is not difficult.  If you send email to the
-list, I probably come up with a fix.
+Be aware that no index representations are supplied by default.  You
+cannot create indices without another extension (such as
+L<ObjStore-REP-FatTree>).
 
 Indices should not be used unless other data structures prove
 inadequate.  Some indices cannot be allocated transiently.  Simple
 hashes and arrays are less trouble in most cases.  Indices are best
 suited to large data-sets that must be indexed in more than a few
 ways.  If you can always afford to iterate through every record then
-indices probably aren't worth the trouble.
+indices probably aren't worth the effort.
 
 =head2 Index Cursors
 
@@ -295,7 +291,7 @@ eliminate the possibility of indices diverging with indexed data, keys
 are marked read-only when records are added to the index.  This
 insures that indices will not be disordered by ad-hoc updates to
 records' keys.  (Just imagine if people were constantly changing the
-meanings of words as you read this sentance!)
+meanings of words as you read this sentance.)
 
 For example:
 
@@ -320,9 +316,9 @@ read-only scheme.
 The exact constraints of indexing are dependent on the index
 representation and the record representation.  Different
 representations can allow a greater or lesser degree of flexibility.
-If you need something that is not supported by default, it is likely
-that the wanted behavior can be implemented with new representations.
-(Virtual sunglasses not included. :-)
+If you need something that is not supported by an existing extension,
+it is likely that the behavior you need can be implemented with new
+representations.  (Virtual sunglasses not included. :-)
 
 =head2 And Access Paths (Oh My!)
 
@@ -371,21 +367,21 @@ favor of making queries smarter.
 
 This is the correct trade because data usually out-bulks code.
 Furthermore, since there isn't a artificial split between the
-implementation language and a goofy, unempowered database language
+implementation language and a goofy, unempowered database language,
 schema evolution is reduced to the same problem as source code
 compatibility.  (Database are just a rich API.)
 
 Now, I'm not saying that data layouts never have to change.  When
-thinking about data, the first thing to consider is how to organize
-your data to improve your ability to evolve.
+thinking about data the first thing to consider is how to organize to
+improve one's ability to evolve.
 
 First of all, it is entirely unnecessary to store all data in a single
 database.  Multiple databases interoperate and can be used
 simultaniously.  For example, you can have a separate database for
 each day or each month.  By starting fresh with a new database it is
 easier to make structural changes while perserving backward
-compatibility.  It reduces the scope of the problem in comparison to
-relational databases.
+compatibility.  In constrast to relational databases, the scope of the
+problem can easily be minimized.
 
 Within a database, the way you split up your database generally
 depends on three things:
@@ -399,20 +395,20 @@ perfect awareness of nothing.>
 
 =item * REAL-TIME WRITERS
 
-It is usually good design to create a separate database for each group
-of real-time writers.  Readers of real-time data can open databases in
-C<mvcc> mode and writers will never encounter lock contention (which
-can cause performance degradation).
+If possible, create a separate database for each real-time writer.
+Readers of real-time data can open many databases in C<mvcc> mode and
+writers will never encounter lock contention (which can cause
+performance degradation).
 
 =item * COUPLING TIGHTNESS
 
 Loosely coupled data can easily be split into multiple databases.  The
-most exciting data is tightly coupled; keep this data close together.
+most exciting data is tightly coupled.  Keep this data close together.
 
 =back
 
 A few additional considerations can be found in the C<ObjectStore>
-documentation but that's about it.  Don't over-complicate things.
+documentation, but that's about it.  Don't over-complicate things.
 This isn't a relational database, remember?  The power and simplicity
 is hard to describe because there's just not much to it.  (Just the
 absolute minimum to get the job done. :-)
@@ -422,9 +418,9 @@ absolute minimum to get the job done. :-)
 Un-structured perl databases are probably under-constrained for most
 applications.  Fortunately, RDBMS style tables have been adapted,
 adopted, and included with this package.  While they are a little
-different from traditional tables, with a few doses of Prozac
-relational developers should feel right at home.  See
-C<ObjStore::Index> and L<ObjStore::Table3>.
+different from traditional tables I am confident that with a few doses
+of Prozac, relational developers should feel right at home.  See
+L<ObjStore::Table3> and C<ObjStore::Index>.
 
 =head1 API REFERENCE
 
@@ -1121,7 +1117,7 @@ Where to find schema databases.
 
 =head1 AUTHOR
 
-Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
+Copyright © 1997-1999 Joshua Nathaniel Pritikin.  All rights reserved.
 
 This package is free software and is provided "as is" without express
 or implied warranty.  It may be used, redistributed and/or modified

@@ -21,9 +21,9 @@ sub add_index {
     my ($o, $name, $index) = @_;
     croak "keys starting with underscore are reserved"
 	if $name =~ m/^_/;
+    return $o->{$name} if $o->{$name};
     $index = $index->()
 	if ref $index eq 'CODE';
-    return $o->{$name} if $o->{$name};
     croak "'$index' doesn't look like a real index" if !blessed $index;
 
     my $any = $o->anyx;
@@ -261,14 +261,5 @@ cursors in a database.
 
 I'm fairly satisfied at this point.  Some thing may still be improved.
 Ideas welcome!
-
-=head1 AUTHOR
-
-Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
-
-This package is free software and is provided "as is" without express
-or implied warranty.  It may be used, redistributed and/or modified
-under the terms of the Perl Artistic License (see
-http://www.perl.com/perl/misc/Artistic.html)
 
 =cut

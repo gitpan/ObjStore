@@ -6,7 +6,7 @@ use base 'DynaLoader';
 __PACKAGE__->bootstrap($ObjStore::VERSION);
 
 $ObjStore::SCHEMA{'ObjStore::REP::Splash'}->
-    load($ObjStore::Config::SCHEMA_DBDIR."/REP-Splash-01.adb");
+    load($ObjStore::Config::SCHEMA_DBDIR."/REP-Splash-02.adb");
 
 package ObjStore::REP::Splash::Heap;
 use Carp;

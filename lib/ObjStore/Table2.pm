@@ -690,13 +690,4 @@ More built-in index types
 
 =back
 
-=head1 AUTHOR
-
-Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
-
-This package is free software and is provided "as is" without express
-or implied warranty.  It may be used, redistributed and/or modified
-under the terms of the Perl Artistic License (see
-http://www.perl.com/perl/misc/Artistic.html)
-
 =cut

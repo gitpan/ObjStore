@@ -1,24 +1,7 @@
-/*
-Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
-This package is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself.
-*/
-
 #include "osp-preamble.h"
 #include "osperl.h"
 
 /*
-
-double
-get_unassigned_address_space()
-	CODE:
-	// Older versions of ObjectStore do not support this API.
-	// Please comment it out if this is your situation:
-	//
-	// RETVAL = 0;
-	RETVAL = objectstore::get_unassigned_address_space(); //64bit? XXX
-	OUTPUT:
-	RETVAL
 
 void
 readonly(sv)
@@ -89,7 +72,8 @@ osperl_schema_loader::load_DLL(const char *what, os_boolean error_if_not_found)
 {
   dTHR;
   assert(strncmp(what, "perl:", 5)==0);
-  DEBUG_schema(warn("load_DLL(%s) force? %d", what, error_if_not_found));
+  if (osp_thr::DEBUG_schema())
+	warn("autoload DLL '%s' force=%d", what, error_if_not_found);
 //  if (!error_if_not_found) return 0;
   char *file = new char[strlen(what)+3];
   const char *s1 = what+5;
@@ -244,6 +228,13 @@ os_version()
 	// (rad perl style version number... :-)
 	XSRETURN_NV(objectstore::release_major() + objectstore::release_minor()/100 + objectstore::release_maintenance()/10000);
 
+double
+get_unassigned_address_space()
+	CODE:
+	RETVAL = objectstore::get_unassigned_address_space(); //64bit? XXX
+	OUTPUT:
+	RETVAL
+
 void
 _set_client_name(name)
 	char *name;
@@ -294,11 +285,6 @@ _typemap_any_count()
 	PPCODE:
 	XPUSHs(sv_2mortal(newSViv(typemap_any::Instances)));
 
-int
-_bridge_count()
-	PPCODE:
-	XPUSHs(sv_2mortal(newSViv(osp_bridge::Instances)));
-
 void
 get_page_size()
 	PPCODE:
@@ -345,9 +331,11 @@ void
 os_DLL_schema_info::load(path)
 	char *path
 	CODE:
+	if (osp_thr::DEBUG_schema())
+	  warn("ObjStore::Schema::load('%s')", path);
 	THIS->DLL_loaded(path);
 	/* maybe return os_schema_handle?? */
-	
+
 void
 os_DLL_schema_info::unload()
 	CODE:
@@ -739,7 +727,7 @@ os_database::is_open()
 	if (THIS->is_open_mvcc()) RETVAL = "mvcc";
 	else if (THIS->is_open_read_only()) RETVAL = "read";
 	else if (THIS->is_open()) RETVAL = "update";
-	else RETVAL = "";
+	else XSRETURN_NO;
 	OUTPUT:
 	RETVAL
 
@@ -1298,8 +1286,8 @@ osp_pathexam::load_path(pth)
 
 void
 osp_pathexam::load_args(...)
-	PPCODE:
-	THIS->load_args(&ST(1), items-1);
+	CODE:
+	THIS->load_args(ax, items);
 
 char *
 osp_pathexam::stringify()
@@ -1369,40 +1357,26 @@ OSPV_Generic::SHIFT()
 
 void
 OSPV_Generic::PUSH(...)
-	PPCODE:
+	CODE:
 	PUTBACK;
-	int size = items-1;
-	if (size > 0) {
-	  SV **copy = new SV*[size]; //optimize for < 32 XXX
-	  for (int xx=0; xx < size; xx++) {
-	    copy[xx] = sv_mortalcopy(ST(xx+1));
-	  }
-	  THIS->PUSH(copy, size);
-	  delete [] copy;
-	}
+	THIS->PUSH(ax, items);
 	SPAGAIN;
-	XPUSHs(sv_2mortal(newSViv(size)));
+	ST(0) = sv_2mortal(newSViv(items - 1));
+	XSRETURN(1);
 
 void
 OSPV_Generic::UNSHIFT(...)
-	PPCODE:
+	CODE:
 	PUTBACK;
-	int size = items-1;
-	if (size > 0) {
-	  SV **copy = new SV*[size];
-	  for (int xx=0; xx < size; xx++) {
-	    copy[xx] = sv_mortalcopy(ST(xx+1));
-	  }
-	  THIS->UNSHIFT(copy, size);
-	  delete [] copy;
-	}
+	THIS->UNSHIFT(ax, items);
 	SPAGAIN;
-	XPUSHs(sv_2mortal(newSViv(size)));
+	ST(0) = sv_2mortal(newSViv(items - 1));
+	XSRETURN(1);
 
 void
 OSPV_Generic::SPLICE(...)
 	PROTOTYPE: $$;$@
-	PPCODE:
+	CODE:
 	PUTBACK;
 	int size = THIS->FETCHSIZE();
 	// Mirror the logic in pp_splice; GACK!
@@ -1423,6 +1397,11 @@ OSPV_Generic::SPLICE(...)
 	    copy[xx] = sv_mortalcopy(ST(xx+3));
 	  }
 	}
+	// We have copies so we can pop the args off the stack
+	// and forward to SPLICE.  SPLICE can push stuff back
+	// on the stack so it is important to return without PUTBACK.
+	PL_stack_sp = PL_stack_base + ax - 1;
+	//
 	//warn("SPLICE(off=%d,len=%d,@%d)", offset, length, toadd);
 	THIS->SPLICE(offset, length, copy, toadd);
 	if (toadd) {
@@ -1487,12 +1466,9 @@ MODULE = ObjStore	PACKAGE = ObjStore::Index
 
 void
 OSPV_Generic::configure(...)
-	PPCODE:
-	SV *args[32];
-	if (items >= 32) croak("too many args to configure(...)");
-	for (int xx=0; xx < items; xx++) args[xx] = sv_mortalcopy(ST(xx));
-	PUTBACK;
-	THIS->configure(args, items);
+	CODE:
+	// NOTE: This does not pop args off of the stack.
+	THIS->configure(ax, items);
 	return;
 
 void
@@ -1605,7 +1581,7 @@ OSPV_Cursor2::store(nval)
 
 void
 OSPV_Cursor2::seek(...)
-	PPCODE:
+	CODE:
 	PUTBACK;
 	osp_pathexam *exam;
 	if (SvROK(ST(1))) {
@@ -1613,12 +1589,11 @@ OSPV_Cursor2::seek(...)
 	} else {
 	  dOSP;
 	  osp->exam.init();
-	  osp->exam.load_args(&ST(1), items-1);
+	  osp->exam.load_args(ax, items);
 	  exam = &osp->exam;
 	}
-	int ret = THIS->seek(*exam);
-	SPAGAIN;
-	XPUSHs(boolSV(ret));
+	ST(0) = boolSV(THIS->seek(*exam));
+	XSRETURN(1);
 
 int
 OSPV_Cursor2::pos()

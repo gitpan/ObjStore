@@ -27,11 +27,10 @@ template<class T>
 class SPListBase : public os_virtual_behavior
 {
 private:
-    enum{ALLOCINC=20};
     T *a;
     int cnt;
     int first;
-    int allocinc;
+    int allocinc; //unused
     int firstshift;
     void grow(int amnt= 0, int newcnt= -1);
 
@@ -41,9 +40,9 @@ protected:
 public:
 #ifdef	USLCOMPILER
     // USL 3.0 bug with enums losing the value
-    SPListBase(int n= 20, int fs = 1)
+    SPListBase(int n, int fs = 1)
 #else
-    SPListBase(int n= ALLOCINC, int fs = 1)
+    SPListBase(int n, int fs = 1)
 #endif
     {
       os_segment *WHERE = os_segment::of(this);
@@ -54,7 +53,7 @@ public:
 	firstshift = fs;
         first= n>>firstshift;
 	allocated= n;
-	allocinc= n;
+	allocinc= 0; //unused
 	DEBUG_splash(warn("SPListBase(int %d) a= %p, first= %d\n",
 			  allocinc, a, first));
     }
@@ -140,9 +139,21 @@ INLINE const T& SPListBase<T>::operator[](const int i) const
 */
 template <class T>
 void SPListBase<T>::grow(int amnt, int newcnt){
-int newfirst;
+  int mingrow;
+  int newfirst;
     
     if(amnt <= 0){ // only needs to grow by 1
+      
+      if (cnt+1 < allocated) {
+	memmove(a, &a[first], sizeof(T)*cnt);
+	for (int xx=cnt; xx < cnt + first; xx++) {
+	  a[xx].FORCEUNDEF();
+	}
+	first = 0;
+	return;
+      }
+
+      /* XXX
         newfirst= (allocated>>firstshift) - (cnt>>firstshift); // recenter first
         if(newfirst > 0 && (newfirst+cnt+1) < allocated){ // this is all we need to do
             for(int i=0;i<cnt;i++){ // move rest up or down
@@ -154,17 +165,21 @@ int newfirst;
            first= newfirst;
            return;
         }
+      */
     }
 
-    // that wasn''t enough, so allocate more space
-    if(amnt <= 0) amnt= allocinc; // default value
+    
+    if (allocated < 20) mingrow = 2;
+    else mingrow = allocated * .1;
+    if(amnt <= mingrow) amnt= mingrow;
+
     if(newcnt < 0) newcnt= cnt;   // default
     allocated += amnt;
     os_segment *WHERE = os_segment::of(a);
     T *tmp;
     NEW_OS_ARRAY(tmp, WHERE, T::get_os_typespec(), T, allocated);
 //    tmp = new(WHERE, T::get_os_typespec(),allocated) T[allocated];
-    newfirst= (allocated>>1) - (newcnt>>1);
+    newfirst= (allocated>>firstshift) - (newcnt>>firstshift);
     DEBUG_splash(warn("SPListBase(0x%x)->grow(): old= %p, a= %p, allocinc= %d, newfirst= %d, amnt= %d, cnt= %d, allocated= %d\n",
 		      this, a, tmp, allocinc, newfirst, amnt, cnt, allocated));
     memcpy(tmp+newfirst, a+first, cnt*sizeof(T));

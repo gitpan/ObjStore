@@ -1,13 +1,5 @@
-# Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
-#
-# This package is free software and is provided "as is" without express
-# or implied warranty.  It may be used, redistributed and/or modified
-# under the terms of the Perl Artistic License (see
-# http://www.perl.com/perl/misc/Artistic.html)
-
-package ObjStore;
-require 5.00404;
 use strict;
+package ObjStore;
 use Carp;
 use vars
     qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS 
@@ -17,7 +9,7 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                         # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.51';
+$VERSION = '1.52';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -36,19 +28,15 @@ require DynaLoader;
 		    &network_servers_available
 		    &get_page_size &return_all_pages 
 		    &abort_in_progress &get_n_databases
-		    &set_stargate &DEFAULT_STARGATE
-		    &PoweredByOS),
-		 # depreciated
+		    &set_stargate &DEFAULT_STARGATE),
+		 # deprecated
 		 qw(&set_transaction_priority &subscribe &unsubscribe
 		   ));
-    my @x_old = qw(&schema_dir &get_max_retries &set_max_retries
-		   &fatal_exceptions);
+    my @x_old = qw(&fatal_exceptions);
     my @x_priv= qw($DEFAULT_OPEN_MODE %CLASSLOAD $CLASSLOAD $EXCEPTION
 		   &_PRIVATE_ROOT);
 
-    @EXPORT      = (qw(&bless &begin),
-		    # depreciated
-		    qw(&try_read &try_abort_only &try_update));
+    @EXPORT      = (qw(&bless &begin));
     @EXPORT_FAIL = ('PANIC');
     @EXPORT_OK   = (@EXPORT, @x_adv, @x_tra, @x_old, @x_priv, @EXPORT_FAIL);
     %EXPORT_TAGS = (DEFAULT => [@EXPORT],
@@ -155,12 +143,6 @@ tie $TRANSACTION_PRIORITY, 'ObjStore::Transaction::Priority';
 sub set_transaction_priority {
     carp "just assign to \$TRANSACTION_PRIORITY directly";
     $TRANSACTION_PRIORITY = shift;
-}
-
-sub PoweredByOS {
-    require Config;
-    warn "PoweredByOS wont work until Makefile.PL is fixed.  Sorry.\n";
-    "$Config::Config{sitelib}/ObjStore/PoweredByOS.gif"; #give it a shot... XXX
 }
 
 sub begin {
@@ -369,7 +351,7 @@ sub debug {  # autoload
 	/^pathexam/ and $mask |= 0x00040000, next;
 	/^compare/  and $mask |= 0x00080000, next;
 	/^dynacast/ and $mask |= 0x00100000, next;
-	/^PANIC/  and $mask = 0xfffff, next;
+	/^PANIC/    and $mask = 0xfffff, next;
 	die "Snawgrev $_ tsanik brizwah dork'ni";
     }
     if ($mask) {
@@ -380,50 +362,11 @@ sub debug {  # autoload
 }
 
 #------ ------ ------ ------
-use vars qw($MAX_RETRIES);
-$MAX_RETRIES = 0;
-# goofy?
-sub get_max_retries {
-    carp "get_max_retries is not supported (ignored)";
-    $MAX_RETRIES;
-}
-sub set_max_retries {
-    carp "set_max_retries is not supported (ignored)";
-    $MAX_RETRIES = $_[0];
-}
-
-sub set_cache_size {
-    carp "set_cache_size() depreciated, just assign to \$CACHE_SIZE";
-    $CACHE_SIZE = shift;
-}
-sub set_client_name {
-    carp "set_client_name() depreciated, just assign to \$CLIENT_NAME";
-    $CLIENT_NAME = shift;
-}
-sub schema_dir() {
-    carp "schema_dir is depreciated.  Instead use ObjStore::Config";
-    require ObjStore::Config;
-    &ObjStore::Config::SCHEMA_DBDIR;
-}
-
-sub try_read(&) { 
-    carp "try_read is depreciated.  Use begin('read', sub {...})";
-    ObjStore::begin('read', $_[0]); ();
-}
-sub try_update(&) { 
-    carp "try_update is depreciated.  Use begin('update', sub {...})";
-    ObjStore::begin('update', $_[0]); ();
-}
-sub try_abort_only(&) { 
-    carp "try_abort_only is depreciated.  Use begin('abort_only', sub {...})";
-    ObjStore::begin('abort_only', $_[0]); ();
-}
 sub fatal_exceptions {
     my ($yes) = @_;
     confess "sorry, the cat's already out of the bag"
 	if $yes;
 }
-*rethrow_exceptions = \&fatal_exceptions; # depreciated
 *ObjStore::disable_class_auto_loading = \&disable_auto_class_loading; #silly me
 
 package ObjStore::Config::CacheSize;
@@ -487,12 +430,10 @@ use Carp;
 use vars qw(@ISA @EXPORT %CLASS_DOGTAG);
 BEGIN {
     @ISA = qw(Exporter);
-    @EXPORT = (qw(&_isa &_versionof &_is_evolved &iscorrupt &stash &GLOBS
+    @EXPORT = (qw(&_isa &_versionof &_is_evolved &stash &GLOBS
 		  %CLASS_DOGTAG &_get_certified_blessing &_engineer_blessing
 		  &_conjure_brahma
-		 ),
-	       # depreciated
-	       qw(&is_corrupted));
+		 ));
 }
 
 'ObjStore::Database'->
@@ -687,35 +628,6 @@ sub _engineer_blessing {
     $o->_blessto_slot($bs);
 }
 
-sub iscorrupt {
-    my ($o, $vlev) = @_;
-    warn "iscorrupt might be depreciated";
-    $vlev = 'all' if !defined $vlev;
-    if ($vlev !~ m/^\d+$/) {
-	if ($vlev eq 'quiet') { $vlev = 0; }
-	elsif ($vlev eq 'err') { $vlev = 1; }
-	elsif ($vlev eq 'warn') { $vlev = 2; }
-	elsif ($vlev eq 'info') { $vlev = 3; }
-	elsif ($vlev eq 'all') { $vlev = 4; }
-	else { croak("iscorrupt($vlev): unrecognized verbosity level"); }
-    }
-
-    my $err=0;
-    if ($o->can('_iscorrupt')) {
-	$err += $o->_iscorrupt($vlev);
-    } elsif ($o->can('_is_corrupted')) {
-	warn "Please rename ".ref($o)."::_is_corrupted to _iscorrupt" if $vlev >=2;
-	$err += $o->_is_corrupted($vlev);
-    } else {
-	warn "$o->iscorrupt: no _iscorrupt method found\n" if $vlev >= 2;
-    }
-    $err;
-}
-sub is_corrupted {
-    warn "Please use iscorrupt, it's shorter too";
-    iscorrupt(@_);
-}
-
 package ObjStore::Root;
 
 for (qw(destroy get_name get_value set_value)) {
@@ -740,15 +652,8 @@ for (qw(close get_host_name get_pathname get_relative_directory
     ObjStore::_mark_method($_)
 }
 
-#EXPERIMENTAL !!!!!!!!!!!!!!!!!!!!!!!
-@OPEN0=(\&backward_version);
+@OPEN0=();
 @OPEN1=();
-
-sub backward_version {
-    require ObjStore::REP;
-    ObjStore::REP::be_compatible();
-}
-#EXPERIMENTAL !!!!!!!!!!!!!!!!!!!!!!!
 
 sub database_of {
     use attrs 'method';
@@ -820,7 +725,7 @@ sub import_blessing {
 sub _blessto_slot {
     my ($db, $new) = @_;
     my $bs = $db->_private_root_data('database_blessed_to', $new);
-    return if $bs && !ref $bs; #depreciated 1.19
+    return if $bs && !ref $bs; #deprecated 1.19
     $bs;
 }
 
@@ -942,17 +847,6 @@ sub destroy_root {
     $root->destroy;
 }
 
-sub _iscorrupt {
-    my ($db, $v) = @_;
-    warn "$db->iscorrupt: checking...\n" if $v >= 3;
-    my $err=0;
-    for my $r ($db->get_all_roots()) {
-	my $z = $r->get_value;
-	$err += $z->iscorrupt($v);
-    }
-    $err;
-}
-
 sub _register_private_root_key {
     my ($class, $key, $mk) = @_;
     croak "$_ROOT_KEYS{$key}->{owner} has already reserved private root key '$key'"
@@ -998,11 +892,11 @@ sub _private_root_data {  #XS? XXX
 
 #------- ------- ------- -------
 sub get_INC {
-    carp "depreciated";
+    carp "deprecated";
     shift->_private_root_data('INC', sub { [] });
 }
 sub sync_INC {
-    carp "depreciated";
+    carp "deprecated";
     my ($db) = @_;
     my $inc = $db->_private_root_data('INC');
     return if !$inc;
@@ -1030,18 +924,7 @@ sub is_open_mvcc {
     $db->is_open eq 'mvcc';
 }
 
-sub of {
-    carp "ObjStore::Database::of() is depreciated: use the database_of method";
-    $_[0]->database_of()
-}
-sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
-sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
-
-sub get_n_databases {
-    carp "ObjStore::Database::get_n_databases depreciated; use ObjStore::get_n_databases";
-    ObjStore::get_n_databases();
-}
-$_ROOT_KEYS{Brahma} = { owner => 'ObjStore::Database' }; #depreciated 1.19
+$_ROOT_KEYS{Brahma} = { owner => 'ObjStore::Database' }; #deprecated 1.19
 
 package ObjStore::Segment;
 use Carp;
@@ -1072,13 +955,6 @@ sub destroy {
 }
 
 #------- ------- ------- ------- -------
-sub of {
-    carp "ObjStore::Segment::of() is depreciated: use the segment_of method";
-    $_[0]->segment_of()
-}
-sub newHV { carp 'depreciated'; new ObjStore::HV(@_); }
-sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
-
 package ObjStore::Notification;
 use Carp;
 
@@ -1157,7 +1033,7 @@ sub new_ref {
     }
     elsif ($safe eq 'safe') {
 	$type=0;
-	Carp::cluck "os_reference_protected is depreciated"
+	Carp::cluck "os_reference_protected is deprecated"
 	    if $noise_count-- >= 0;
     }
     elsif ($safe eq 'unsafe' or $safe eq 'hard') { $type=1; }
@@ -1177,8 +1053,7 @@ sub evolve {
 }
 
 #-------- -------- --------
-sub set_weak_refcnt_to_zero { croak "set_weak_refcnt_to_zero is unnecessary"; }
-sub set_readonly { carp "set_readonly depreciated"; shift->const }
+sub set_readonly { carp "set_readonly deprecated"; shift->const }
 
 package ObjStore::Ref;
 use vars qw($VERSION @ISA);
@@ -1287,17 +1162,6 @@ sub new { require ObjStore::REP; &ObjStore::REP::load_default }
 
 sub EXTEND {}  #todo? XXX
 
-sub _iscorrupt {
-    my ($o, $vlev) = @_;
-    warn "$o->iscorrupt: checking...\n" if $vlev >= 3;
-    my $err=0;
-    for (my $z=0; $z < $o->FETCHSIZE; $z++) {
-	my $e = $o->[$z];
-	$err += $e->iscorrupt($vlev) if ObjStore::blessed($e);
-    }
-    $err;
-}
-
 sub map {
     my ($o, $sub) = @_;
     my @r;
@@ -1305,9 +1169,9 @@ sub map {
     @r;
 }
 
-#-------------- -------------- -------------- -------------- DEPRECIATED
+#-------------- -------------- -------------- -------------- DEPRECATED
 sub _count { 
-    carp "_count should be done directly" if $] >= 5.00457;
+    carp "_count should be done scalar(\@directly)" if $] >= 5.00457;
     $_[0]->FETCHSIZE();
 }
 
@@ -1324,16 +1188,6 @@ sub TIEHASH {
     $object;
 }
 
-sub _iscorrupt {
-    my ($o, $vlev) = @_;
-    warn "$o->iscorrupt: checking...\n" if $vlev >= 3;
-    my $err=0;
-    while (my($k,$v) = each %$o) {
-	$err += $v->iscorrupt($vlev) if ObjStore::blessed($v);
-    }
-    $err;
-}
-
 sub map {
     my ($o, $sub) = @_;
     carp "Experimental API";
@@ -1345,19 +1199,6 @@ sub map {
 }
 
 #----------- ----------- ----------- ----------- ----------- -----------
-
-sub nextKey {
-    my ($o, $key) = @_;
-    carp "$o->nextKey($key): depreciated";
-    return $key if !exists $o->{$key};
-    my $x=2;
-    $x = $1 if $key =~ s/\b\s\( (\d+) \)$//x;
-    while (1) {
-	my $try = "$key ($x)";
-	return $try if !exists $o->{$try};
-	++$x;
-    }
-}
 
 # HashIndex will be a separate class; need a better name! XXX
 package ObjStore::Index;
@@ -1383,21 +1224,6 @@ sub index_path {
 }
 
 #----------- ----------- ----------- ----------- ----------- -----------
-
-# only for indices keyed by a single string
-sub nextKey {
-    my ($o,$key) = @_;
-    carp "$o->nextKey($key): depreciated";
-    my $c = $o->new_cursor();
-    return $key if !$c->seek($key);
-    my $x=2;
-    $x = $1 if $key =~ s/\b\s\( (\d+) \)$//x;
-    while (1) {
-	my $try = "$key ($x)";
-	return $try if !$c->seek($try);
-	++$x;
-    }
-}
 
 package ObjStore::Database::HV;
 sub new { die "ObjStore::Database::HV has been renamed to ObjStore::HV::Database" }

@@ -10,6 +10,8 @@ following in the body of your message:
 
 + IDEAS +
 
+figure out how to keep PPCODE from trashing the stack!
+
 $hash->{seg} = $db->create_segment('foo'); #blows up (get_number missing!)
 
 sort tests into appropriate directories

@@ -33,9 +33,13 @@ sub touch {
     my ($class, $time) = @_;
     $time ||= time;
     my $s = $SELF->focus;
-    $$s{mtime} = $time;
+    if ($s) {
+	$$s{mtime} = $time;
+    }
     $s;
 }
+
+sub last_update { time - shift->{mtime} }
 
 1;
 

@@ -56,6 +56,15 @@ osp_thr *osp_thr::fetch()
   return ret;
 }
 
+int osp_thr::DEBUG_schema()
+{
+  osp_thr *ret = fetch();
+  if (ret->debug & 0x20000) return 1;
+  SV *sv = perl_get_sv("ObjStore::REGRESS", 1);
+  if (sv_true(sv)) return 1;
+  return 0;
+}
+
 SV *osp_thr::stargate=0;
 HV *osp_thr::CLASSLOAD;
 HV *osp_thr::BridgeStash;

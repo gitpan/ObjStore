@@ -2,9 +2,11 @@ use strict;
 package ObjStore::REP;
 use Carp;
 use ObjStore;
+use vars qw(%Default);
 
 sub be_compatible {
-    # I'm not sure how to make this more conditional? XXX
+    # These are needed for databases created before DLL schemas
+    # were available.
     require ObjStore::REP::Splash;
     require ObjStore::REP::FatTree;
     require ObjStore::REP::ODI;
@@ -15,24 +17,47 @@ sub load_default {
     my $sub;
     if ($ty eq 'ObjStore::AV') {
 	require ObjStore::REP::Splash;
-	require ObjStore::REP::FatTree;
+	install(AV1 => \&ObjStore::REP::Splash::AV::new);
 	$sub = \&AV;
     } elsif ($ty eq 'ObjStore::HV') {
 	require ObjStore::REP::Splash;
 	require ObjStore::REP::ODI;
+	install(HV1 => \&ObjStore::REP::Splash::HV::new,
+		HV2 => \&ObjStore::REP::ODI::HV::new);
 	$sub = \&HV;
     } elsif ($ty eq 'ObjStore::Index') {
-	require ObjStore::REP::FatTree;
+	# representations are self-serve
 	$sub = \&Index;
     } else {
-	croak "load_default($ty)?";
+	croak "load_default $ty?";
     }
+    $Default{$ty} = 1;  #??
     {
 	no strict 'refs';
 	local $^W = 0;
-	*{"$ty\::new"} = $sub;
+	*{$ty.'::new'} = $sub;
     }
     goto &$sub;
+}
+
+use vars qw($AV1 $AV2 $HV1 $HV2 $XV1 $XV2);
+sub install {
+    while (@_) {
+	my ($k,$v) = splice @_, 0, 2;
+	if    ($k eq 'AV1') { $AV1 = $v }
+	elsif ($k eq 'AV2') { $AV2 = $v }
+	elsif ($k eq 'HV1') { $HV1 = $v }
+	elsif ($k eq 'HV2') { $HV2 = $v }
+	elsif ($k eq 'XV1') { $XV1 = $v }
+	elsif ($k eq 'XV2') { $XV2 = $v }
+	else { Carp::cluck "unknown '$k'" }
+    }
+    $AV1 ||= $AV2;
+    $AV2 ||= $AV1;
+    $HV1 ||= $HV2;
+    $HV2 ||= $HV1;
+    $XV1 ||= $XV2;
+    $XV2 ||= $XV1;
 }
 
 sub AV {
@@ -46,11 +71,7 @@ sub AV {
     } else {
 	$sz = $how || 7;
     }
-    if ($sz < 45) {
-	$av = ObjStore::REP::Splash::AV::new($class, $loc, $sz);
-    } else {
-	$av = ObjStore::REP::FatTree::AV::new($class, $loc, $sz);
-    }
+    $av = ($sz < 45? $AV1 : $AV2)->($class, $loc, $sz);
     if ($init) {
 	for (my $x=0; $x < @$init; $x++) { $av->STORE($x, $init->[$x]); }
     }
@@ -68,38 +89,28 @@ sub HV {
     } else {
 	$sz = $how || 7;
     }
-    if ($sz < 25) {
-	$hv = ObjStore::REP::Splash::HV::new($class, $loc, $sz);
-    } else {
-	$hv = ObjStore::REP::ODI::HV::new($class, $loc, $sz);
-    }
+    $hv = ($sz < 25? $HV1 : $HV2)->($class, $loc, $sz);
     if ($init) {
 	while (my($hk,$v) = each %$init) { $hv->STORE($hk, $v); }
     }
     $hv;
 }
 
+my $noise = 3;
 sub Index {
-    my ($this, $loc, @CONF) = @_;
+    my ($this, $loc, @C) = @_;
     $loc = $loc->segment_of if ref $loc;
     my $class = ref($this) || $this;
-    # How should this work by default?
-    my $x;
-    if (@CONF) {
-	if (ref $CONF[0]) { #new
-	    my $c = $CONF[0];
-	    my $sz = $c->{size} || 100;
-
-	    $x = ObjStore::REP::FatTree::Index::new($class, $loc);
-	    $x->configure($c);
-	} else {
-	    # depreciated? XXX
-	    $x = ObjStore::REP::FatTree::Index::new($class, $loc);
-	    $x->configure(@CONF);
-	}
-    } else {
-	$x = ObjStore::REP::FatTree::Index::new($class, $loc);
+    if (@C and ref $C[0]) {
+	carp "please pass configuration without hashref"
+	    if $noise-- >= 0;
+	@C = %{ $C[0] };
     }
+    my %c = @C;
+    my $sz = $c{size} ||= 100;
+    my $x = ($sz < 7000? $XV1 : $XV2)->($class, $loc);
+    my @args = %c; #shouldn't need to unroll here XXX
+    $x->configure(@args);
     $x;
 }
 
@@ -107,11 +118,11 @@ sub Index {
 
 =head1 NAME
 
-    ObjStore::REP - Setup Default Data Representations
+    ObjStore::REP - Default Representations Constructors
 
 =head1 SYNOPSIS
 
-    *ObjStore::AV::new = sub { ... };
+    ObjStore::REP::install(type => \&constructor);
 
 =head1 DESCRIPTION
 

@@ -4,7 +4,7 @@ use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
 use vars qw($VERSION @DB $DAEMON $Loop $LoopMeth %Debug $Shutdown $AutoReloader);
-$VERSION = '1.02';
+$VERSION = '1.03';
 $DAEMON = 1;
 $LoopMeth = 'defaultLoop';
 my $default_server = 'ObjStore::ServerDB';
@@ -17,6 +17,14 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
     } elsif ($o =~ m/^ -F (ore(ground)?)? $/x) {
 	$DAEMON = 0;
 	warn "please use the '-dF' option instead\n";
+    } elsif ($o =~ m/^-C(\w+)$/) {
+	my $c = $1;
+	if ($c eq 'schema') {
+	    require ObjStore::REP;
+	    ObjStore::REP::be_compatible();
+	} else {
+	    warn "unrecognized compatibility option '$c' (ignored)\n";
+	}
     } elsif ($o =~ m/^-d(\w+)$/) {
 	# this style is preferred
 	for my $d (split / */, $1) {
@@ -105,15 +113,26 @@ for (@DB) {
 $ObjStore::CLIENT_NAME = 
     "osperl[".join(',',map { $_->[0] =~ m,/([^/]+)$, ? $1:$_->[0] } @DB)."]";
 
+sub do_load_module {
+    no strict 'refs';
+    my $class = shift;
+    unless (defined %{"$class\::"}) {
+	my $file = $class;
+	$file =~ s,::,/,g;
+	require "$file.pm";
+    }
+}
+
 ObjStore::initialize();
 require ObjStore::ServerInfo;
 for (@DB) {
     no strict 'refs';
     my $class = $_->[1];
-    unless (defined %{"$class\::"}) {
-	my $file = $class;
-	$file =~ s,::,/,g;
-	require "$file.pm";
+    do_load_module($class);
+
+    my @boot = split /,/, $_->[2];
+    for my $m (@boot) {
+	do_load_module($m);
     }
 
     my $DB = $class->new($_->[0], 'update');
@@ -131,7 +150,6 @@ for (@DB) {
 	my $top = $DB->hash;
 	bless $top, $class.'::Top' if
 	    $class ne $default_server || blessed $top eq 'ObjStore::HV';
-	my @boot = split /,/, $_->[2];
 	$top->boot(@boot);
 	$top->restart() if $top->can('restart'); #dubious
 	
@@ -171,24 +189,27 @@ for (@DB) {
 if ($AutoReloader) {
     require Module::Reload;
     $Module::Reload::Debug = $Module::Reload::Debug = 1;
-    Event->timer(desc => 'osperlserver reload',
-		 interval => 1, callback => sub { Module::Reload->check });
+    Event->timer(e_desc => 'osperlserver reload',
+		 e_interval => 1, e_cb => sub { Module::Reload->check });
 }
 if ($Shutdown) {
     require Date::Manip;
     Date::Manip->import();
     my $at = ParseDate($Shutdown);
-    warn "osperlserver: do not understand -shutdown '$Shutdown' (ignored)\n"
-	if !$at;
-    # assumes that Event is in control... XXX
-    Event->timer(desc => "osperlserver shutdown",
-		 interval => 60, callback => sub {
-		     my $d = DateCalc('now',$at);
-		     if ($d !~ m/^\+/) {
-			 warn "shutdown at ".UnixDate($at,"%u")."\n";
-			 kill 'TERM', $$;
-		     }
-		 });
+    if (!$at) {
+	warn "osperlserver: do not understand -shutdown '$Shutdown' (ignored)\n"
+    } else {
+	# assumes that Event is in control... XXX
+	# be smarter about computing the number of seconds left XXX
+	Event->timer(e_desc => "osperlserver shutdown",
+		     e_interval => 60, e_cb => sub {
+			 my $d = DateCalc('now',$at);
+			 if ($d !~ m/^\+/) {
+			     warn "shutdown at ".UnixDate($at,"%u")."\n";
+			     kill 'TERM', $$;
+			 }
+		     });
+    }
 }
 
 my $why;
@@ -211,14 +232,15 @@ $why = $@ if $@;
 sub usage {
     print "
 Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
-  -d\\w+
+  -C\\w+            compatibility options
+    schema          preload DLL schemas which are now optional
+  -d\\w+            debugging options
      b              enable boot diagnostics
      n              print notifications to STDERR
      F              do not fork
   -Idirectory       specify \@INC directory (may be used more than once)
   -loop <method>    use a different event loop method [defaultLoop]
   -[mM]module..     executes `use/no module...' (just like perl)
-  -(no)reload       run Module::Reload every second (requires Event)
   -shutdown <when>  exit at <when> (requires Event & Date::Manip)
   -v                print version number (and exit)
 

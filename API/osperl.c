@@ -1,5 +1,4 @@
 // Switch to -*-c++-*- mode please!
-// Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
 
 #define OSPERL_PRIVATE
 #include "osp-preamble.h"
@@ -1002,13 +1001,13 @@ void OSSVPV::bless(SV *stashname)
   DEBUG_bless(warn("0x%x->bless('%s')", this, SvPV(stashname, PL_na)));
   SV *me = osp_thr::ospv_2sv(this, 1);
   dSP;
-  // We must avoid the user-level bless if possible since the our
-  // bless glue creates persistent objects.
+  // We must avoid the user-level bless since otherwise the bless glue
+  // will enter deep recursion (it creates persistent objects too).
   STRLEN cur1, cur2;
   char *pv1 = SvPV(stashname, cur1);
   char *pv2 = os_class(&cur2);
   if (cur1 == cur2 && memcmp((void*)pv1, (void*)pv2, cur1) == 0) {
-    // Can avoid storing the bless-to for 'unblessed' objects.
+    // Can avoid storing the bless-to for an object in its default package.
     XPUSHs(me);
     PUTBACK;
     return;
@@ -1192,7 +1191,7 @@ char *OSSVPV::os_class(STRLEN *len)  { RETURN_BADNAME(len); }
 char *OSSVPV::rep_class(STRLEN *len) { RETURN_BADNAME(len); }
 void OSSVPV::make_constant() { NOTFOUND("make_constant"); }
 
-void OSSVPV::fwd2rep(char *methname, SV **top, int items)
+void OSSVPV::fwd2rep(char *methname, int ax, int items)
 {
   SV *meth=0;
   STRLEN len;
@@ -1200,11 +1199,9 @@ void OSSVPV::fwd2rep(char *methname, SV **top, int items)
   HV *pkg = gv_stashpvn(rep, len, 0);
   if (pkg) meth = (SV*) gv_fetchmethod(pkg, methname);
   if (!meth) NOTFOUND(methname);
-  dSP;
-  //  assert(SP == top); XXX
-  PUSHMARK(SP);
-  SP += items;
-  PUTBACK;
+
+  PUSHMARK(PL_stack_base + ax - 1);
+  PL_stack_sp = PL_stack_base + ax - 1 + items;
   perl_call_sv(meth, GIMME_V);
 }
 
@@ -1346,15 +1343,15 @@ int OSPV_Generic::EXISTS(SV *) { NOTFOUND("EXISTS"); return 0; }
 // ARRAY
 void OSPV_Generic::POP() { NOTFOUND("POP"); }
 void OSPV_Generic::SHIFT() { NOTFOUND("SHIFT"); }
-void OSPV_Generic::PUSH(SV **,int) { NOTFOUND("PUSH"); }
-void OSPV_Generic::UNSHIFT(SV **,int) { NOTFOUND("UNSHIFT"); }
+void OSPV_Generic::PUSH(int ax, int items) { NOTFOUND("PUSH"); }
+void OSPV_Generic::UNSHIFT(int ax, int items) { NOTFOUND("UNSHIFT"); }
 void OSPV_Generic::SPLICE(int, int, SV **, int) { NOTFOUND("SPLICE"); }
 
 // INDEX
 int OSPV_Generic::add(OSSVPV*) { NOTFOUND("add"); return 0; }
 int OSPV_Generic::remove(OSSVPV*) { NOTFOUND("remove"); return 0; }
-void OSPV_Generic::configure(SV **top, int items)
-{ fwd2rep("configure", top, items); }
+void OSPV_Generic::configure(int ax, int items)
+{ fwd2rep("configure", ax, items); }
 
 // REFERENCES
 OSPV_Ref2::OSPV_Ref2() {}
@@ -1544,18 +1541,20 @@ OSSV *osp_pathexam::mod_ossv(OSSV *sv)
   return sv;
 }
 
-void osp_pathexam::load_args(SV **top, int items)
+// This API is a bit strange because we need to read off
+// the perl stack (which can be relocated).  See XSUB.h.
+void osp_pathexam::load_args(int ax, int items)
 {
-  SV *copy[OSP_PATHEXAM_MAXKEYS];
-  int xa;
-  if (items >= OSP_PATHEXAM_MAXKEYS) items = OSP_PATHEXAM_MAXKEYS-1;
-  for (xa=0; xa < items; xa++) {
-    copy[xa] = sv_mortalcopy(top[xa]);
+  int args = items - 1;
+  if (args > OSP_PATHEXAM_MAXKEYS) {
+    warn("Too many keys (%d) in load_args -- truncated to %d keys",
+	 args, OSP_PATHEXAM_MAXKEYS);
+    args = OSP_PATHEXAM_MAXKEYS;
   }
   keycnt = 0;
   conflict = 0;
-  for (xa=0; xa < items; xa++) {
-    tmpkeys[xa] = copy[xa];  //may cause SP to change
+  for (int xa=0; xa < args; xa++) {
+    tmpkeys[xa] = ST(1+xa);
     keys[xa] = &tmpkeys[xa];
     ++keycnt;
   }

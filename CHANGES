@@ -1,3 +1,23 @@
+** 11-05-98 RELEASE 1.50
+
+- Fixed order of PUTBACK/POPSTACK.
+
+
+** 11-04-98 RELEASE 1.49
+
+- Stargate reengineering for ObjStore::Lib::PDL.
+
+- MIN_PERL_DEFINE clean up for 5.005_53.
+
+- Various API improvements.  Safer safe_rv().  osp_pathexam fixes.
+
+- Safer typemap code.  Added debugging mode for dynacasts. Resolved
+serious name conflict by renaming ObjStore::Server to
+ObjStore::ServerInfo (Gack!!).
+
+- Various tweaks & fixes.
+
+
 ** 10-13-98 RELEASE 1.48
 
 - The transient memory leak is finally fixed!!  A patch for 5.005_02

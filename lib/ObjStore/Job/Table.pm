@@ -141,3 +141,8 @@ sub find_jobs {
 }
 
 1;
+__END__
+
+TODO:
+
+time each slice for per job slice stats

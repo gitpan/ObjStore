@@ -2,7 +2,7 @@ use strict;
 package ObjStore::Serve::Notify;
 use Event 0.28;
 use ObjStore;
-use ObjStore::Serve;
+use ObjStore::Serve qw(dyn_begin);
 use vars qw($OVERFLOW);
 
 my $notifyEv;
@@ -26,11 +26,12 @@ sub dispatch_notifications {
     my ($sz, $pend, $over) = ObjStore::Notification->queue_status();
     #       $MAXPENDING = $pend if $pend > $MAXPENDING;
     if ($over != $OVERFLOW) {
-	warn "lost ".($over-$OVERFLOW)." messages";
+	warn "lost ".($over-$OVERFLOW)." notifications";
 	$OVERFLOW = $over;
     }
 
     my $max = 10;  # XXX?
+    dyn_begin();
     begin 'update', sub { # need transaction? XXX
 	while (my $note = ObjStore::Notification->receive(0) and $max--) {
 	    my $why = $note->why();

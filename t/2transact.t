@@ -1,6 +1,6 @@
 # test all transaction types for -*-perl-*-
 use Test;
-BEGIN { plan tests => 19 }
+BEGIN { plan tests => 18 }
 
 use strict;
 use ObjStore ':ALL';
@@ -37,7 +37,6 @@ die if $@;
 begin 'update', sub {
     ok($db->is_writable);
     ok(txn->get_type, 'update');
-    ok(! txn->is_prepare_to_commit_invoked);
 
     my $john = $db->root('John');
     $john->{right} = 69;

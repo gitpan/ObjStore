@@ -3,20 +3,24 @@
 use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
-use vars qw($VERSION @DB $DAEMON $Loop $LoopMeth %Debug $Shutdown $AutoReloader);
-$VERSION = '1.03';
+use vars qw($VERSION @DB $DAEMON $Loop $LoopMeth %Debug
+	    $Top $Subscribe $Shutdown $AutoReloader);
+$VERSION = '1.04';
 $DAEMON = 1;
 $LoopMeth = 'defaultLoop';
 my $default_server = 'ObjStore::ServerDB';
 
+# checkpoint interval should be a command line option? XXX
+# avoid the need for Date::Manip XXX
+
 for (my $arg=0; $arg < @ARGV; $arg++) {
     my $o = $ARGV[$arg];
     if ($o =~ m/^ -d(ebug)? $/x) {
-	warn "debug will no flags\n";
+	warn "-debug with no flags is deprecated\n";
 	&usage;
     } elsif ($o =~ m/^ -F (ore(ground)?)? $/x) {
 	$DAEMON = 0;
-	warn "please use the '-dF' option instead\n";
+	warn "please use '-dF' instead\n";
     } elsif ($o =~ m/^-C(\w+)$/) {
 	my $c = $1;
 	if ($c eq 'schema') {
@@ -26,7 +30,6 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	    warn "unrecognized compatibility option '$c' (ignored)\n";
 	}
     } elsif ($o =~ m/^-d(\w+)$/) {
-	# this style is preferred
 	for my $d (split / */, $1) {
 	    if ($d eq 'F') {
 		$DAEMON = 0;
@@ -62,10 +65,15 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	    die "osperlserver: can't find myself" if !$FindBin::Bin;
 	    unshift(@INC, "$FindBin::Bin/$dir");
 	}
-    } elsif ($o =~ m/^-shutdown/) {
+    } elsif ($o =~ m/^-top$/) {
+	$Top=1;
+    } elsif ($o =~ m/^-subscribe_all$/) {
+	$Subscribe=1;
+    } elsif ($o =~ m/^-shutdown$/) {
 	$Shutdown = $ARGV[++$arg];
     } elsif ($o =~ m/^-((no)?)reload/) {
 	$AutoReloader = $1 eq 'no'? 0 : 1;
+	warn "[Module::Reload is experimental]\n" if $AutoReloader;
     } elsif ($o !~ m/^-/) {
 #	warn "osperlserver: database.db is boring" if $o =~ m/\.db$/;
 	push @DB, $o;
@@ -89,20 +97,20 @@ if ($DAEMON) {
     defined(my $pid = fork) or die "Can't fork: $!";
     exit if $pid;
     &POSIX::setsid()        or die "Can't start a new session: $!";
+    $SIG{HUP} = 'IGNORE';
 }
-$SIG{HUP} = $DAEMON ? 'IGNORE' : sub { warn "SIGHUP" };
 
 for (@DB) {
     # Not foolproof... Hm.
     if (m/^(.*) \= (.*) \+ (.*)$/x) {
-	# depreciated?
+	# deprecated?
 	$_ = [$1,$2,$3];
 
     } elsif (m/^(.*) \+\= (.*)$/x) {
 	$_ = [$1,$default_server,$2];
 
     } elsif (m/^(.*) \= (.*)$/x) {
-	# depreciated?
+	# deprecated?
 	$_ = [$1,$2,''];
 
     } else {
@@ -136,7 +144,8 @@ for (@DB) {
     }
 
     my $DB = $class->new($_->[0], 'update');
-    $DB->subscribe();
+    $DB->subscribe()
+	if $Subscribe;
     bless $DB, $class if
 	$class ne $default_server || blessed $DB eq 'ObjStore::Database';
 
@@ -184,8 +193,14 @@ for (@DB) {
     die if $@;
 }
 
-# checkpoint timer should be a command line option?
-
+if ($Top) {
+    eval { require NetServer::ProcessTop };
+    if ($@) { die "osperlserver: -top failed: $@" }
+    else {
+	eval { $Top = NetServer::ProcessTop->new(); };
+	warn if $@;
+    }
+}
 if ($AutoReloader) {
     require Module::Reload;
     $Module::Reload::Debug = $Module::Reload::Debug = 1;
@@ -199,15 +214,17 @@ if ($Shutdown) {
     if (!$at) {
 	warn "osperlserver: do not understand -shutdown '$Shutdown' (ignored)\n"
     } else {
-	# assumes that Event is in control... XXX
-	# be smarter about computing the number of seconds left XXX
+	my $d = DateCalc('now',$at);
+	die "osperlserver: -shutdown $at is in the past [DIED]\n"
+	    if $d !~ m/^\+/;
+	my @d = reverse split /[:]/, $d;
+	my $when = $d[0] + $d[1]*60 + $d[2]*3600 + $d[3]*24*3600;
+	die "osperlserver: -shutdown too far in the future [DIED]\n"
+	    if ($d[4] or $d[5]);
 	Event->timer(e_desc => "osperlserver shutdown",
-		     e_interval => 60, e_cb => sub {
-			 my $d = DateCalc('now',$at);
-			 if ($d !~ m/^\+/) {
-			     warn "shutdown at ".UnixDate($at,"%u")."\n";
-			     kill 'TERM', $$;
-			 }
+		     e_after => $when, e_cb => sub {
+			 warn "Shutdown at ".UnixDate($at,"%u")."\n";
+			 kill 'TERM', $$
 		     });
     }
 }
@@ -227,21 +244,23 @@ eval {
 	die "fatal: $Loop can't Loop or '$LoopMeth'";
     }
 };
-$why = $@ if $@;
+$why = $@ if $@; # see END{} above
 
 sub usage {
     print "
 Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
   -C\\w+            compatibility options
-    schema          preload DLL schemas which are now optional
+    schema          preload DLL schemas (now optional)
   -d\\w+            debugging options
      b              enable boot diagnostics
      n              print notifications to STDERR
      F              do not fork
   -Idirectory       specify \@INC directory (may be used more than once)
-  -loop <method>    use a different event loop method [defaultLoop]
+  -loop <method>    use a different event loop method             [defaultLoop]
   -[mM]module..     executes `use/no module...' (just like perl)
-  -shutdown <when>  exit at <when> (requires Event & Date::Manip)
+  -shutdown <when>  exit at <when> (requires Date::Manip)
+  -subscribe_all    subscribe to notifications for all databases
+  -top              activate NetServer::ProcessTop
   -v                print version number (and exit)
 
     server:/full/path/to/database

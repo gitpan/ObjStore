@@ -547,18 +547,6 @@ osp_txn::get_type()
 	}
 	croak("os_transaction::get_type(): unknown transaction type");
 
-void
-osp_txn::prepare_to_commit()
-	CODE:
-	warn("prepare_to_commit() is experimental");
-	THIS->prepare_to_commit();
-
-bool
-osp_txn::is_prepare_to_commit_invoked()
-
-bool
-osp_txn::is_prepare_to_commit_completed()
-
 MODULE = ObjStore	PACKAGE = ObjStore
 
 void

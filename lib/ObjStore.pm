@@ -9,7 +9,7 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                         # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.52';
+$VERSION = '1.53';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -1167,12 +1167,6 @@ sub map {
     my @r;
     for (my $x=0; $x < $o->FETCHSIZE; $x++) { push(@r, $sub->($o->[$x])); }
     @r;
-}
-
-#-------------- -------------- -------------- -------------- DEPRECATED
-sub _count { 
-    carp "_count should be done scalar(\@directly)" if $] >= 5.00457;
-    $_[0]->FETCHSIZE();
 }
 
 package ObjStore::HV;

@@ -177,6 +177,9 @@ patterns.
 
 =head2 Representation Limitations
 
+Most of these limitations are planned to be removed with the release
+of C<ObjectStore> 6.0.
+
 =over 4
 
 =item *
@@ -302,7 +305,7 @@ per received notification.
 
 =item * CROSS DATABASE POINTERS
 
-This feature is highly depreciated and will likely be discontinued,
+This feature is highly deprecated and will likely be discontinued,
 but at the moment you can allow cross database B<pointers> with:
 
   $db->_allow_external_pointers;    #never do this!
@@ -324,13 +327,6 @@ deleted objects or removed databases.  (Imagine the freedom. :-)
 Indexed records temporarily cannot be evolved due to const-ness.  For
 now, it is recommended that records be removed, changed, and re-added
 to the table when changing indexed fields.
-
-=item * C<os_protected_reference>
-
-Allocates persistent memory that cannot be reclaimed without
-destroying the segment.  This makes it non-trival to determine whether
-a segment is empty or not.  The needed change is listed as ODI feature
-request C<#SE055496_O#>.
 
 =item * WIN32
 
@@ -359,60 +355,68 @@ This section is not a legal contract.  This section is not a legal
 statement in any way, shape, or form.
 
 
-While there have been gains in software quality in the form of GNU,
-Perl, Apache, Linux, Qt, and recently the Netscape browser
-(potentially), we have been in the dark ages with respect to database
-technology.  After avoiding relational databases for years, I sensed a
-combination of ObjectStore and Perl could offer the same level of
-quality and simplicity that I find invaluable in addressing the
-hurdles I face as a software professional.
+While there have been huge gains in software quality in the form of
+GNU, Perl, Apache, Linux, Qt, and Mozilla (potentially), the world has
+been slogging along in the dark ages (the 1960s in fact) with respect
+to database technology.  After avoiding relational databases for years,
+I sensed a combination of ObjectStore and Perl could offer the same
+level of quality and simplicity that I find invaluable in addressing
+the hurdles I face as a software professional.
 
-It might seem obvious in hindsight (doesn't it always?!), but it is my
-conviction that it was something in particular (not just luck!) that
-encouraged me to imagine and implement this cutting-edge technology
-years before it would be recognized and adopted.  Therefore, I would
-like to say B<"thank you!"> to all the wonderful teachers with whom
-I've had the opportunity of studying.  My ideas are truly theirs.
-While I predict that this software will be considered a world-class
-inter-disciplinary achievement (!), I do not see it as such.  Rather,
-it was a simple mechanical exercise that I used to gain a basic level
-of clear understanding with the happy side effect of being useful in a
-business context.  My subsequent hope is that people who use this
-software will also be able to learn from its clarity.  But what are my
-real aspirations?
+Combining ObjectStore & Perl might seem obvious in hindsight (doesn't
+it always?!) but it is my conscious conviction that it was something
+more than luck and hard work that gave me the necessary insight to
+imagine and implement this technology years before it would be
+recognized and adopted.  While I predict that this software will be
+considered a great achievement (along with many other significant
+contributions), I did (and do) not see it as such.  Rather, it was a
+simple mechanical exercise that helped me gain a basic level of clear
+understanding (with the happy side effect of being useful in a
+business context).
 
-I should keep quiet about that but I can say this much: one of my
-friends had an email signature that read, "Life would be so much
-easier if we could just look at the source code."  ("Computational
-metaphysics" :-) If you share this interest then I can tell you with
-some certainty that the answers are not found exclusively in the
-software world.  However, interesting parallels can be drawn and are
-not unhelpful.
-
-If you will suspend judgement for a moment, I would like to invite you
-imagine a hypothetical situation: What if you found someone who was
+If you will suspend disbelief for a moment, I would like to invite you
+imagine a hypothetical situation.  What if you found someone who was
 absolutely convincing in their knowledge of the absolute?  What if you
 had an opportunity to spend time with them?  What would you do?
 
-Designing software requires a basic subtlety of awareness: to be
-successful, you must be able to fluctuate fluidly between the place of
+Designing software requires a basic subtlety of awareness.  To be
+successful you must be able to fluctuate fluidly between the place of
 reason and the place of silent knowledge.  The place of concern is the
 forerunner to the place of reason.  Similarly, the place of unbending
 intent is the forerunner to the place of silent knowledge.  Yet, this
-technique is just a technique.  There is a big difference between
-mastering the technique with respect to software and knowing its
-possibilities and potential in the general case.
+technique is not limited exclusively to software design.  And there is
+a big difference between mastering software design and knowing the
+hidden potential of your own true self.  Let me emphasize the word
+B<big>.
 
-One of the main reasons I bothered to kill myself developing this
-software (and foolishly giving it away for free!) is that I want
-people to know that perfection is actually a possibility.  It's
-actually possible for you to be the experiencer of perfection,
-continuously and/or predictably.  It seems like most people I meet are
-only certain that they can experience the lack of perfection or at
-best that they can experience perfection once in a while with a great
-deal of preparation and set up.  Maybe you don't care?  Maybe you
-don't believe it's possible?  That's okay!  You are welcome to use
-this software anyway (it will work wonders :-).  Enlightenment is
-impersonal.
+Not that there is anything wrong with software design.  Computers have
+an evolutionary function: they (can) help people to understand the
+difference between the mechanical and the non-mechanical aspects of
+themselves.  Computers are I<entirely> mechanical.  Don't believe the
+anthropomorphisms.  Computers cannot create anything without our help;
+they only do as they are instructed.  Probably this is easy to see.
+However, many people seem to have difficulty seeing what should be
+equally obvious: the pure, non-mechanical creative principle.  Ask
+yourself these questions: Who is the software designer?  Who imagines?
+Who moves the fingers to type?  To try to know yourself consciously is
+the most worthy and worthwhile goal.  Therefore, evolution is served
+by making available software that is very similar to part of our own
+mechanical thinking processes.  By understanding this special type of
+software, consciousness is aided in understanding how the brain works.
+(I am not referring exclusively to the field of artificial
+intelligence.  The brain is a data processor in the broadest sense and
+the algorithms of artificial intelligence are only a part of that.)
+
+So I have clear intention as to why I am developing this software and
+why I am (foolishly!) giving it away for free.  By contributing to the
+evolution of others' understanding, I contribute to my own evolution.
+The better one understands, the less experience is wasted in states of
+confusion.  As you learn how this database works, you will assimilate
+the perspectives that I have consciously distilled.  Self knowledge
+can be actualized when enough perspectives are gathered and special
+subjective techniques are used to reach the fixed point.  My real
+interest is the subjective fact of your existance.  When you have time
+to pursue it, look me up!  Until then, you are welcome to use this
+software anyway (it will work wonders :-).
 
 =cut

@@ -5,8 +5,8 @@ ObjStore - Perl Extension For C<ObjectStore> OODBMS
 =head1 SYNOPSIS
 
 Like perl?  Sick of SQL?  Ready to try something new?  This extension
-implements databases that look exactly like normal perl.  The same can
-also be extended with arbitrary C++ objects (!).
+implements something like a relational database management system,
+except that s/SQL/Perl/ig.
 
 
 =head1 PREREQUISITES
@@ -58,6 +58,18 @@ query is unique among database architectures.
 =head1 R!CENT CHANGES
 
 
+** 02-11-99 RELEASE 1.53 [STABLE]
+
+- osperlserver no longer subscribes to notifications by default.  Use
+the -subscribe_all command-line option for the old behavior.
+
+- ObjStore::Serve no longer initiates dynamic transactions
+automatically.  You must invoke begin_dyn() (in the ObjStore::Serve
+package) to be sure a transaction is open.
+
+- Various documentation updates.
+
+
 ** 01-12-99 RELEASE 1.52
 
 - Split FatTree representation into a separate tarball.
@@ -65,32 +77,16 @@ query is unique among database architectures.
 - Added ObjStore::REP::Splash::ObjAV, an array that stores only
 pointers to composites.
 
-- Fixed growth heuristics for Splash representations.
+- Fixed sub-optimal growth heuristics of Splash representations.
 
-- More correct integration between C code & perl for APIs with a
-variable number of arguments.
+- More correct integration between C & perl for APIs with a variable
+number of arguments.
 
-- Partially factored tests into ObjStore::Test.
+- Factored some tests into ObjStore::Test.
 
 - Updates for Event 0.29.
 
-- Delete some already deprecated code.
-
-
-** 11-23-98 RELEASE 1.51
-
-- Added more assertions to the API.  A new (transient) memory leak
-debugging mode is available.  See ObjStore::MakeMaker.
-
-- os_smart_object tweaks for ObjStore-Lib-PDL.
-
-- Fixed a bug that caused the save-stack to become corrupted during
-exceptions.  Yikes!
-
-- Fixed transient memory leak trigger when an SV holding a persistent
-object has non-transaction scope.
-
-- Minor fixes to qtposh.
+- Remove deprecated code.
 
 
 see ./INSTALL for hints on installation

@@ -6,16 +6,15 @@ use Exporter ();
 use Event 0.28 qw(loop unloop_all);
 use ObjStore;
 use base 'ObjStore::HV';
-use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $SERVE %METERS $Init $TXOpen $VERSION);
-$VERSION = '0.04';
+use vars qw($VERSION @ISA @EXPORT_OK $SERVE $Init $TXOpen);
+$VERSION = '0.05';
 push @ISA, 'Exporter', 'osperlserver';
-@EXPORT_OK = qw(&txqueue &txretry &seconds_delta
-		&init_signals &meter &exitloop );
+@EXPORT_OK = qw(&txqueue &txretry &seconds_delta &dyn_begin
+		&init_signals &meter &exitloop $ChkptEv);
 
 my $meter_warn=0;
 sub meter {
     carp "meter is deprecated" if ++$meter_warn > 5;
-#    ++ $METERS{ $_[$#_] };
 }
 use vars qw(@TXready @TXtodo);
 sub txretry {
@@ -169,13 +168,9 @@ sub before_checkpoint {
 	    for (@Commit) { $_->($o, $now) }
 
 	    my $r = $o->{history}[0];
-#	    my $recent = $$r{recent};
-#	    push @$recent, \%METERS;
-#	    shift @$recent if @$recent > 10;
 
 	    do {
 		local $^W=0; #lexical warnings XXX
-#		while (my($k,$v) = each %METERS) { $tot->{$k} += $v; }
 		my $tot = $$r{total};
 		if ($Aborts) { $tot->{aborts} += $Aborts; $Aborts = 0; }
 		if ($Commits) { $tot->{commits} += $Commits; $Commits = 0; }
@@ -183,7 +178,6 @@ sub before_checkpoint {
 	    $$r{mtime} = $now;
 	    
 	    $LoopTime = $$o{looptm} ||= $LoopTime;
-#	    %METERS = ();
 	    $t->post_transaction(); #1
 	};
 	if ($@) { $t->abort; warn; }
@@ -218,17 +212,27 @@ sub dotodo {
 	    if ($$j{retry}) { push @TXtodo, $j if !$c->(); }
 	    else { $c->(); }
 	};
-	if ($@) { $TXN->abort; warn }  # is this correct? XXX
+	if ($@) { $TXN->abort; warn; last }  # is this correct? XXX
     }
     unshift @TXtodo, @c;
 }
 
-sub checkpoint {
-    my ($continue) = @_;
-    $continue = 1 if !defined $continue;
+sub dyn_start {
+    if (!$TXN) {
+	confess "Cannot nest dynamic transactions"
+	    if @ObjStore::Transaction::Stack;
+	$TXN = ObjStore::Transaction->new($SERVE? 'update' : 'read');
+    }
+    start_transaction();
+    dotodo();
+}
+
+sub dyn_commit {
+    my $continue = shift;
     if ($TXN) {
 	before_checkpoint($TXN);
-        if (!$TXN->is_aborted and $continue and $UseOSChkpt) {
+        if ($UseOSChkpt and $continue and
+	    !ObjStore::Transaction::is_aborted($TXN)) {
             # This will not work properly until Object Design
 	    # fixes the checkpoint code. XXX
             $TXN->checkpoint();
@@ -238,48 +242,45 @@ sub checkpoint {
         }
         after_checkpoint();
     }
-    if ($continue) {
-        if (!$TXN) {
-            confess "Cannot nest dynamic transactions"
-                if @ObjStore::Transaction::Stack;
-            $TXN = ObjStore::Transaction->new($SERVE? 'update' : 'read');
-        }
-        start_transaction();
-    }
-    dotodo();
-}
-
-use vars qw($Chkpt);
-
-sub safe_checkpoint {
-    eval { checkpoint() };
-    if ($@) {
-	warn;
-	$Chkpt->cancel;
-	unloop_all();
-    }
 }
 
 ################################################# default
+use vars qw($ChkptEv);
 sub defaultLoop {
     require ObjStore::Serve::Notify;
     ObjStore::Serve::Notify::init_autonotify();
-    if (!$Init) { &init_signals; ++$Init; }
-    checkpoint(1);
-    $Chkpt = Event->timer(e_desc => "ObjStore::Serve checkpoint", e_nice => -1,
-			  e_interval => \$LoopTime, e_cb => \&safe_checkpoint);
-    Event->add_hooks(asynccheck => sub {
-			 $Chkpt->now() if ObjStore::Transaction::is_aborted($TXN)
-		     });
+    if (!$Init) { &init_signals; ++$Init }
+    $ChkptEv = Event->timer(e_desc => 'ObjStore::Serve checkpoint',
+			    e_nice => -1, e_hard => 0, 
+			    e_interval => \$LoopTime, e_repeat => 0,
+			    e_cb => sub {
+				eval { dyn_commit($ChkptEv->{e_repeat}) };
+				if ($@) { warn; unloop_all() }
+			    });
     $Event::DIED = sub {
 	my ($e, $why) = @_;
 	$TXN->abort;
 	my $m = "Event '$e->{e_desc}' died: $why";
 	$m .= "\n" if $m !~ m/\n$/;
 	warn $m;
-	$Chkpt->{e_cb}->();
     };
     loop();
+}
+
+# For continuous transactions:
+#
+# $ChkptEv->{e_repeat} = 1;
+# Event->add_hooks(callback => \&dyn_begin);
+
+sub dyn_begin {
+    return if ($TXN and !ObjStore::Transaction::is_aborted($TXN));
+    # the eval should never be triggered -- but we want to be extra careful
+    eval {
+	dyn_commit(1) if $TXN; #was aborted
+	dyn_start(); 
+	$ChkptEv->again
+    };
+    if ($@) { warn; unloop_all() }
 }
 
 ################################################# VERY EXPERIMENTAL!!
@@ -289,6 +290,7 @@ use vars qw($Status $LoopLevel $ExitLevel);
 $LoopLevel = $ExitLevel = 0;
 
 sub Loop_async {
+    warn "EXPERIMENTAL";
     my ($Q) = @_;
     local $Status = undef;
     local $LoopLevel = $LoopLevel+1;
@@ -326,6 +328,7 @@ sub Loop_async {
 ################################################# threads (multi)
 
 sub Loop_mt {
+    warn "EXPERIMENTAL";
     my ($o) = @_;
     local $Status = undef;
     local $LoopLevel = $LoopLevel+1;
@@ -357,6 +360,7 @@ sub Loop_mt {
 }
 
 sub async_checkpoint {
+    warn "EXPERIMENTAL";
     # regex are not thread-safe! XXX
     while ($ExitLevel >= 1) {
         my $tx;

@@ -1,3 +1,19 @@
+** 11-23-98 RELEASE 1.51
+
+- Added more assertions to the API.  A new (transient) memory leak
+debugging mode is available.  See ObjStore::MakeMaker.
+
+- os_smart_object tweaks for ObjStore-Lib-PDL.
+
+- Fixed a bug that caused the save-stack to become corrupted during
+exceptions.  Yikes!
+
+- Fixed transient memory leak trigger when an SV holding a persistent
+object has non-transaction scope.
+
+- Minor fixes to qtposh.
+
+
 ** 11-05-98 RELEASE 1.50
 
 - Fixed order of PUTBACK/POPSTACK.
@@ -491,7 +507,7 @@ transactions are now fully supported.
 
 - Support for cross database references.
 
-- Sets depreciated.  The interface is there, but they are
+- 'Sets' deprecated.  The interface is there, but they are
 re-implemented with hashes.
 
 
@@ -586,7 +602,7 @@ of 'large' can be customized (not yet).
 
 ** RELEASE 1.00
 
-- The first release, written during our 60 day evaluation.  I knew a
+- The first release written during our 60 day evaluation.  I knew a
 Perl - ObjectStore combination would be fantastic!  Apparently it is
 my mission to save the world from the unspeakable torture of
-relational databases...I do it gladly. :-)
+relational databases...I do it gladly! :-)

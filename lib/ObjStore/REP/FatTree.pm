@@ -27,18 +27,19 @@ sub estimate {
 }
 
 # [
-#   version=0,
-#   is_unique,
+#   version=1,
+#   is_unique=1,
 #   [
 #     ['field1','field2'],
 #     ...,
-#   ]
+#   ],
+#   exclusive readonly=0  (v1)
 # ]
 
 sub configure {
     my $o = shift;
     my $c = $o->ObjStore::REP::FatTree::Index::_conf_slot();
-    $c ||= [0,1,[]];
+    $c ||= [1,1,[],1];
     return $c if @_ == 0;
     my @conf = ref $_[0] ? %{$_[0]} : @_;
     while (@conf) {
@@ -54,6 +55,8 @@ sub configure {
 	    $c->[2] = [map {[map {"$_\0"} split(m"\/", $_)]} @comp];
 	    
 	} elsif ($k eq 'size' or $k eq 'type') {
+	} elsif ($k =~ m/^excl(usive)?$/) {
+	    $c->[3] = $v;
 	} else {
 	    carp "$o->configure: unknown parameter '$k'";
 	}

@@ -1,5 +1,5 @@
 # even obscure -*-perl-*- should work
-use Test;
+use Test 1.03;
 BEGIN { plan tests => 16 }
 
 use ObjStore ':ADV';
@@ -7,10 +7,10 @@ use lib './t';
 use test;
 
 #
-# THIS DOESN'T PASS ALL TESTS IF YOU SET OSPERL_SCHEMA_DB
+# THIS DOESN'T PASS ALL TESTS IF YOU SET $ENV{OSPERL_SCHEMA_DB}
 #
-# I haven't tracked down the cause but it's probably not important.
-# (None of these tests are all that important. :-)
+# I haven't tracked down the cause, but it's probably not important.
+# (None of these tests are very important. :-)
 #
 
 ok !defined ObjStore::get_all_servers();
@@ -42,7 +42,7 @@ for (qw(read mvcc update)) {
 }
 
 ok(ObjStore::debug('off') == 0);
-ok ObjStore::release_name() =~ m/ObjectStore/;
+ok ObjStore::release_name(), '/ObjectStore/';
 
 $db->get_pathname;
 $db->get_relative_directory;
@@ -57,10 +57,10 @@ $db->set_fetch_policy('segment');
 $db->set_fetch_policy('page');
 $db->set_fetch_policy('stream', 8192);
 eval { $db->set_fetch_policy('bogus'); };
-ok($@ =~ m/unrecog/) or warn $@;
+ok $@, '/unrecog/';
 
 for (qw(as_used read write)) { $db->set_lock_whole_segment($_); }
 eval { $db->set_lock_whole_segment("bogus"); };
-ok($@ =~ m/unrecog/) or warn $@;
+ok $@, '/unrecog/';
 
 ObjStore::return_all_pages();

@@ -36,7 +36,7 @@ struct OSPV_hvarray : OSPV_Generic {
   virtual double _percent_filled();
   virtual int FETCHSIZE();
   virtual OSSV *traverse(char *keyish);
-  virtual void XSHARE(int on);
+  virtual void ROSHARE_set(int on);
 };
 
 struct OSPV_hvarray_cs : OSPV_Cursor {

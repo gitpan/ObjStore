@@ -102,6 +102,6 @@ sub prune {
 
 =head1 DESCRIPTION
 
-Documentation...
+I'm not sure if this will be depreciated...
 
 =cut

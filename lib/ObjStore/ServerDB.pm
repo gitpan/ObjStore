@@ -5,9 +5,10 @@ use ObjStore ':ADV';
 require ObjStore::Process;
 use base 'ObjStore::HV::Database';
 use vars qw($VERSION $AUTOFORK);
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 sub fork_server {
+    warn "EXPERIMENTAL";
     my ($o,$path) = @_;
     $path ||= $o->get_pathname() if ref $o;
     my $class = ref $o || $o;
@@ -16,9 +17,9 @@ sub fork_server {
     if (grep /blib/, @INC) {
 	if (-x "./blib/script/$srv") {
 	    # ?XXX never used?
-	    $cmd = "$^X -Mblib ./blib/script/$srv -F $path=$class &";
+	    $cmd = "$^X -Mblib ./blib/script/$srv -F $path &";
 	} else {
-	    $cmd = "$srv -Mblib -F $path=$class &";
+	    $cmd = "$srv -Mblib -F $path &";
 	}
     } else {
 	$cmd = "$srv $path=$class";
@@ -28,132 +29,147 @@ sub fork_server {
 }
 
 sub autofork {
+    warn "EXPERIMENTAL";
     $AUTOFORK = 1;
 }
 
 sub new {
     my ($class,$path,$mode,$mask) = @_;
-
     $mode ||= 'mvcc';
-    if ($mode eq 'mvcc' and !-e $path) {
-	$class->fork_server($path);
-	while (!-e $path) {
-	    warn "waiting for $ {path} to exist\n";
-	    sleep 1;
-	}
-    }
     $mask = $mode eq 'update'? 0666 : 0 unless defined $mask;
+
+    # catch not found errors? XXX
+#    if ($mode eq 'mvcc' and !-e $path) {
+#	while (!-e $path) {
+#	    warn "please start a server for $path\n";
+#	    sleep 1;
+#	}
+#    }
     my $DB = ObjStore::open($path, $mode, $mask);
-    bless $DB, $class if ($class ne 'ObjStore::ServerDB' or
-			  blessed $DB eq 'ObjStore::Database');
 
-    if (!defined %Posh::) {
-	if ($mode eq 'update') { ### SERVER
-	    $DB->subscribe();
-	    ObjStore::Process->set_mode('update');
-	    
-	    begin 'update', sub {
-		my $h = $DB->hash;
-		#hostile takeover
-		my $s = $$h{server} || $DB->create_segment('server');
-		$$h{server} = ObjStore::Process->new($s);
-	    };
-	    die if $@;
-	    begin 'update', sub {
-		my $top = $DB->hash;
-		bless $top, $class.'::Top'
-		    if ($class ne 'ObjStore::ServerDB' or 
-			blessed $top eq 'ObjStore::HV');
-		$top->boot();               #simple is good
-		for (values %$top) {
-		    # not much point in checking is_evolved...
-		    $_->evolve() if blessed $_;
-		}
-	    };
-	    die if $@;
-	    begin 'update', sub {
-		my $top = $DB->hash;
-		for (values %$top) {
-		    $_->restart() if blessed $_ && $_->can('restart');
-		}
-	    };
-	    die if $@;
-	    
-	    # should be READY...
-	    ObjStore::Process->autonotify(); #GO
-
-	} else { ### CLIENT
-	    begin sub {
-		my $top = $DB->hash;
-		if ($AUTOFORK and
-		    (!$top->{server} or time - $$top{server}{mtime} > 60)) {
-		    $DB->fork_server();
-		}
-	    };
-	    die if $@;
-	}
+    if (!defined %Posh:: and $mode ne 'update') { ### CLIENT
+	begin sub {
+	    my $top = $DB->hash;
+	    if ($AUTOFORK and
+		(!$top->{server} or time - $$top{server}{mtime} > 60)) {
+		$DB->fork_server();
+	    }
+	};
+	die if $@;
     }
     $DB;
 }
 
-sub wait_for_commit { shift->hash->{server}->wait_for_commit(); }
+sub wait_for_commit { shift->hash->{'ObjStore::Process'}->wait_for_commit(); }
 
-package ObjStore::ServerDB::Top;
+package ObjStore::ServerDB::Top;  #move to a separate file?
+use Carp;
 use ObjStore;
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-$VERSION = '0.02';
+$VERSION = '0.04';
 
-use ObjStore::notify qw(new_object);
-sub do_new_object {
-    no strict 'refs';
-    my ($o,$k,$p) = @_;
-    unless (defined %{"$p\::"}) {
-	my $file = $p;
-	$file =~ s,::,/,g;
-	require "$file.pm";
-    }
-    $$o{$k} ||= $p->new($o->create_segment($k));
+# make fetch safe
+sub FETCH {
+    my ($h,$p) = @_;
+    my $o = $h->SUPER::FETCH($p);
+    return $o if $o;
+    croak "$p service is not available in ".$h->database_of;
 }
 
-sub boot {}
+sub _install2 {
+    my ($o, $i, $pk) = @_;
+    $pk ||= ref $i;
+    $$o{ $pk } = $i; #overwrite!
+    no strict 'refs';
+    for my $u (@{"$pk\::ISA"}) {
+	$o->_install2($i, $u);
+    }
+}
+
+use ObjStore::notify qw(boot_class);
+sub do_boot_class {
+    my ($o,$class) = @_;
+    next if $o->SUPER::FETCH($class);
+    ObjStore::require_isa_tree($class);
+    my $i = $class->new($o->create_segment($class));
+    $o->_install2($i);
+}
+
+sub boot {
+    my $o = shift;
+    for my $p (@_) { $o->do_boot_class($p) }
+}
 
 1;
 
 =head1 NAME
 
-ObjStore::ServerDB - Generic Real-Time Database Server
+ObjStore::ServerDB - Generic Real-Time Database Server Framework
 
 =head1 SYNOPSIS
 
-    require ObjStore::ServerDB;
-    require E::GUI;
-
-    $$o{app} = ObjStore::ServerDB->new('/research/tmp/qsg_gui');
-    my $top = $$o{app}->hash;
-    $top->new_object('preferences', 'E::GUI');
+    osperlserver host:/full/path/to/db+=MyClass
 
 =head1 DESCRIPTION
 
-Provides a remote method invokation service for persistent objects.
+An active database is an framework for tightly integrated
+collaboration.  While implementation abstraction is preserved without
+hinderance, objects can easy interact in a variety of ways:
 
-=head1 BOOT METHOD
+=over 4
 
-Normally, you would just call C<$top->new_object(...)> once the
-database was open (as above), but sometimes you really need the
-database to be created already.  Inherit the class and override the
-C<boot> method.
+=item * ABSTRACTION / COLLABORATION
 
- sub boot {
-    my ($o) = @_;
-    require E::Icache;
-    $$o{icache} ||= E::Icache->new($o->create_segment('icache'));
-    require E::Basket;
-    $$o{baskets} ||= E::BasketTable->new($o->create_segment('baskets'));
- }
+The hash at the top of the database holds the set of cooperating
+objects that implement all database functionality.  This hash is
+always accessable via C<$any->database_of->hash>.  Furthermore, keys
+are populated such that they reflect the C<@ISA> tree of object
+instances.
 
-=head1 SEE ALSO
+=item * CLIENT / SERVER
 
-osperlserver, C<ObjStore::Process>, C<ObjStore::notify>
+Other processes can read the database asyncronously with MVCC
+transactions invoke remote method invokations (RMIs) on individual
+objects.  See C<ObjStore::notify>.
+
+=item * EVENT MANAGEMENT
+
+The C<Event> API is fully integrated (see C<ObjStore::Process>).
+Moreover, low priority jobs can be (persistently) queued for
+processing with a variety of scheduling options (see
+C<ObjStore::Job>).
+
+=back
+
+=head1 BOOTSTRAPPING
+
+The C<$db->hash->do_boot_class> method creates arbitrary classes and
+populates the top-level hash.  There are quite a few ways to invoke
+it:
+
+=over 4
+
+=item * COMMAND-LINE
+
+  osperlserver host:/full/path/to/db+=MyClass
+
+=item * RMI
+
+  $db->hash->boot_class('MyClass');
+
+=item * INHERITANCE
+
+  package MyDB::Top;
+  require 'ObjStore::ServerDB';
+  use base 'ObjStore::ServerDB::Top';
+  sub boot {
+     my ($o) = @_;
+     $o->boot_class('MyClass');
+  }
+
+  osperlserver host:/full/path/to/db=MyDB
+
+=back
 
 =cut

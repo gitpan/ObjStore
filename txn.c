@@ -21,10 +21,6 @@ void osp_croak(const char* pat, ...)
 
 /* CCov: on */
 
-// Since perl_exception has no parent and is never signalled, we always
-// get an unhandled exception when ObjectStore throws.
-DEFINE_EXCEPTION(perl_exception,"Perl/ObjStore Exception",0);
-
 /*--------------------------------------------- osp_bridge */
 
 osp_bridge::osp_bridge()
@@ -37,7 +33,7 @@ osp_bridge::osp_bridge()
 osp_bridge::~osp_bridge()
 {
 //  assert(ready()); should be done in subclasses
-  DEBUG_bridge(warn("bridge(%p)->DESTROY", this));
+  DEBUG_bridge(this, warn("bridge(%p)->DESTROY", this));
 }
 void osp_bridge::release()
 { croak("osp_bridge::release()"); }
@@ -110,6 +106,10 @@ static void ehook(tix_exception_p cause, os_int32 value, os_char_p report)
 
 /* CCov: on */
 
+// Since perl_exception has no parent and is never signalled, we always
+// get an unhandled exception when ObjectStore dies.
+DEFINE_EXCEPTION(perl_exception,"Perl/ObjectStore Exception!",0);
+
 osp_thr::osp_thr()
   : handler(&perl_exception)
 {
@@ -118,7 +118,6 @@ osp_thr::osp_thr()
   CLASSLOAD = perl_get_hv("ObjStore::CLASSLOAD", FALSE);// will need to lock XXX
   assert(CLASSLOAD);
   stargate = 0;
-  tie_objects = 1;
   txn = 0;
   tix_exception::set_unhandled_exception_hook(ehook);
   bridge_top = 0;

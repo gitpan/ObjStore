@@ -16,6 +16,7 @@ begin 'update', sub {
     my $s = new ObjStore::AV::Set($j, 12);
     ok($s->FETCHSIZE, 0);
 
+#    ObjStore::debug qw(PANIC);
     $s->add({box => 1});
     $s->add({box => 2});
     $s->add({box => 2});

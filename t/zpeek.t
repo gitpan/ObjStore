@@ -22,7 +22,7 @@ begin 'update', sub {
     my $now = 0;
     map { $now += $_->size } $db->get_all_segments;
     ok($before == $now) or 
-	warn("SIZE MISMATCH ($before != $now); PLEASE RERUN TESTS\n");
+	warn("SIZE MISMATCH ($before != $now); PLEASE RE-RUN TESTS\n");
     $j->{size} = $now;
 };
 die if $@;

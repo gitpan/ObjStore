@@ -48,14 +48,14 @@ char *OSPV_fattree_av::rep_class(STRLEN *len)
 int OSPV_fattree_av::get_perl_type()
 { return SVt_PVAV; }
 
-void OSPV_fattree_av::XSHARE(int on)
+void OSPV_fattree_av::ROSHARE_set(int on)
 {
   OSSV *ret;
   dGCURSOR(&ary);
   tc_moveto(&gl->tc, 0);
   while (1) {
     if (!avtc_fetch(&gl->tc, &ret)) break;
-    OSvXSHARED_set(ret, on);
+    OSvROSHARE_set(ret, on);
     tc_step(&gl->tc, 1);
   }
 }
@@ -226,11 +226,13 @@ void OSPV_fatindex2::CLEAR()
   if (conf_slot) {
     OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
     OSPV_Generic *paths = (OSPV_Generic*) conf->avx(2)->get_ospv();
+    OSSV *excl = conf->avx(3);
+    int is_excl = excl? excl->istrue() : 0;
     dGCURSOR(&tv);
     tc_moveto(&gl->tc, 0);
     OSSVPV *pv;
     while (dex2tc_fetch(&gl->tc, &pv)) {
-      osp_pathexam exam(paths, pv, 'u');
+      osp_pathexam exam(paths, pv, 'u', is_excl);
       assert(!exam.failed);
       exam.commit();
       pv->REF_dec();
@@ -246,7 +248,8 @@ void OSPV_fatindex2::add(OSSVPV *target)
   OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
   dGCURSOR(&tv);
   OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
-  osp_pathexam exam(paths, target, 's');
+  OSSV *excl = conf->avx(3);
+  osp_pathexam exam(paths, target, 's', excl? excl->istrue() : 0);
   if (exam.failed) return;
   int unique = conf->avx(1)->istrue();
   int match = dex2tc_seek(&gl->tc, unique, exam);
@@ -291,7 +294,8 @@ void OSPV_fatindex2::remove(OSSVPV *target)
   dGCURSOR(&tv);
   OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
   OSPV_Generic *paths = (OSPV_Generic*) conf->avx(2)->get_ospv();
-  osp_pathexam exam(paths, target, 'u');
+  OSSV *excl = conf->avx(3);
+  osp_pathexam exam(paths, target, 'u', excl? excl->istrue() : 0);
   if (exam.failed) return;
   int unique = conf->avx(1)->istrue();
   int match = dex2tc_seek(&gl->tc, unique, exam);
@@ -479,12 +483,13 @@ void
 OSPV_fatindex2::_conf_slot(...)
 	PPCODE:
 	PUTBACK;
+        dOSP;
 	SV *ret = 0;
 	if (items == 2) {
 	  if (TvFILL(&THIS->tv)) {
 	    croak("Configuration of an active index cannot be changed");
 	  }
-	  ospv_bridge *br = osp->sv_2bridge(ST(1), 1, os_segment::of(THIS));
+	  ospv_bridge *br = osp_thr::sv_2bridge(ST(1), 1, os_segment::of(THIS));
 	  OSSVPV *nconf = br->ospv();
 	  nconf->REF_inc();
 	  if (THIS->conf_slot) THIS->conf_slot->REF_dec();

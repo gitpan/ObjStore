@@ -2,12 +2,24 @@
 
 use strict;
 use lib './lib';
+use Config;
 use ObjStore::Config ':ALL';
 use ExtUtils::MakeMaker;
 use vars qw(@PREREQ);
 
 if ($] < 5.00404) {
-    print "perl 5.004_04 (or better) is probably required\n";
+    print "perl 5.004_04 (or better) is required\n";
+    exit;
+}
+
+if ($Config{libperl} !~ m/\.a$/ and $Config{usemymalloc} =~ m'y') {
+    print "
+Since you built perl as a shared library, you must use the default
+malloc instead of perl's malloc.  Otherwise, ObjectStore's shared
+libraries will not know which allocator is correct for a given
+chunk of memory.
+
+";
     exit;
 }
 
@@ -56,7 +68,6 @@ osperl.h :: dex2tv.h avtv.h
 my $ccov=0;
 push(@PREREQ, 'Devel::CCov' => 0.06) if $ccov;
 my @CCOV = $ccov? 'ccov_registry.o':'';
-my $xsubpp = $ccov ? '' : '-nolinenumbers';
 
 #cruft for CCov...
 sub MY::c_o {
@@ -88,7 +99,7 @@ ccov_registry$(OBJ_EXT): .ccov-timestamp
 WriteMakefile
     (
      NAME         => 'ObjStore',
-     PREREQ_PM	  => { 'Tree::Fat' => 1.02, Test => 0.08,
+     PREREQ_PM	  => { 'Tree::Fat' => 1.02, Test => 1.03,
 		       @PREREQ
 		       # Proc::Daemon
 		     },
@@ -102,7 +113,7 @@ WriteMakefile
 			"osperl-$schema_version-osschema.o", @CCOV,
 			qw[txn.o ObjStore.o osperl.o GENERIC.o dex2tv.o avtv.o
 			   tvcommon.o osp_hkey.o ODI.o Splash.o FatTree.o]),
-     'XSPROTOARG' => '-prototypes '.$xsubpp,
+     'XSPROTOARG' => '-prototypes '.($] < 5.00460? '-nolinenumbers' : ''),
      dist	=> {COMPRESS=>'gzip -9f', SUFFIX => 'gz'},
     );
 

@@ -1,3 +1,13 @@
+** 03-21-98 RELEASE 1.32
+
+- Major improvements to serverization code.  See osperlserver,
+ObjStore::ServerDB, and ObjStore::Process.  It is likely that not all
+changes are backward compatible to 1.30 (but I'm pretty sure
+improvements will outweigh breakage :-).
+
+- ObjStore::AV::Set now checks for duplicates.
+
+
 ** 03-13-98 RELEASE 1.31
 
 - Posh will move directly to a database specified on the command line.

@@ -18,7 +18,7 @@ use vars
     qw($DEFAULT_OPEN_MODE $MAX_RETRIES),                       # simulated
     qw($EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.33';
+$VERSION = '1.34';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -170,7 +170,6 @@ sub begin {
     my $do_retry;
     do {
 	@result=();
-	undef $@;
 	my $txn = ObjStore::Transaction::new($tt);
 	push @TxnStack, $txn;
 	my $ok=0;
@@ -238,20 +237,11 @@ sub bless ($;$) {
 sub require_isa_tree {
     no strict 'refs';
     my $class = shift;
-    my @c = split(m/\:\:/, $class);
-    while (!@{"$class\::ISA"} and @c) {
-	my $file = join('/',@c).".pm";
-	local $@;
-	eval { require $file }; #can't use 'begin' - too complicated
-#	warn "$file: ".($@?$@:"ok")."\n";
-	if ($@) {
-	    if ($@ !~ m"Can't locate .*? in \@INC") { die $@ }
-#	    else { warn $@ }
-#	    undef $@;
-	}
-	# Can't loop.  Too dangerous.
-#	pop @c;
-	last;
+    unless (@{"$class\::ISA"}) {
+	my $file = $class;
+	$file =~ s,::,/,g;
+	eval { require "$file.pm" };
+	die $@ if $@ && $@ !~ m"Can't locate .*? in \@INC";
     }
     for my $c (@{"$class\::ISA"}) { require_isa_tree($c) }
 }
@@ -341,13 +331,14 @@ sub debug {
 	/^set/    and $mask |= 32, next;
 	/^cursor/ and $mask |= 64, next;
 	/^bless/  and $mask |= 128, next;
-	/^root/   and $mask |= 256, next;
-	/^splash/ and $mask |= 512, next;
-	/^txn/    and $mask |= 1024, next;
-	/^ref/    and $mask |= 2048, next;
-	/^wrap/   and $mask |= 4096, next;
-	/^thread/ and $mask |= 8192, next;
-	/^index/  and $mask |= 16384, next;
+	/^root/   and $mask |= 0x100, next;
+	/^splash/ and $mask |= 0x200, next;
+	/^txn/    and $mask |= 0x400, next;
+	/^ref/    and $mask |= 0x800, next;
+	/^wrap/   and $mask |= 0x1000, next;
+	/^thread/ and $mask |= 0x2000, next;
+	/^index/  and $mask |= 0x4000, next;
+	/^norefs/ and $mask |= 0x8000, next;
 	/^PANIC/  and $mask = 0xffff, next;
 	die "Snawgrev $_ tsanik brizwah dork'ni";
     }
@@ -706,7 +697,8 @@ sub open {
     else { $ok = $db->_open($mode eq 'read'); }
     return 0 if !$ok;
 
-    # Acquiring a lock here messes up the deadlock regression test.
+    # Acquiring a lock here messes up the deadlock regression test
+    # so we check TRANSACTION_PRIORITY first.
     if ($ObjStore::TRANSACTION_PRIORITY and $ObjStore::CLASS_AUTO_LOAD) {
 	&ObjStore::begin(sub {
 			     for my $x (@OPEN0) { $x->($db); }
@@ -720,8 +712,12 @@ sub open {
 
 'ObjStore::Database'->_register_private_root_key('INC');
 
-sub get_INC { shift->_private_root_data('INC', sub { [] }); }
+sub get_INC {
+    carp "EXPERIMENTAL";
+    shift->_private_root_data('INC', sub { [] });
+}
 sub sync_INC {
+    # DEPRECIATED?
     my ($db) = @_;
     my $inc = $db->_private_root_data('INC');
     return if !$inc;
@@ -750,7 +746,7 @@ sub import_blessing {
 	my $class = $bs->[1];
 	&ObjStore::safe_require('ObjStore::Database', $class);
 
-	# Must use CORE::bless here: this is strictly an import.
+	# Must use CORE::bless here -- the database is _already_ blessed, yes?
 	CORE::bless($db, $class);
     }
     $db;
@@ -1058,6 +1054,7 @@ sub database_of { $_[0]->_database_of->import_blessing; }
 
 *create_segment = \&ObjStore::Database::create_segment;
 
+sub HOLD { carp "reserved method"; }
 sub BLESS {
     return $_[0]->SUPER::BLESS($_[1])
 	if ref $_[0];
@@ -1244,6 +1241,8 @@ sub new {
     $av;
 }
 
+sub EXTEND {}  #todo XXX
+
 sub _iscorrupt {
     my ($o, $vlev) = @_;
     warn "$o->iscorrupt: checking...\n" if $vlev >= 3;
@@ -1371,6 +1370,22 @@ sub new {
 	$x = ObjStore::REP::FatTree::Index::new($class, $loc);
     }
     $x;
+}
+
+# optimize!! XXX
+sub SHIFT {
+    my ($o) = @_;
+    return if !@$o;
+    my $e = $o->[0];
+    $o->remove($e);
+    $e;
+}
+sub POP {
+    my ($o) = @_;
+    return if !@$o;
+    my $e = $o->[$#$o];
+    $o->remove($e);
+    $e;
 }
 
 # only for indices keyed by a single string

@@ -4,7 +4,7 @@ ObjStore - Perl Extension For C<ObjectStore> OODBMS
 
 =head1 SYNOPSIS
 
-The new C<SQL> and the sunset of relational databases.
+Enjoy perl?  Sick of SQL?  Ready to try something new?
 
 =head1 DESCRIPTION
 
@@ -104,8 +104,8 @@ course :-).
 
 =item * osperlserver
 
-Run it against any database that inherits C<ObjStore::ServerDB> and it
-will provide a remote method invokation service.
+Provides remote method invokation, database job scheduling, and
+server-object collaboration services.  Completely generic.
 
 =back
 
@@ -193,8 +193,16 @@ Unsafe, unprotected references are also available:
 
 Care must to taken that these hard reference do not point to objects
 that have already been deleted.  C<SEGV> or garbled data can result.
-It is always safe to use hard references given they are used to merely
-to avoid circular references within a single database.
+
+Fortunately, it is always safe to use hard references when they are
+used to merely to avoid circular references within a single database.
+A nice trick:
+
+  my $o = ObjStore::HV->new($db);
+  $$o{SELF} = $o->new_ref($o,'hard');
+
+Then, use this single reference to point back to the top of the data
+structure (but only from below to the top!).
 
 =head2 Cursors
 
@@ -273,14 +281,14 @@ actual data, keys are marked read-only as they are indexed.  (Another
 scheme for keeping indices up-to-date is to use os_backptr.  This
 scheme is not supported because it has considerable memory overhead
 (12-bytes per record!) and provides little benefit beyond our
-read-only scheme.)
+read-only schemes.)
 
 For example:
 
   my $category = { name => 'Bath Toy' };
   my $row = { name => 'Rubber Ducky', category => $category };
 
-  $index->configure(path => 'category/name, name');
+  $index->configure(path => 'category/name, name', excl => 1);
   $index->add($row);
 
   $row->{category}{name} = 'Beach Toy';  #READONLY exception
@@ -288,7 +296,14 @@ For example:
   $row->{owner} = $bob;                  #ok
 
 The first key is the category's name.  The second key is the row's
-name.
+name.  This is one more detail to be aware of.  There are two types of
+index read-only modes: exclusive and shared.  Exclusive mode is
+simple.  This is the default.  In exclusive mode, you can only index a
+key once.  If this is not sufficient, shared mode can be used.  In
+shared mode, multiple indices can index the same keys.  However, all
+shared keys remain read-only until the record is removed from all
+shared indices.  Shared indices also impose a slight performance
+penalty compared to exclusive indices.
 
 Indices should not be used unless other data structures prove
 inadequate.  Hashes and arrays are easier in most cases.  Indices are
@@ -334,11 +349,12 @@ classes when you can avoid it?
 =head2 The Theory of Lazy Evolution
 
 When you practice lazy evolution, you avoid changing data layouts in
-favor of making queries smarter.  Since data usually out-bulks code,
-this is the correct trade.  And since there isn't a artificial split
-between the implementation language and some goofy database language,
-schema evolution is reduced to the same problem as source code
-compatibility.  (Database are essentially just a rich API.)
+favor of making queries smarter.  That's what it means.  Since data
+usually out-bulks code, this is the correct trade.  And since there
+isn't a artificial split between the implementation language and some
+goofy database language, schema evolution is reduced to the same
+problem as source code compatibility.  (Database are essentially just
+a rich API.)
 
 Now, I'm not saying that data layouts never have to change.  When
 thinking about data, the first thing to consider is how to partition
@@ -346,8 +362,8 @@ your data into manageable chunks.  Fortunately, databases interoperate
 and can be used simultaniously.  Therefore, it is entirely unnecessary
 to store all data in one database.  By splitting your data into
 logical chunks, you should be able to minimize the impact of
-structural changes.  (This is the same problem as designing good
-APIs.)
+structural changes.  (This is the same problem as designing good APIs
+and adding new features while maintaining backward compatibility.)
 
 The way you split up your database generally depends on three things
 (wisdom gleened from developing a real-time trading system):
@@ -356,7 +372,7 @@ The way you split up your database generally depends on three things
 
 =item * LOCALITY OF REFERENCE
 
-The less data you have, the faster you can access it.  Work towards
+The less data you have, the faster you can access it.  Aim for a
 perfect awareness of nothing.
 
 =item * REAL-TIME WRITERS
@@ -364,20 +380,21 @@ perfect awareness of nothing.
 It is usually good design to create a separate database for each group
 of real-time writers.  Readers of real-time data can open databases in
 mvcc mode and writers will never encounter lock contention (which is a
-major performance advantage).
+major performance win).
 
 =item * COUPLING TIGHTNESS
 
 Loosely coupled data can easily (and should) be split into multiple
-databases.  (The most exciting data is tightly coupled.  Keep this
-data close together. :-)
+databases.  (The most exciting data is tightly coupled; keep this data
+close together. :-)
 
 =back
 
 Additional considerations can be found in the C<ObjectStore>
-documentation, but that's about it.  The power and simplicity is hard
-to describe because there's just not much to it.  (Just the absolute
-minimum to meet every requirement. :-)
+documentation, but that's about it.  Don't over-complicate things; this
+isn't a relational database, remember?  The power and simplicity is
+hard to describe because there's just not much to it.  (Just the
+absolute minimum to satisfy every requirement. :-)
 
 (For extra integrity verification, see the C<iscorrupt> method.)
 
@@ -386,7 +403,7 @@ minimum to meet every requirement. :-)
 Un-structured perl databases are probably under-constrained for most
 applications.  Fortunately, RDBMS style tables have been adapted,
 adopted, and included with this package.  While they are a little
-different from traditional tables, with a few doses of Prozac,
+different from traditional tables, with a few doses of Prozac
 relational developers should feel right at home.  See
 C<ObjStore::Index> and C<ObjStore::Table3>.
 
@@ -725,7 +742,9 @@ to support most (maybe all!) of the above features.
 =head2 Performance Check List
 
 The word I<tuning> implies too high a brain-level requirement.
-B<Getting performance out of C<ObjectStore> is not rocket science.>
+B<Getting performance out of C<ObjectStore> is not rocket science.> On
+the other hand, you shouldn't think that perl will ever go as fast as
+optimized C<C++>.  (C<C++> has to be better for something. :-)
 
 =over 4
 
@@ -745,7 +764,8 @@ setup/cleanup.  The more you do per transaction the better.
 =item * IS MUTABLE DATA MOSTLY SEPARATED FROM READ-ONLY DATA?
 
 Update transaction commit time is proportional to the amount of data
-written AND to the number of pages with modifications.
+written AND to the number of pages with modifications.  Examine your
+data-flow and data-dependencies.
 
 =item * SEGMENTS
 
@@ -777,9 +797,9 @@ C<os_database::set_fetch_policy>.)
 
 =item * THROW MONEY AT THE PROBLEM
 
-Get a more memory, more CPUs, upgrade to your network, or hire C<C++>
-programmers and redo your project in C<C++>.  Perl isn't the solution
-to everything (yet :-).
+Get more memory, more CPUs, and upgrade to your network.  Or throw in
+the towel and hire C<C++> programmers to redo your project in C<C++>.
+(But don't forget to multiple your timeline by a factor of ten. :-)
 
 =back
 
@@ -862,12 +882,17 @@ errors, just in case exceptions are not automatically re-thrown.
 
 =item * DEADLOCK
 
+Built-in automatic deadlock retry is experimental, not because it
+doesn't work but because it doesn't make much sense in perl.  Since
+it's so easy to implement yourself, you probably should.
+
 Top level transactions are automatically retried in the case of a
 deadlock.  You can increase the number of retries with
 C<ObjStore::set_max_retries($retries)>.  Or if you need to handle
-deadlocks yourself, you can set the number of retries to zero.  (There
-is not much point to retrying I<non->top-level transactions because
-locks are released only at the top-level [OS 4-5.0.*].)
+deadlocks yourself, you can set the number of retries to zero.
+
+(There is not much point to retrying I<non->top-level transactions
+because locks are released only at the top-level [OS 4-5.0.*].)
 
 =back
 
@@ -902,6 +927,8 @@ transient objects, this method does not truly preview object
 destruction.  (Hacking C<DESTROY> such that it can be used as
 C<NOREFS> is desirable, but would require changes to the core perl
 code-base.  This change is under consideration...)
+
+Also see C<ObjStore::Mortician>!
 
 =head2 C<posh>
 

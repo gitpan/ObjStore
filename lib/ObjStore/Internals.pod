@@ -18,7 +18,8 @@ over-engineered.
 
 The perl interface is optimized to be fun and easy.  Since
 C<ObjectStore> is also blindingly fast, you can happily leave
-relational databases on the bookshelf where they belong.
+relational databases to collect dust on the bookshelf where they
+belong.
 
 =back
 
@@ -73,7 +74,7 @@ sub-optimal if adopted by perl.
 Perl often trades memory for speed.  This is the wrong trade for a
 database.  Memory usage is much more of a concern when data sets can
 be as large or larger than ten million megabytes.  A few percent
-difference in compactness be quite noticable.
+difference in compactness can be quite noticable.
 
 =back
 
@@ -238,13 +239,47 @@ It is critical that another pointer to C<OSSV>s is not stored, since
 C<OSSV>s can be relocated when arrays need to grow.  C<OSSVPV>s are
 never relocated.
 
+=head2 Notes On The Source Code
+
+=over 4
+
+=item *
+
+Some of my code might be hard to read.  Imagine how hard it was to
+write!
+
+=item *
+
+Functions or methods starting with '_' are internal to the C<ObjStore>
+extension.  They are subject to change entirely without notice.
+
+=item *
+
+Avoid C<const>, privacy & templates.  C<C++> sucks!  Long live C<C++>!
+
+=item *
+
+The relationship between references and cursors is strange.  It's
+probably best not to think about it.
+
+=back
+
 =head1 BUGS
 
 =over 4
 
+=item * UNFORGEABLE NOTIFICATION SENDER INFORMATION
+
+ODI feature request #13632: It would be very useful to know which
+client sent a given notification.  While the client I<could> fill in
+this information as part of the notification, the C<osserver> already
+knows the sender's client# and could pass this information
+transparently to subscribers.  The additional overhead be just 2 bytes
+per received notification.
+
 =item * SIGNALS ARE UNRELIABLE
 
-[This bug entry might have been entirely fixed!]
+[This bug might have been entirely fixed!]
 
 Perl signal handlers are not bulletproof.  Since ObjectStore makes
 aggressive use of signals, pathelogical failure is not impossible.
@@ -261,7 +296,7 @@ failure modes.
 
 =item * MIXING WITH EVAL
 
-[This bug entry might have been entirely fixed!]
+[This bug might have been entirely fixed!]
 
 It is possible to use C<eval> within transactions, but B<you
 absolutely must not> use the C<ObjectStore> API or access any
@@ -281,7 +316,7 @@ general, you should global replace C<eval> to C<begin>.
 
 =item * ABORT MANUAL-OVERRIDE
 
-[A proper fix is on the TODO list.]
+[A proper fix is on the TODO list.  Maybe this is solved.]
 
 Since C<eval> does not imply a nested transaction, if you use C<eval>
 you can have situations where a transaction must be manually aborted.

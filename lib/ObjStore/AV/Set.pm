@@ -4,7 +4,7 @@ package ObjStore::AV::Set;
 use base 'ObjStore::AV';
 use vars qw($VERSION);
 use Carp;
-use ObjStore;
+use ObjStore ':ADV';
 
 $VERSION = '0.04';
 
@@ -32,6 +32,7 @@ sub exists {
 
 sub where {
     my ($o, $e) = @_;
+    return if !blessed $e || !$e->isa('ObjStore::UNIVERSAL');
     my $x;
     for (my $z=0; $z < $o->FETCHSIZE(); $z++) {
 	my $e2 = $o->[$z];

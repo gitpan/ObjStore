@@ -38,16 +38,20 @@ lib/ObjStore/Config.pm
 lib/ObjStore/HV/Database.pm
 lib/ObjStore/Internals.pod
 lib/ObjStore/Job.pm
+lib/ObjStore/Job/Table.pm
+lib/ObjStore/Mortician.pm
 lib/ObjStore/NoInit.pm
 lib/ObjStore/Path/Cursor.pm
 lib/ObjStore/Path/Ref.pm
 lib/ObjStore/Peeker.pm
+lib/ObjStore/Posh/Cursor.pm
 lib/ObjStore/Process.pm
 lib/ObjStore/REP/FatTree.pm
 lib/ObjStore/REP/ODI.pm
 lib/ObjStore/REP/Splash.pm
 lib/ObjStore/ServerDB.pm
 lib/ObjStore/SetEmulation.pm
+lib/ObjStore/Sex.pm
 lib/ObjStore/Table.pm
 lib/ObjStore/Table2.pm
 lib/ObjStore/Table3.pm
@@ -61,7 +65,6 @@ notes/database_overhead_per_object
 notes/deadlock_debugging
 notes/deadlock_explanation
 notes/hints_on_allocating_large_objects
-notes/mysource
 notes/protected_references_info
 notes/static_linking_and_vector_delete
 notes/tiehash.1
@@ -94,6 +97,7 @@ t/2notify.t
 t/2ref.t
 t/2root.t
 t/2transact.t
+t/2typemap.t
 t/3avset.t
 t/3csv.t
 t/3noinit.t

@@ -1,6 +1,6 @@
 # give -*-perl-*- a kiss
 
-use Test;
+use Test 1.03;
 BEGIN {
     if ($] < 5.00450) { plan tests => 0; exit; }
     else { plan tests => 7; }
@@ -40,9 +40,10 @@ begin 'update', sub {
     ObjStore::AVHV::Fields::nuke_class_fields($db);
 
     my $john = $db->root('John');
-    my $o = new Test::AVHV1($db);
+#    ObjStore::debug qw(PANIC);
+    my $o = Test::AVHV1->new($db);
     begin sub { $o->[0]{'my'} = 'bad'; };
-    ok($@ =~ m'READONLY') or warn $@;
+    ok $@, '/READONLY/', $@;
     undef $@;
     $john->{avhv} = $o;
     $o->{'my'} = 1;
@@ -72,6 +73,9 @@ begin 'update', sub {
        $o->{'is'} == 3);
     $o->{horsht} = 5;
     $o->{pretty} = 4;
+
+#    ObjStore::debug('PANIC');
+#    warn join ' ', keys %$o;   #broken!
 
     # make sure traverse still works!
     my $x = new ObjStore::Index($o);

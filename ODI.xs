@@ -50,12 +50,12 @@ OSSV *OSPV_hvdict::FETCH(SV *key)
 OSSV *OSPV_hvdict::traverse(char *keyish)
 { return hvx(keyish); }
 
-void OSPV_hvdict::XSHARE(int on)
+void OSPV_hvdict::ROSHARE_set(int on)
 {
   os_cursor cs(hv);
   OSSV *at;
   for (at = (OSSV*) cs.first(); at; at = (OSSV*) cs.next()) {
-    OSvXSHARED_set(at, on);
+    OSvROSHARE_set(at, on);
   }
 }
 

@@ -2,10 +2,11 @@
 
 use strict;
 package osperlserver;
-use ObjStore::NoInit;
+use ObjStore::NoInit ':ADV';
 use vars qw($VERSION @DB $DAEMON);
-$VERSION = '0.01';
+$VERSION = '0.02';
 $DAEMON = 1;
+my $default_server = 'ObjStore::ServerDB';
 
 for (my $arg=0; $arg < @ARGV; $arg++) {
     my $o = $ARGV[$arg];
@@ -16,7 +17,7 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	$DAEMON = 0;
     } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
 	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
-	eval "require $m";
+        eval "require $m";
 	warn, next if $@;
 	if ($way eq 'M') {
 	    $m->import(@im);
@@ -39,51 +40,102 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	push @DB, $o;
     } elsif ($o =~ m/^-v$/) {
 	require ObjStore;
-	print("osperlserver $ObjStore::VERSION (Perl $] ".ObjStore::release_name().")\n");
+	print "osperlserver $VERSION ($ObjStore::VERSION)\n";
 	exit;
     } elsif ($o =~ m/^-h(elp)?$/) {
-	print q"
-Usage: osperlserver [switches] database[=Package] [databases...]
-  -F[oreground]    do not fork
-  -Idirectory      specify @INC directory (may be used more than once)
-  -[mM]module..    executes `use/no module...' (just like perl)
-  -v               print version number and patchlevel of osperlserver
-
-  (Also see ObjStore::notify, ObjStore::Process, and ObjStore::ServerDB)
-
-";
-	exit;
+	&usage;
     } else {
 	warn "unknown option '$o' (-h for usage)\n";
     }
 }
-die "osperlserver: which db?\n" if @DB==0;
+&usage if @DB==0;
 
+open(STDOUT, ">&STDERR") or die "can't redirect STDOUT: $!";
 if ($DAEMON) {
     require Proc::Daemon;          #available via CPAN
     Proc::Daemon::init();
 }
 $SIG{HUP} = sub { warn "SIGHUP" if !$DAEMON };
 
+for (@DB) {
+    # Not foolproof... Hm.
+    if (m/^(.*) \= (.*) \+ (.*)$/x) {
+	$_ = [$1,$2,$3];
+    } elsif (m/^(.*) \+\= (.*)$/x) {
+	$_ = [$1,$default_server,$3];
+    } elsif (m/^(.*) \= (.*)$/x) {
+	$_ = [$1,$2,''];
+    } else {
+	$_ = [$_,$default_server,''];
+    }
+}
+
 $ObjStore::CLIENT_NAME = 
-    "osperl[".join(',', map { $_=~m,/([^=/]+)(\=[^/]+)?$,?$1:$_ } @DB)."]";
+    "osperl[".join(',',map { $_->[0] =~ m,/([^/]+)$, ? $1:$_->[0] } @DB)."]";
 
 ObjStore::initialize();
-
+require ObjStore::Process;
 for (@DB) {
     no strict 'refs';
-    my @c = split m'/';
-    my $class = $1 if $c[$#c] =~ s,= ([^=]+) $,,x;
-    $class ||= 'ObjStore::ServerDB';
+    my $class = $_->[1];
     unless (defined %{"$class\::"}) {
 	my $file = $class;
 	$file =~ s,::,/,g;
 	require "$file.pm";
     }
-    my $db = join '/', @c;
-    $class->new($db, 'update');
+
+    my $DB = $class->new($_->[0], 'update');
+    $DB->subscribe();
+    bless $DB, $class if
+	$class ne $default_server || blessed $DB eq 'ObjStore::Database';
+
+    begin 'update', sub {  #hostile takeover
+	$DB->hash->{'ObjStore::Process'} =
+	    ObjStore::Process->new($DB);  #inheritance? XXX
+    };
+    die if $@;
+
+    begin 'update', sub {
+	my $top = $DB->hash;
+	bless $top, $class.'::Top' if
+	    $class ne $default_server || blessed $top eq 'ObjStore::HV';
+	$top->boot(split /,/, $_->[2]);
+	for (values %$top) {
+	    # not much point in checking is_evolved...
+	    $_->evolve() if blessed $_;
+	}
+	$top->restart() if $top->can('restart');
+	for (values %$top) {
+	    $_->restart() if blessed $_ && $_->can('restart');
+	}
+    };
+    die if $@;
 }
 
-require ObjStore::Process;
+ObjStore::Process->set_mode('update');
+ObjStore::Process->autonotify();
+
+eval q{ END{ warn "exiting...\n"; } }; #otherwise confusing
 warn "Started!!\n";
 ObjStore::Process->Loop();
+
+sub usage {
+    print "
+Usage: osperlserver [switches] database[=Class[+Class[,Class]]] [databases...]
+  -F[oreground]    do not fork
+  -Idirectory      specify @INC directory (may be used more than once)
+  -[mM]module..    executes `use/no module...' (just like perl)
+  -v               print version number and patchlevel of osperlserver
+
+    server:/full/path/to/database
+       $default_server->new(...); boot();
+
+    server:/full/path/to/database+=My::Class1,My::Class2
+       $default_server->new(...); boot('My::Class1','My::Class2')
+
+    server:/full/path/to/database=My::Database+My::Class1,My::Class2
+       My::Database->new(...); boot('My::Class1','My::Class2')
+
+";
+    exit;
+}

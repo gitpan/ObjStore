@@ -114,21 +114,18 @@ blessed(sv)
 	XSRETURN_PV(sv_reftype(SvRV(sv),TRUE));
 
 void
+_sv_dump(sv)
+	SV *sv
+	CODE:
+	mysv_dump(sv);
+
+void
 _debug(mask)
 	int mask
 	PPCODE:
 	dOSP ;
 	int old = osp->debug;
 	osp->debug = mask;
-	XSRETURN_IV(old);
-
-void
-_tie_objects(yes)
-	int yes
-	PPCODE:
-	dOSP;
-	int old = osp->tie_objects;
-	osp->tie_objects = yes;
 	XSRETURN_IV(old);
 
 SV *
@@ -254,11 +251,11 @@ void
 subscribe(...)
 	PPCODE:
 	PUTBACK;
+	dOSP;
 	if (items == 0) return;
 	os_subscription *subs = new os_subscription[items];
-	dOSP;
 	for (int xa=0; xa < items; xa++) {
-	  ospv_bridge *br = osp->sv_2bridge(ST(xa), 1);
+	  ospv_bridge *br = osp_thr::sv_2bridge(ST(xa), 1);
 	  subs[xa].assign(br->ospv());
 	}
 	OSP_START0
@@ -272,11 +269,11 @@ void
 unsubscribe(...)
 	PPCODE:
 	PUTBACK;
+	dOSP;
 	if (items == 0) return;
 	os_subscription *subs = new os_subscription[items];
-	dOSP;
 	for (int xa=0; xa < items; xa++) {
-	  ospv_bridge *br = osp->sv_2bridge(ST(xa), 1);
+	  ospv_bridge *br = osp_thr::sv_2bridge(ST(xa), 1);
 	  subs[xa].assign(br->ospv());
 	}
 	OSP_START0
@@ -339,11 +336,8 @@ os_notification::why()
 	PPCODE:
 	char *str = (char*) THIS->get_string();
 	assert(str);
-	if (str[0] == 0) {
-	  XPUSHs(sv_2mortal(newSViv(THIS->get_kind())));
-	} else {
-	  XPUSHs(sv_2mortal(newSVpv(str, 0)));
-	}
+	// number slot is reserved
+	XPUSHs(sv_2mortal(newSVpv(str, 0)));
 
 void
 os_notification::DESTROY()
@@ -355,6 +349,7 @@ OSSVPV::notify(why, ...)
 	SV *why
 	PROTOTYPE: $$;$
 	CODE:
+	dOSP;
 	int now=0;
 	if (items == 3) {
 	  if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), na), "now")) now=1;
@@ -364,14 +359,7 @@ OSSVPV::notify(why, ...)
 	  warn("%p->notify($string): assuming $when eq 'commit', please specify");
 	}
 	os_notification note;
-	if (SvNIOK(why)) {
-	  os_int32 kind = SvIV(why);
-	  if (kind < 0)
-	    croak("%p->notify(%d): non-positive numbers are reserved", kind);
-	  note.assign(THIS, kind, 0);
-	} else {
-	  note.assign(THIS, 0, SvPV(why, na));
-	}
+	note.assign(THIS, 0, SvPV(why, na)); //number slot is reserved
 	OSP_START0
 	  if (now) os_notification::notify_immediate(&note, 1);
 	  else     os_notification::notify_on_commit(&note, 1);
@@ -799,10 +787,10 @@ os_database_root::set_value(sv)
 	SV *sv
 	PPCODE:
 	PUTBACK ;
-	dOSP ;
+	dOSP;
 	os_segment *WHERE = os_database::of(THIS)->get_default_segment();
 	OSSVPV *pv=0;
-	ospv_bridge *br = osp->sv_2bridge(sv, 1, WHERE);
+	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1, WHERE);
 	pv = br->ospv();
 	// Disallow scalars in roots because it is fairly useless and messy.
 	OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
@@ -931,7 +919,7 @@ MODULE = ObjStore	PACKAGE = ObjStore::Bridge
 void
 osp_bridge::DESTROY()
 	CODE:
-	DEBUG_bridge(warn("osp_bridge(%p)->release", THIS));
+	DEBUG_bridge(THIS, warn("osp_bridge(%p)->release", THIS));
 	THIS->release();
 
 #-----------------------------# UNIVERSAL
@@ -942,8 +930,7 @@ int
 _is_persistent(sv)
 	SV *sv;
 	CODE:
-	dOSP;
-	ospv_bridge *br = osp->sv_2bridge(sv, 0);
+	ospv_bridge *br = osp_thr::sv_2bridge(sv, 0);
 	RETVAL = br != 0;
 	OUTPUT:
 	RETVAL
@@ -953,8 +940,7 @@ _pstringify(THIS, ...)
 	SV *THIS;
 	PROTOTYPE: $;$$
 	PPCODE:
-	dOSP;
-	ospv_bridge *br = osp->sv_2bridge(THIS, 0);
+	ospv_bridge *br = osp_thr::sv_2bridge(THIS, 0);
 	SV *ret;
 	if (!br) {
 	  STRLEN len;
@@ -969,6 +955,7 @@ _pstringify(THIS, ...)
 	  //STRLEN CLEN;
 	  //char *CLASS = br->ospv()->blessed_to(&CLEN);
 	  //
+	  //optimize!! XXX
 	  ret = newSVpvf("%s=%s(0x%p)",	HvNAME(SvSTASH(SvRV(THIS))),
 			 sv_reftype(SvRV(THIS), 0), br->ospv());
 	}
@@ -980,10 +967,11 @@ _peq(a1, a2, ign)
 	SV *a2
 	SV *ign
 	CODE:
-	dOSP;
-	ospv_bridge *b1 = osp->sv_2bridge(a1, 0);
-	ospv_bridge *b2 = osp->sv_2bridge(a2, 0);
-	RETVAL = b1 && b2 && b1->ospv() == b2->ospv();
+	//if (!SvOK(a1) || !SvOK(a2)) XSRETURN_NO;
+	ospv_bridge *b1 = osp_thr::sv_2bridge(a1, 1);
+	ospv_bridge *b2 = osp_thr::sv_2bridge(a2, 1);
+	//warn("b1=%p b2=%p", b1->ospv(), b2->ospv());
+	RETVAL = b1->ospv() == b2->ospv();
 	OUTPUT:
 	RETVAL
 
@@ -993,12 +981,19 @@ _pneq(a1, a2, ign)
 	SV *a2
 	SV *ign
 	CODE:
-	dOSP;
-	ospv_bridge *b1 = osp->sv_2bridge(a1, 0);
-	ospv_bridge *b2 = osp->sv_2bridge(a2, 0);
-	RETVAL = !b1 || !b2 || b1->ospv() != b2->ospv();
+	//if (!SvOK(a1) || !SvOK(a2)) XSRETURN_NO;
+	ospv_bridge *b1 = osp_thr::sv_2bridge(a1, 1);
+	ospv_bridge *b2 = osp_thr::sv_2bridge(a2, 1);
+	//warn("b1=%p b2=%p", b1->ospv(), b2->ospv());
+	RETVAL = b1->ospv() != b2->ospv();
 	OUTPUT:
 	RETVAL
+
+void
+OSSVPV::_debug(yes)
+	int yes;
+	PPCODE:
+	BrDEBUG_set(THIS_bridge, yes);
 
 void
 OSSVPV::_refcnt()
@@ -1015,8 +1010,9 @@ OSSVPV::_blessto_slot(...)
 	PROTOTYPE: ;$
 	PPCODE:
 	PUTBACK;
+	dOSP;
 	if (items == 2) {
-	  ospv_bridge *br = osp->sv_2bridge(ST(1), 1);
+	  ospv_bridge *br = osp_thr::sv_2bridge(ST(1), 1);
 	  OSSVPV *nval = (OSSVPV*) br->ospv();
 	  nval->REF_inc();
 	  if (OSPvBLESS2(THIS) && THIS->classname)
@@ -1073,13 +1069,14 @@ void
 OSSVPV::const()
 	PPCODE:
 	OSPvROCNT(THIS) = ~0;
-	THIS->XSHARE(1);
+	THIS->ROSHARE_set(1);
 
 void
 OSSVPV::POSH_CD(keyish)
 	char *keyish
 	PPCODE:
 	PUTBACK;
+	dOSP;
 	STRLEN len;
 	SV *ret=0;
 	OSSV *sv = THIS->traverse(keyish);
@@ -1103,7 +1100,8 @@ OSSVPV::_new_ref(type, sv1)
 	SV *sv1;
 	PPCODE:
 	PUTBACK;
-	os_segment *seg = osp->sv_2segment(sv1);
+	dOSP;
+	os_segment *seg = osp_thr::sv_2segment(sv1);
 	SV *ret;
 	if (type == 0) {
 	  ret = osp->ospv_2sv(new (seg, OSPV_Ref2_protect::get_os_typespec())
@@ -1133,7 +1131,8 @@ OSPV_Container::_new_cursor(sv1)
 	SV *sv1;
 	PPCODE:
 	PUTBACK;
-	os_segment *seg = osp->sv_2segment(sv1);
+	dOSP;
+	os_segment *seg = osp_thr::sv_2segment(sv1);
 	SV *ret = osp->ospv_2sv(THIS->new_cursor(seg));
 	SPAGAIN;
 	XPUSHs(ret);
@@ -1151,6 +1150,7 @@ OSPV_Generic::FETCH(xx)
 	PPCODE:
 	SV **savesp = SP;
 	PUTBACK;
+	dOSP;
 	SV *ret = osp->ossv_2sv(THIS->FETCH(xx));
 	SPAGAIN;
 	assert(SP == savesp);
@@ -1163,6 +1163,7 @@ OSPV_Generic::STORE(xx, nval)
 	PPCODE:
 	SV **savesp = SP;
 	PUTBACK;
+	dOSP;
 	SV *ret = osp->ossv_2sv(THIS->STORE(xx, nval));
 	SPAGAIN;
 	assert(SP == savesp);
@@ -1260,6 +1261,7 @@ OSPV_Generic::FETCH(key)
 	PPCODE:
 	SV **savesp = SP;
 	PUTBACK;
+	dOSP;
 	SV *ret = osp->ossv_2sv(THIS->FETCH(key));
 	SPAGAIN;
 	assert(SP == savesp);
@@ -1272,6 +1274,7 @@ OSPV_Generic::STORE(key, nval)
 	PPCODE:
 	SV **savesp = SP;
 	PUTBACK;
+	dOSP;
 	SV *ret = osp->ossv_2sv(THIS->STORE(key, nval));
 	SPAGAIN;
 	assert(SP == savesp);
@@ -1317,7 +1320,7 @@ OSPV_Generic::add(sv)
 	SV *sv;
 	PPCODE:
 	PUTBACK;
-	ospv_bridge *br = osp->sv_2bridge(sv, 1, os_segment::of(THIS));
+	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1, os_segment::of(THIS));
 	THIS->add(br->ospv());
 	SPAGAIN;
 	if (GIMME_V != G_VOID) PUSHs(sv);
@@ -1327,16 +1330,18 @@ OSPV_Generic::remove(sv)
 	SV *sv
 	PPCODE:
 	PUTBACK;
-	ospv_bridge *br = osp->sv_2bridge(sv, 1);
+	ospv_bridge *br = osp_thr::sv_2bridge(sv, 1);
 	THIS->remove(br->ospv());
 	return;
 
 void
 OSPV_Generic::configure(...)
 	PPCODE:
-	SV **top = &ST(0);
+	SV *args[32];
+	if (items >= 32) croak("too many args to configure(...)");
+	for (int xx=0; xx < items; xx++) args[xx] = sv_mortalcopy(ST(xx));
 	PUTBACK;
-	THIS->configure(top, items);
+	THIS->configure(args, items);
 	return;
 
 void
@@ -1344,6 +1349,7 @@ OSPV_Generic::FETCH(keyish)
 	SV *keyish
 	PPCODE:
 	PUTBACK;
+	dOSP;
 	SV *ret = osp->ospv_2sv(THIS->FETCHx(keyish));
 	SPAGAIN;
 	XPUSHs(ret);
@@ -1360,6 +1366,7 @@ OSPV_Ref2::_get_database()
 	PREINIT:
 	char *CLASS = ObjStore_Database;
 	CODE:				//should be just like lookup
+	dOSP;
 	OSP_START0
 	  RETVAL = THIS->get_database();
 	  RETVAL->set_check_illegal_pointers(1);
@@ -1381,6 +1388,7 @@ void
 OSPV_Ref2::focus()
 	PPCODE:
 	PUTBACK;
+	dOSP;
 	SV *sv = osp->ospv_2sv(THIS->focus());
 	SPAGAIN;
 	XPUSHs(sv);
@@ -1394,8 +1402,7 @@ _load(CLASS, sv1, type, dump, db)
 	os_database *db;
 	PPCODE:
 	PUTBACK;
-	dOSP;
-	os_segment *seg = osp->sv_2segment(sv1);
+	os_segment *seg = osp_thr::sv_2segment(sv1);
 	OSPV_Ref2 *ref;
 	if (type == 0) {
 	  ref = new (seg, OSPV_Ref2_protect::get_os_typespec())
@@ -1415,6 +1422,7 @@ void
 OSPV_Cursor2::focus()
 	PPCODE:
 	PUTBACK;
+	dOSP;
 	SV *sv = osp->ospv_2sv(THIS->focus());
 	SPAGAIN;
 	XPUSHs(sv);
@@ -1463,9 +1471,10 @@ OSPV_Cursor2::store(nval)
 void
 OSPV_Cursor2::seek(...)
 	PPCODE:
-	SV **top = &ST(0);
+	SV *args[INDEX_MAXKEYS];
+	for (int xx=0; xx < items; xx++) args[xx] = sv_mortalcopy(ST(xx));
 	PUTBACK;
-	int ret = THIS->seek(top, items);
+	int ret = THIS->seek(args, items);
 	SPAGAIN;
 	XPUSHs(sv_2mortal(newSViv(ret)));
 
@@ -1554,6 +1563,7 @@ void
 OSPV_Ref::focus()
 	PPCODE:
 	PUTBACK;
+	dOSP;
 	SV *sv = osp->ospv_2sv(THIS->focus());
 	SPAGAIN;
 	XPUSHs(sv);

@@ -93,10 +93,10 @@ OSSV *OSPV_hvarray::FETCH(SV *sv)
 OSSV *OSPV_hvarray::traverse(char *key)
 { return hvx(key); }
 
-void OSPV_hvarray::XSHARE(int on)
+void OSPV_hvarray::ROSHARE_set(int on)
 {
   for (int xx=0; xx < hv.count(); xx++) {
-    OSvXSHARED_set(&hv[xx].hv, on);
+    OSvROSHARE_set(&hv[xx].hv, on);
   }
 }
 

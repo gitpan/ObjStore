@@ -25,29 +25,32 @@ os_segment *osp_thr::sv_2segment(SV *sv)
 
 ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
 {
-  dOSP ;
 // Is tied?  Examine tied object, extract ospv_bridge from '~'
 // Is OSSV in a PVMG?
 
-  if (SvGMAGICAL(ref))
-    mg_get(ref);        //NEEDED; can't remember how to reproduce the case
+  DEBUG_assign(mysv_dump(ref));
 
-  assert(ref);
   if (!SvROK(ref)) {
-    if (force) {
-      if (!SvOK(ref))
-	croak("sv_2bridge: Use of uninitialized value");
-      croak("sv_2bridge: expecting a reference, got a scalar");
+    if (SvGMAGICAL(ref))
+      mg_get(ref);
+    if (!SvROK(ref)) {
+      if (force) {
+	if (!SvOK(ref)) {
+	  mysv_dump(ref);
+	  croak("sv_2bridge: Use of uninitialized value");
+	}
+	mysv_dump(ref);
+	croak("sv_2bridge: expecting a reference, got a scalar");
+      }
+      return 0;
     }
-    return 0;
   }
   SV *nval = SvRV(ref);
-  assert(nval);
 
   ospv_bridge *br = 0;
   do {
-    if (SvMAGICAL(nval) && (SvTYPE(nval) == SVt_PVHV ||
-			    SvTYPE(nval) == SVt_PVAV)) {
+    if (SvOBJECT(nval) && (SvTYPE(nval) == SVt_PVHV ||
+			   SvTYPE(nval) == SVt_PVAV)) {
       MAGIC *magic = mg_find(nval, '~');
       if (!magic) break;
       SV *mgobj = (SV*) magic->mg_obj;
@@ -67,22 +70,27 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
     return br;
   }
   if (!force) return 0;
-  if (!seg) croak("sv_2bridge: expecting a persistent object");
-  
-  dSP ;
-  PUSHMARK(sp);
-  XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Segment", seg));
-  XPUSHs(ref);
-  PUTBACK ;
-  assert(osp->stargate);
-  int count = perl_call_sv(osp->stargate, G_SCALAR);
-  assert(count==1);
-  SPAGAIN ;
-  br = osp->sv_2bridge(POPs, 0);
-  PUTBACK ;
-  if (!br) croak("ObjStore::stargate: returned useless junk");
-  //  warn("stargate returned:");
-  //  br->dump();
+  if (!seg) {
+    mysv_dump(ref);
+    croak("sv_2bridge: expecting a persistent object");
+  }
+  {
+    dOSP;
+    dSP;
+    PUSHMARK(sp);
+    XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Segment", seg));
+    XPUSHs(ref);
+    PUTBACK ;
+    assert(osp->stargate);
+    int count = perl_call_sv(osp->stargate, G_SCALAR);
+    assert(count==1);
+    SPAGAIN ;
+    br = osp->sv_2bridge(POPs, 0);
+    PUTBACK ;
+    if (!br) croak("ObjStore::stargate: returned useless junk");
+    //  warn("stargate returned:");
+    //  br->dump();
+  }
   return br;
 }
 
@@ -96,14 +104,12 @@ static SV *ospv_2bridge(OSSVPV *pv)
 
 SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
 {
-  dOSP ;
   HV *stash = ospv->stash(1);
-
   switch (ospv->get_perl_type()) {
   case SVt_PVMG:{
     SV *rv = sv_2mortal(newRV_noinc(br));
     (void)sv_bless(rv, stash);
-    DEBUG_wrap(warn("mgwrap %p", ospv); sv_dump(br););
+    DEBUG_wrap(warn("mgwrap %p", ospv); mysv_dump(br););
     return rv;}
   case SVt_PVHV:
   case SVt_PVAV:{
@@ -118,17 +124,16 @@ SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
     --SvREFCNT(br);				// like ref_noinc
     SV *rv = newRV_noinc(tied);			// $rv = \tied
     
-    if (osp->tie_objects) {
-      sv_magic(tied, rv, 'P', Nullch, 0);	// tie tied, CLASS, $rv
-      MAGIC *tie_mg = mg_find(tied, 'P');	// undo tie refcnt (yikes!)
-      assert(tie_mg);
-      tie_mg->mg_flags &= ~(MGf_REFCOUNTED);
-      --SvREFCNT(rv);
-      //sv_2mortal(rv);
-    }
+    sv_magic(tied, rv, 'P', Nullch, 0);	// tie tied, CLASS, $rv
+    MAGIC *tie_mg = mg_find(tied, 'P');	// undo tie refcnt (yikes!)
+    assert(tie_mg);
+    tie_mg->mg_flags &= ~(MGf_REFCOUNTED);
+    --SvREFCNT(rv);
+    //sv_2mortal(rv);
+
     (void)sv_bless(rv, stash);
     
-    DEBUG_wrap(warn("[av]wrap %p", ospv); sv_dump(rv););
+    DEBUG_wrap(warn("[av]wrap %p", ospv); mysv_dump(rv););
     return rv;}
   }
   croak("osp::ossv_2sv: unknown perl type (%d)", ospv->get_perl_type());
@@ -156,8 +161,7 @@ SV *osp_thr::ossv_2sv(OSSV *ossv)
     OR_RETURN_UNDEF(ossv->vptr);
     return sv_2mortal(newSVnv(OSvNV(ossv)));
   case OSVt_PV:
-    // Store single characters if vptr==0 XXX
-    OR_RETURN_UNDEF(ossv->vptr);
+    if (!ossv->vptr) return sv_2mortal(newSVpv("", 0));
     // Problems with eliding the copy:
     // 1. What if the persistent copy is deleted?  Read transactions only.
     // 2. They can not be packaged as simple SVPV because of the need
@@ -217,7 +221,7 @@ OSSV::OSSV(OSSVPV *nval) : _type(OSVt_UNDEF)
 
 OSSV::~OSSV()
 {
-  OSvXSHARED_set(this, 0);
+  OSvROCLEAR(this);
   set_undef();
 }
 
@@ -272,6 +276,8 @@ OSSV *OSSV::operator=(SV *nval)
   dOSP ;
   char *tmp; STRLEN tmplen;
 
+  DEBUG_assign(mysv_dump(nval));
+
   if (SvGMAGICAL(nval))
     mg_get(nval);
 
@@ -286,15 +292,13 @@ OSSV *OSSV::operator=(SV *nval)
     s((os_int32) SvIV(nval));
   } else if (SvNOKp(nval)) {
     s((double) SvNV(nval));
-  } else if (SvPOK(nval)) {
+  } else if (SvPOK(nval) || SvPOKp(nval)) {
     tmp = SvPV(nval, tmplen);
     s(tmp, tmplen);
   } else if (! SvOK(nval)) {
     set_undef();
   } else {
-#ifdef DEBUGGING
-    sv_dump(nval);
-#endif
+    mysv_dump(nval);
     croak("OSSV=(SV*): unknown type");
   }
   return this;
@@ -328,10 +332,12 @@ int OSSV::morph(int nty)
   case OSVt_NV:    delete ((OSPV_nv*)vptr); vptr=0; break;
 
   case OSVt_PV:
-    DEBUG_assign(warn("OSSV(0x%x)->morph(pv): deleting string '%s' 0x%x",
-		      this, vptr, vptr));
-    delete [] ((char*)vptr);
-    vptr = 0;
+    if (vptr) {
+      DEBUG_assign(warn("OSSV(0x%x)->morph(pv): deleting string '%s' 0x%x",
+			this, vptr, vptr));
+      delete [] ((char*)vptr);
+      vptr = 0;
+    }
     break;
 
   case OSVt_RV: break;
@@ -383,24 +389,46 @@ void OSSV::s(double nval)
 
 void OSSV::s(char *nval, os_unsigned_int32 nlen)
 {
+  // Go through extra contortions for speed...
   OSvTRYWRITE(this);
-  assert(nlen > 0 || nval[0] == 0);
-  if (nlen > 32767) {
-    warn("ObjStore: string of length %d truncated to 32767 bytes", nlen);
-    nlen = 32767;
+  if (nlen == 0) {
+    morph(OSVt_PV);
+    if (vptr) {
+      DEBUG_assign(warn("OSSV(0x%x)->s(): deleting string 0x%x", this, vptr));
+      delete [] ((char*)vptr);
+      vptr = 0;
+    }
+    xiv = 0;
+    return;
   }
-  xiv = nlen;
+  if (nlen > 32760) {
+    warn("ObjStore: string of length %d truncated to 32760 bytes", nlen);
+    nlen = 32760;
+  }
+  int LONGISH = nlen > 16 ? 1 : 0;
   if (!morph(OSVt_PV)) {
-    DEBUG_assign(warn("OSSV(0x%x)->s(): deleting string 0x%x", this, vptr));
-    delete [] ((char*)vptr);
-    vptr = 0;
+    if (xiv == nlen) {
+      //already ok
+    } else if (xiv - nlen <= 8) {
+      //small waste; just fixup null terminator
+      ((char*)vptr)[nlen] = 0;
+    } else {
+      if (vptr) {
+	DEBUG_assign(warn("OSSV(0x%x)->s(): deleting string 0x%x", this, vptr));
+	delete [] ((char*)vptr);
+      }
+      vptr = new(os_segment::of(this), os_typespec::get_char(),
+		 nlen+LONGISH) char[nlen+LONGISH];
+      if (LONGISH) ((char*)vptr)[nlen] = 0;
+    }
+  } else {
+    vptr = new(os_segment::of(this), os_typespec::get_char(),
+	       nlen+LONGISH) char[nlen+LONGISH];
+    if (LONGISH) ((char*)vptr)[nlen] = 0;
   }
-  int OSSV_NULL_TERMINATE = nlen > 16 ? 1 : 0;
-  char *str = new(os_segment::of(this), os_typespec::get_char(),
-		  nlen+OSSV_NULL_TERMINATE) char[nlen+OSSV_NULL_TERMINATE];
-  memcpy(str, nval, nlen+OSSV_NULL_TERMINATE);
-  vptr = str;
-  DEBUG_assign(warn("OSSV(0x%x)->s(%s): alloc 0x%x", this, (char*) vptr, str));
+  memcpy(vptr, nval, nlen);
+  xiv = nlen;
+  DEBUG_assign(warn("OSSV(0x%x)->s(%s): 0x%x", this, (char*) vptr, vptr));
 }
 
 void OSSV::s(OSSVPV *nval)
@@ -451,7 +479,7 @@ char *OSSV::stringify() // debugging ONLY!
     STRLEN len;
     char *s1 = OSvPV(this, len);
     if (len > 60) len = 60;
-    memcpy(strrep1, s1, len);
+    if (len) {assert(s1); memcpy(strrep1, s1, len);}
     strrep1[len]=0;
     break;}
   case OSVt_RV:    sprintf(strrep1, "OBJECT(0x%p)", vptr); break;
@@ -672,8 +700,7 @@ void OSSVPV::bless(SV *stash)
   STRLEN cur1, cur2;
   char *pv1 = SvPV(stash, cur1);
   char *pv2 = os_class(&cur2);
-  if (memcmp((void*)pv1, (void*)pv2, cur1 < cur2 ? cur1 : cur2)== 0 &&
-      cur1 == cur2) {
+  if (cur1 == cur2 && memcmp((void*)pv1, (void*)pv2, cur1) == 0) {
     // Can avoid storing the bless-to for 'unblessed' objects.
     XPUSHs(me);
     PUTBACK;
@@ -718,7 +745,7 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
   }
 
   if (CLASS) {
-    // roll up into database open! XXX
+    // roll up into database open? XXX
     SV *toclass=0;
     SV **msvp = hv_fetch(osp->CLASSLOAD, CLASS, *CLEN, 0); //in CACHE?
     if (msvp) toclass = *msvp;
@@ -735,7 +762,7 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
       SAVETMPS;
       PUSHMARK(SP);
       EXTEND(SP, 3);
-      PUSHs(sv_2mortal(newSVpv("The database should not be considered", 0)));
+      PUSHs(sv_2mortal(newSVpv("the database is not relavent", 0)));
       SV *sv1, *sv2;
       PUSHs(sv1 = sv_2mortal(newSVpv(oscl, len)));
       PUSHs(sv2 = sv_2mortal(newSVpv(CLASS, *CLEN)));
@@ -781,7 +808,7 @@ void OSSVPV::ROCNT_dec()
   if (OSPvROCNT(this) < REFCNT16) {
     if (OSPvROCNT(this) <= 1) {
       assert(OSPvROCNT(this) == 1);
-      XSHARE(0);
+      ROSHARE_set(0);
     }
     --OSPvROCNT(this);
   }
@@ -807,25 +834,31 @@ void OSSVPV::REF_dec() {
       meth = (SV*) gv_fetchmethod(pkg, "NOREFS");
     if (meth) {
       OSPvINUSE_on(this); //protect from race condition
-      DEBUG_refcnt(warn("%x->enter NOREFS", this));
+      DEBUG_norefs(warn("%x->enter NOREFS", this));
       SV *br = ospv_2bridge(this);
       SV *me = osp->wrap(this, br);
       dSP;
+      ENTER;
       PUSHMARK(SP);
       XPUSHs(me);
       PUTBACK;
-      perl_call_sv(meth, G_VOID|G_DISCARD);
-      ((ospv_bridge*) SvIV(SvRV(br)))->invalidate(); //must avoid extra ref!
-      DEBUG_refcnt(warn("%x->exit NOREFS", this));
+      perl_call_sv((SV*)GvCV(meth), G_DISCARD|G_EVAL|G_KEEPERR);
+      ((osp_bridge*) SvIV(SvRV(br)))->invalidate(); //must avoid extra ref!
+      LEAVE;
+      DEBUG_norefs(warn("%x->exit NOREFS", this));
       OSPvINUSE_off(this);
+    } else {
+      DEBUG_norefs(warn("%x->NOREFS not found", this));
     }
+    // Probably should support the exact same re-bless symantics
+    // that DESTROY supports. XXX
   }
   _refs--;
   DEBUG_refcnt(warn("OSSVPV(0x%x)->REF_dec() to %d", this, _refs));
   if (_refs == 0) {
-    DEBUG_refcnt(warn("%x: begin delete", this));
+    DEBUG_norefs(warn("OSSVPV(0x%x): begin delete", this));
     delete this;
-    DEBUG_refcnt(warn("%x: finish delete", this));
+    DEBUG_norefs(warn("OSSVPV(0x%x): finish delete", this));
   }
 }
 
@@ -865,8 +898,8 @@ OSSV *OSSVPV::traverse(char *keyish)
 { NOTFOUND("traverse"); return 0; }
 OSSVPV *OSSVPV::traverse2(char *keyish)
 { return 0; }
-void OSSVPV::XSHARE(int)
-{ NOTFOUND("XSHARE"); }
+void OSSVPV::ROSHARE_set(int)
+{ NOTFOUND("ROSHARE_set"); }
 
 void OSSVPV::fwd2rep(char *methname, SV **top, int items)
 {
@@ -891,11 +924,12 @@ ospv_bridge::ospv_bridge(OSSVPV *_pv)
 {
   is_transient = os_segment::of(pv) == os_segment::of(0);
   can_delete = 0;
+  BrDEBUG_set(this, 0);
 
   dOSP; dTXN;
   assert(pv);
   STRLEN junk;
-  DEBUG_bridge(warn("ospv_bridge 0x%x->new(%s=0x%x) is_transient=%d",
+  DEBUG_bridge(this,warn("ospv_bridge 0x%x->new(%s=0x%x) is_transient=%d",
 		    this, _pv->os_class(&junk), pv, is_transient));
   if (txn->can_update(pv) || is_transient) pv->REF_inc();
 }
@@ -930,7 +964,7 @@ void ospv_bridge::unref()
 
   dOSP ; dTXN ;
   assert(txn);
-  DEBUG_bridge(warn("ospv_bridge 0x%x->unref(pv=0x%x) updt=%d",
+  DEBUG_bridge(this, warn("ospv_bridge 0x%x->unref(pv=0x%x) updt=%d",
 		    this, copy, txn->can_update(copy)));
   assert(copy);
   if (txn->can_update(copy)) {
@@ -985,7 +1019,7 @@ OSSV *OSPV_Generic::path_2key(OSSVPV *obj, OSPV_Generic *path)
     OSSV *s1 = path->avx(pi);
     assert(s1->natural() == OSVt_PV);
     char *tr = OSvPV(s1, slen);
-    assert(tr[slen-1] == 0);  //null terminated!
+    assert(tr && tr[slen-1] == 0);  //null terminated!
     OSSV *at = obj->traverse(tr);
     if (!at || !at->is_set()) {
       croak("Could not traverse field '%s'", tr);
@@ -1006,22 +1040,29 @@ OSSV *OSPV_Generic::path_2key(OSSVPV *obj, OSPV_Generic *path)
 void osp_pathexam::abort()
 {
   assert(mode == 's');
-  for (int xx=0; xx < trailcnt; xx++) {
-    trail[xx]->ROCNT_dec();
+  if (!is_excl) {
+    for (int xx=0; xx < trailcnt; xx++) {
+      trail[xx]->ROCNT_dec();
+    }
   }
 }
 
 void osp_pathexam::commit()
 {
   assert(mode == 'u');
-  for (int xx=0; xx < trailcnt; xx++) {
-    trail[xx]->ROCNT_dec();
+  if (!is_excl) {
+    for (int xx=0; xx < trailcnt; xx++) {
+      trail[xx]->ROCNT_dec();
+    }
   }
 }
 
 // path_2key for all keys & updates readonly flags
-osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
+osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in,
+			   int exclusive)
 {
+  is_excl = exclusive;
+  int flag = is_excl? OSVf_ROEXCL : OSVf_ROSHARE;
   failed=0;
   mode = mode_in;
   assert(mode == 's' || mode == 'u');
@@ -1049,9 +1090,9 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
 
       STRLEN slen;
       char *tr = OSvPV(s1, slen);
-      assert(tr[slen-1] == 0);  //verify null terminated
+      assert(tr && tr[slen-1] == 0);  //verify null terminated
 
-      if (mode == 's') obj->ROCNT_inc();
+      if (mode == 's' && !is_excl) obj->ROCNT_inc();
       trail[trailcnt++] = obj;
 
       OSSV *at = obj->traverse(tr);
@@ -1062,8 +1103,13 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
 	return;
       }
 
-      if (mode == 's')
-	OSvXSHARED_set(at, 1);  // will reset when ROCNT_dec to zero
+      if (mode == 's') {
+	if (is_excl && OSvROEXCL(at))
+	  croak("attempt to exclusive-index key twice (at '%s')", tr);
+	OSvFLAG_set(at, flag, 1);
+      } else {
+	if (is_excl) OSvFLAG_set(at, flag, 0);
+      }
 
       if (++pstep < len) {
 	if (at->natural() != OSVt_RV) 
@@ -1192,3 +1238,274 @@ void OSPV_Cursor::at()
 void OSPV_Cursor::next()
 { NOTFOUND("next"); }
 
+//////////////////////////////////////////////////////////////////////
+// adapted from perl 5.004_63
+
+#ifndef Perl_debug_log
+#define Perl_debug_log	PerlIO_stderr()
+#endif
+extern "C" void mysv_dump(SV *sv)
+{
+    SV *d = sv_newmortal();
+    char *s;
+    U32 flags;
+    U32 type;
+
+    if (!sv) {
+	PerlIO_printf(Perl_debug_log, "SV = 0\n");
+	return;
+    }
+    
+    flags = SvFLAGS(sv);
+    type = SvTYPE(sv);
+
+    sv_setpvf(d, "(0x%lx)\n  REFCNT = %ld\n  FLAGS = (",
+	      (unsigned long)SvANY(sv), (long)SvREFCNT(sv));
+    if (flags & SVs_PADBUSY)	sv_catpv(d, "PADBUSY,");
+    if (flags & SVs_PADTMP)	sv_catpv(d, "PADTMP,");
+    if (flags & SVs_PADMY)	sv_catpv(d, "PADMY,");
+    if (flags & SVs_TEMP)	sv_catpv(d, "TEMP,");
+    if (flags & SVs_OBJECT)	sv_catpv(d, "OBJECT,");
+    if (flags & SVs_GMG)	sv_catpv(d, "GMG,");
+    if (flags & SVs_SMG)	sv_catpv(d, "SMG,");
+    if (flags & SVs_RMG)	sv_catpv(d, "RMG,");
+
+    if (flags & SVf_IOK)	sv_catpv(d, "IOK,");
+    if (flags & SVf_NOK)	sv_catpv(d, "NOK,");
+    if (flags & SVf_POK)	sv_catpv(d, "POK,");
+    if (flags & SVf_ROK)	sv_catpv(d, "ROK,");
+    if (flags & SVf_OOK)	sv_catpv(d, "OOK,");
+    if (flags & SVf_FAKE)	sv_catpv(d, "FAKE,");
+    if (flags & SVf_READONLY)	sv_catpv(d, "READONLY,");
+
+#ifdef OVERLOAD
+    if (flags & SVf_AMAGIC)	sv_catpv(d, "OVERLOAD,");
+#endif /* OVERLOAD */
+    if (flags & SVp_IOK)	sv_catpv(d, "pIOK,");
+    if (flags & SVp_NOK)	sv_catpv(d, "pNOK,");
+    if (flags & SVp_POK)	sv_catpv(d, "pPOK,");
+    if (flags & SVp_SCREAM)	sv_catpv(d, "SCREAM,");
+
+    switch (type) {
+    case SVt_PVCV:
+    case SVt_PVFM:
+	if (CvANON(sv))		sv_catpv(d, "ANON,");
+	if (CvUNIQUE(sv))	sv_catpv(d, "UNIQUE,");
+	if (CvCLONE(sv))	sv_catpv(d, "CLONE,");
+	if (CvCLONED(sv))	sv_catpv(d, "CLONED,");
+	if (CvNODEBUG(sv))	sv_catpv(d, "NODEBUG,");
+	break;
+    case SVt_PVHV:
+	if (HvSHAREKEYS(sv))	sv_catpv(d, "SHAREKEYS,");
+	if (HvLAZYDEL(sv))	sv_catpv(d, "LAZYDEL,");
+	break;
+    case SVt_PVGV:
+	if (GvINTRO(sv))	sv_catpv(d, "INTRO,");
+	if (GvMULTI(sv))	sv_catpv(d, "MULTI,");
+	if (GvASSUMECV(sv))	sv_catpv(d, "ASSUMECV,");
+	if (GvIMPORTED(sv)) {
+	    sv_catpv(d, "IMPORT");
+	    if (GvIMPORTED(sv) == GVf_IMPORTED)
+		sv_catpv(d, "ALL,");
+	    else {
+		sv_catpv(d, "(");
+		if (GvIMPORTED_SV(sv))	sv_catpv(d, " SV");
+		if (GvIMPORTED_AV(sv))	sv_catpv(d, " AV");
+		if (GvIMPORTED_HV(sv))	sv_catpv(d, " HV");
+		if (GvIMPORTED_CV(sv))	sv_catpv(d, " CV");
+		sv_catpv(d, " ),");
+	    }
+	}
+    case SVt_PVBM:
+	if (SvTAIL(sv))	sv_catpv(d, "TAIL,");
+	if (SvCOMPILED(sv))	sv_catpv(d, "COMPILED,");
+	break;
+    }
+
+    if (*(SvEND(d) - 1) == ',')
+	SvPVX(d)[--SvCUR(d)] = '\0';
+    sv_catpv(d, ")");
+    s = SvPVX(d);
+
+    PerlIO_printf(Perl_debug_log, "SV = ");
+    switch (type) {
+    case SVt_NULL:
+	PerlIO_printf(Perl_debug_log, "NULL%s\n", s);
+	return;
+    case SVt_IV:
+	PerlIO_printf(Perl_debug_log, "IV%s\n", s);
+	break;
+    case SVt_NV:
+	PerlIO_printf(Perl_debug_log, "NV%s\n", s);
+	break;
+    case SVt_RV:
+	PerlIO_printf(Perl_debug_log, "RV%s\n", s);
+	break;
+    case SVt_PV:
+	PerlIO_printf(Perl_debug_log, "PV%s\n", s);
+	break;
+    case SVt_PVIV:
+	PerlIO_printf(Perl_debug_log, "PVIV%s\n", s);
+	break;
+    case SVt_PVNV:
+	PerlIO_printf(Perl_debug_log, "PVNV%s\n", s);
+	break;
+    case SVt_PVBM:
+	PerlIO_printf(Perl_debug_log, "PVBM%s\n", s);
+	break;
+    case SVt_PVMG:
+	PerlIO_printf(Perl_debug_log, "PVMG%s\n", s);
+	break;
+    case SVt_PVLV:
+	PerlIO_printf(Perl_debug_log, "PVLV%s\n", s);
+	break;
+    case SVt_PVAV:
+	PerlIO_printf(Perl_debug_log, "PVAV%s\n", s);
+	break;
+    case SVt_PVHV:
+	PerlIO_printf(Perl_debug_log, "PVHV%s\n", s);
+	break;
+    case SVt_PVCV:
+	PerlIO_printf(Perl_debug_log, "PVCV%s\n", s);
+	break;
+    case SVt_PVGV:
+	PerlIO_printf(Perl_debug_log, "PVGV%s\n", s);
+	break;
+    case SVt_PVFM:
+	PerlIO_printf(Perl_debug_log, "PVFM%s\n", s);
+	break;
+    case SVt_PVIO:
+	PerlIO_printf(Perl_debug_log, "PVIO%s\n", s);
+	break;
+    default:
+	PerlIO_printf(Perl_debug_log, "UNKNOWN%s\n", s);
+	return;
+    }
+    if (type >= SVt_PVIV || type == SVt_IV)
+	PerlIO_printf(Perl_debug_log, "  IV = %ld\n", (long)SvIVX(sv));
+    if (type >= SVt_PVNV || type == SVt_NV) {
+	SET_NUMERIC_STANDARD();
+	PerlIO_printf(Perl_debug_log, "  NV = %.*g\n", DBL_DIG, SvNVX(sv));
+    }
+    if (SvROK(sv)) {
+	PerlIO_printf(Perl_debug_log, "  RV = 0x%lx\n", (long)SvRV(sv));
+	mysv_dump(SvRV(sv));
+	return;
+    }
+    if (type < SVt_PV)
+	return;
+    if (type <= SVt_PVLV) {
+	if (SvPVX(sv))
+	    PerlIO_printf(Perl_debug_log, "  PV = 0x%lx \"%s\"\n  CUR = %ld\n  LEN = %ld\n",
+		(long)SvPVX(sv), SvPVX(sv), (long)SvCUR(sv), (long)SvLEN(sv));
+	else
+	    PerlIO_printf(Perl_debug_log, "  PV = 0\n");
+    }
+    if (type >= SVt_PVMG) {
+	if (SvMAGIC(sv)) {
+	    PerlIO_printf(Perl_debug_log, "  MAGIC = 0x%lx\n", (long)SvMAGIC(sv));
+	}
+	if (SvSTASH(sv))
+	    PerlIO_printf(Perl_debug_log, "  STASH = \"%s\"\n", HvNAME(SvSTASH(sv)));
+    }
+    switch (type) {
+    case SVt_PVLV:
+	PerlIO_printf(Perl_debug_log, "  TYPE = %c\n", LvTYPE(sv));
+	PerlIO_printf(Perl_debug_log, "  TARGOFF = %ld\n", (long)LvTARGOFF(sv));
+	PerlIO_printf(Perl_debug_log, "  TARGLEN = %ld\n", (long)LvTARGLEN(sv));
+	PerlIO_printf(Perl_debug_log, "  TARG = 0x%lx\n", (long)LvTARG(sv));
+	mysv_dump(LvTARG(sv));
+	break;
+    case SVt_PVAV:
+	PerlIO_printf(Perl_debug_log, "  ARRAY = 0x%lx\n", (long)AvARRAY(sv));
+	PerlIO_printf(Perl_debug_log, "  ALLOC = 0x%lx\n", (long)AvALLOC(sv));
+	PerlIO_printf(Perl_debug_log, "  FILL = %ld\n", (long)AvFILLp(sv));
+	PerlIO_printf(Perl_debug_log, "  MAX = %ld\n", (long)AvMAX(sv));
+	PerlIO_printf(Perl_debug_log, "  ARYLEN = 0x%lx\n", (long)AvARYLEN(sv));
+	flags = AvFLAGS(sv);
+	sv_setpv(d, "");
+	if (flags & AVf_REAL)	sv_catpv(d, ",REAL");
+	if (flags & AVf_REIFY)	sv_catpv(d, ",REIFY");
+	if (flags & AVf_REUSED)	sv_catpv(d, ",REUSED");
+	PerlIO_printf(Perl_debug_log, "  FLAGS = (%s)\n",
+		      SvCUR(d) ? SvPVX(d) + 1 : "");
+	break;
+    case SVt_PVHV:
+	PerlIO_printf(Perl_debug_log, "  ARRAY = 0x%lx\n",(long)HvARRAY(sv));
+	PerlIO_printf(Perl_debug_log, "  KEYS = %ld\n", (long)HvKEYS(sv));
+	PerlIO_printf(Perl_debug_log, "  FILL = %ld\n", (long)HvFILL(sv));
+	PerlIO_printf(Perl_debug_log, "  MAX = %ld\n", (long)HvMAX(sv));
+	PerlIO_printf(Perl_debug_log, "  RITER = %ld\n", (long)HvRITER(sv));
+	PerlIO_printf(Perl_debug_log, "  EITER = 0x%lx\n",(long) HvEITER(sv));
+	if (HvPMROOT(sv))
+	    PerlIO_printf(Perl_debug_log, "  PMROOT = 0x%lx\n",(long)HvPMROOT(sv));
+	if (HvNAME(sv))
+	    PerlIO_printf(Perl_debug_log, "  NAME = \"%s\"\n", HvNAME(sv));
+	break;
+    case SVt_PVCV:
+	if (SvPOK(sv))
+	    PerlIO_printf(Perl_debug_log, "  PROTOTYPE = \"%s\"\n", SvPV(sv,na));
+	/* FALL THROUGH */
+    case SVt_PVFM:
+	PerlIO_printf(Perl_debug_log, "  STASH = 0x%lx\n", (long)CvSTASH(sv));
+	PerlIO_printf(Perl_debug_log, "  START = 0x%lx\n", (long)CvSTART(sv));
+	PerlIO_printf(Perl_debug_log, "  ROOT = 0x%lx\n", (long)CvROOT(sv));
+	PerlIO_printf(Perl_debug_log, "  XSUB = 0x%lx\n", (long)CvXSUB(sv));
+	PerlIO_printf(Perl_debug_log, "  XSUBANY = %ld\n", (long)CvXSUBANY(sv).any_i32);
+	PerlIO_printf(Perl_debug_log, "  GV = 0x%lx", (long)CvGV(sv));
+	if (CvGV(sv) && GvNAME(CvGV(sv))) {
+	    PerlIO_printf(Perl_debug_log, "  \"%s\"\n", GvNAME(CvGV(sv)));
+	} else {
+	    PerlIO_printf(Perl_debug_log, "\n");
+	}
+	PerlIO_printf(Perl_debug_log, "  FILEGV = 0x%lx\n", (long)CvFILEGV(sv));
+	PerlIO_printf(Perl_debug_log, "  DEPTH = %ld\n", (long)CvDEPTH(sv));
+	PerlIO_printf(Perl_debug_log, "  PADLIST = 0x%lx\n", (long)CvPADLIST(sv));
+	PerlIO_printf(Perl_debug_log, "  OUTSIDE = 0x%lx\n", (long)CvOUTSIDE(sv));
+#ifdef USE_THREADS
+	PerlIO_printf(Perl_debug_log, "  MUTEXP = 0x%lx\n", (long)CvMUTEXP(sv));
+	PerlIO_printf(Perl_debug_log, "  OWNER = 0x%lx\n", (long)CvOWNER(sv));
+#endif /* USE_THREADS */
+	PerlIO_printf(Perl_debug_log, "  FLAGS = 0x%lx\n",
+		      (unsigned long)CvFLAGS(sv));
+	if (type == SVt_PVFM)
+	    PerlIO_printf(Perl_debug_log, "  LINES = %ld\n", (long)FmLINES(sv));
+	break;
+    case SVt_PVGV:
+	PerlIO_printf(Perl_debug_log, "  NAME = \"%s\"\n", GvNAME(sv));
+	PerlIO_printf(Perl_debug_log, "  NAMELEN = %ld\n", (long)GvNAMELEN(sv));
+	PerlIO_printf(Perl_debug_log, "  STASH = \"%s\"\n", HvNAME(GvSTASH(sv)));
+	PerlIO_printf(Perl_debug_log, "  GP = 0x%lx\n", (long)GvGP(sv));
+	PerlIO_printf(Perl_debug_log, "    SV = 0x%lx\n", (long)GvSV(sv));
+	PerlIO_printf(Perl_debug_log, "    REFCNT = %ld\n", (long)GvREFCNT(sv));
+	PerlIO_printf(Perl_debug_log, "    IO = 0x%lx\n", (long)GvIOp(sv));
+	PerlIO_printf(Perl_debug_log, "    FORM = 0x%lx\n", (long)GvFORM(sv));
+	PerlIO_printf(Perl_debug_log, "    AV = 0x%lx\n", (long)GvAV(sv));
+	PerlIO_printf(Perl_debug_log, "    HV = 0x%lx\n", (long)GvHV(sv));
+	PerlIO_printf(Perl_debug_log, "    CV = 0x%lx\n", (long)GvCV(sv));
+	PerlIO_printf(Perl_debug_log, "    CVGEN = 0x%lx\n", (long)GvCVGEN(sv));
+	PerlIO_printf(Perl_debug_log, "    LASTEXPR = %ld\n", (long)GvLASTEXPR(sv));
+	PerlIO_printf(Perl_debug_log, "    LINE = %ld\n", (long)GvLINE(sv));
+	PerlIO_printf(Perl_debug_log, "    FILEGV = 0x%lx\n", (long)GvFILEGV(sv));
+	PerlIO_printf(Perl_debug_log, "    EGV = 0x%lx\n", (long)GvEGV(sv));
+	break;
+    case SVt_PVIO:
+	PerlIO_printf(Perl_debug_log, "  IFP = 0x%lx\n", (long)IoIFP(sv));
+	PerlIO_printf(Perl_debug_log, "  OFP = 0x%lx\n", (long)IoOFP(sv));
+	PerlIO_printf(Perl_debug_log, "  DIRP = 0x%lx\n", (long)IoDIRP(sv));
+	PerlIO_printf(Perl_debug_log, "  LINES = %ld\n", (long)IoLINES(sv));
+	PerlIO_printf(Perl_debug_log, "  PAGE = %ld\n", (long)IoPAGE(sv));
+	PerlIO_printf(Perl_debug_log, "  PAGE_LEN = %ld\n", (long)IoPAGE_LEN(sv));
+	PerlIO_printf(Perl_debug_log, "  LINES_LEFT = %ld\n", (long)IoLINES_LEFT(sv));
+	PerlIO_printf(Perl_debug_log, "  TOP_NAME = \"%s\"\n", IoTOP_NAME(sv));
+	PerlIO_printf(Perl_debug_log, "  TOP_GV = 0x%lx\n", (long)IoTOP_GV(sv));
+	PerlIO_printf(Perl_debug_log, "  FMT_NAME = \"%s\"\n", IoFMT_NAME(sv));
+	PerlIO_printf(Perl_debug_log, "  FMT_GV = 0x%lx\n", (long)IoFMT_GV(sv));
+	PerlIO_printf(Perl_debug_log, "  BOTTOM_NAME = \"%s\"\n", IoBOTTOM_NAME(sv));
+	PerlIO_printf(Perl_debug_log, "  BOTTOM_GV = 0x%lx\n", (long)IoBOTTOM_GV(sv));
+	PerlIO_printf(Perl_debug_log, "  SUBPROCESS = %ld\n", (long)IoSUBPROCESS(sv));
+	PerlIO_printf(Perl_debug_log, "  TYPE = %c\n", IoTYPE(sv));
+	PerlIO_printf(Perl_debug_log, "  FLAGS = 0x%lx\n", (long)IoFLAGS(sv));
+	break;
+    }
+}

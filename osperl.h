@@ -63,7 +63,7 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 
 #define DEBUG_refcnt(a)   if (osp_thr::fetch()->debug & 1)  a
 #define DEBUG_assign(a)   if (osp_thr::fetch()->debug & 2)  a
-#define DEBUG_bridge(a)   if (osp_thr::fetch()->debug & 4)  a
+// 0x4: see txn.h
 #define DEBUG_array(a)    if (osp_thr::fetch()->debug & 8)  a
 #define DEBUG_hash(a)     if (osp_thr::fetch()->debug & 16) a
 #define DEBUG_set(a)      if (osp_thr::fetch()->debug & 32) a
@@ -76,11 +76,11 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 #define DEBUG_wrap(a)	  if (osp_thr::fetch()->debug & 4096) {a}
 #define DEBUG_thread(a)	  if (osp_thr::fetch()->debug & 8192) a
 #define DEBUG_index(a)	  if (osp_thr::fetch()->debug & 16384) a
+#define DEBUG_norefs(a)	  if (osp_thr::fetch()->debug & 32768) a
 #else
 #define assert(what)
 #define DEBUG_refcnt(a)
 #define DEBUG_assign(a)
-#define DEBUG_bridge(a)
 #define DEBUG_array(a) 
 #define DEBUG_hash(a)
 #define DEBUG_set(a)
@@ -93,6 +93,7 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 #define DEBUG_wrap(a)
 #define DEBUG_thread(a)
 #define DEBUG_index(a)
+#define DEBUG_norefs(a)
 #endif
 
 typedef void (*XS_t)(CV*);
@@ -111,24 +112,29 @@ typedef void (*XS_t)(CV*);
 #define OSVt_RV			5
 #define OSVt_IV16		6
 //#define OSVt_IV64??		7
+//#define OSVt_1CHAR		8
+//#define OSVt_2CHAR		9
 
 #define OSVTYPEMASK		0x07
 #define OSvTYPE(sv)		((sv)->_type & OSVTYPEMASK)
 #define OSvTYPE_set(sv,to) \
 	(sv)->_type = (((sv)->_type & ~OSVTYPEMASK) | (to & OSVTYPEMASK))
 
-// XSHARED is undo-able until the ROCNT reach 2^16 - 10
-#define OSVf_XSHARED		0x80
+// ROSHARE is undo-able until the ROCNT reach 2^16 - 10
+#define OSVf_ROEXCL		0x40
+#define OSVf_ROSHARE		0x80
 #define OSvFLAG_set(sv,flag,on)			\
 STMT_START {					\
 	if (on) ((sv)->_type |= (flag));	\
 	else ((sv)->_type &= ~(flag));		\
 } STMT_END
-#define OSvXSHARED_set(sv,on) OSvFLAG_set(sv,OSVf_XSHARED,on)
+#define OSvROSHARE_set(sv,on)	OSvFLAG_set(sv,OSVf_ROSHARE,on)
+#define OSvROEXCL(sv)		((sv)->_type & OSVf_ROEXCL)
+#define OSvROCLEAR(sv)		OSvFLAG_set(sv, OSVf_ROEXCL|OSVf_ROSHARE, 0)
 
 #define OSvTRYWRITE(sv)						\
 STMT_START {							\
-  if ((sv)->_type & OSVf_XSHARED)				\
+  if ((sv)->_type & (OSVf_ROEXCL|OSVf_ROSHARE))			\
     croak("ObjStore: attempt to modify READONLY %s='%s'",	\
 	  sv->type_2pv(), sv->stringify());			\
 } STMT_END
@@ -240,7 +246,7 @@ struct OSSVPV : os_virtual_behavior {
   // you must implement none or both of the following:
   virtual OSSV *traverse(char *keyish);
   virtual OSSVPV *traverse2(char *keyish);
-  virtual void XSHARE(int on);
+  virtual void ROSHARE_set(int on);
 };
 
 struct OSPV_Ref2 : OSSVPV {
@@ -361,8 +367,9 @@ struct osp_pathexam : osp_pathref {
   OSSVPV *trail[INDEX_MAXKEYS*4]; //XXX
   int failed;
   int trailcnt;
+  int is_excl;
   char mode;
-  osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode);
+  osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode, int excl);
   void abort();
   void commit();
 };
@@ -413,5 +420,7 @@ struct OSPV_Cursor : OSPV_Ref {
   virtual void at();
   virtual void next();
 };
+
+extern "C" void mysv_dump(SV *sv);
 
 #endif

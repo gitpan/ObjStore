@@ -10,38 +10,51 @@ following in the body of your message:
 
 + IDEAS +
 
-bugs:
-  where $j is persistent and $$j{errors} doesn't exist yet
-  push @{$j->{errors}}, $m;
+study the perl compiler (ExCxx)
 
-osperlserver
-  test coverage analysis?
+bridges
+  use a doubly-linked ring
+  pool allocation
 
-configure unique index duplicate row behavior?
-
-$ref->notify('m1', 'batch'); ???
-
-transactions
-  keep a single transaction stack
-  begin 'update', $string;
-  begin('update!',...): force switch to update?
+Perl variables do not need to increment database refcnts as long as
+deleted data is not referenced.  Envision two modes:
+1. Don't increment, but enable extra code to check for improper use.
+2. Don't increment.  Performance should be better but crashes are
+possible.
 
 posh
-  'cd - ': go back to prior directory
-  resolve cd paths per component!
-  autodetect @INC modifications and print help message
-  factor eval stuff more
+  merge with ObjStore::Posh::Cursor
   display style?  web integration?  cgi-posh?
   qt-posh?
 
-document?
-  What does an ObjStore server look like?
-  What are stored procedures?
+Support for multiple application schemas
+  generic scalar object typemap
+  XPVMG abstraction
+  REFCNT
+  Bit::Vector
+
+transactions
+  keep a single transaction stack
+  begin('update!',...): force switch to update?
+  void os_transaction::set_name(const char*); 
+  char* os_transaction::get_name();
 
 
 + VAGUE POSSIBILITIES +
 
-split all the goodies into a separate package?
+overloaded refs
+
+~magic ownership check?
+
+$ref->notify('m1', 'batch'); ???
+
+configure unique index duplicate row behavior?
+
+configure(...) : relax parameter limitation
+
+remove copy of sv_dump
+
+split all the server goodies into a separate package?
 
 switch representations dynamically
   cursor syncronization: check os_typespec
@@ -57,11 +70,11 @@ typemap
   there are still some mysterious problems
 
 permutation magic for AVHV
-  ObjStore::Index::_(un)protect
+  ObjStore::Index::_(un)protect?
 
 translate('transient', $persistent)
 
-asyncronous signals can cause perl to SEGV (known perl bug)
+asyncronous signals can cause perl to SEGV? (known perl bug)
 
 move ObjStore::subscribe back into ObjStore::Notification?
 
@@ -72,13 +85,8 @@ optimize splash suite
 ObjStore::Index
   $t->select(['*'], sub { my $r = shift; ... }); ??why
 
-Table3
-  assign cursor focus to avoid malloc
-
 Threads!
   renovate thread specific stuff in ObjStore.xs
-
-Autoclassloading upon open?  Maybe not, you don't know what to load
 
 pathexam
   invisibly auto-traverse references?
@@ -87,18 +95,11 @@ get_database
   factor
   os_server::get_databases() ignores bless; yikes!
 
-per-database shared hash key strings?  (for small hashes?)
+per- database/segment shared hash key strings?  (for small hashes?)
 
 prune debugging stuff
 
-Improve transaction memory management.  Go back to using doubly-linked
-lists to destroy the bridge at soonest point.
-
-iterating over AVHV keys is broken - cursor is stored in the ossv_bridge
-  unmagic the keys hash - make non-lazy?
-
 posh
-  improve pre/post eval logic
   Devel::Symdump->methods when peeking if blessed?
   Multiple sessions per user?  Who cares?
   Call system() when in ufs?  How about rawfs?
@@ -127,10 +128,10 @@ automatically spooge $ObjStore::RUN_TIME if @ISA changes?
 install HTML versions of the pod files & gif image
 
 notifications
-  notify should in/out the string length - #SE057480_O#
+  notify should in/out string length!  #SE057480_O#
 
 change_schema_key:
-  delete database INC, checksum %INC, light up security flag
+  delete database INC, checksum %INC, light up security flags?
   open: require each %INC, verify checksums (unless some flags is set)
   TAINTing?
 
@@ -145,12 +146,6 @@ optional pool allocation of numeric types
   configurable block size
   store offset in xiv!
   think about performance
-
-Support for multiple application schemas
-  generic scalar object typemap
-  XPVMG abstraction
-  REFCNT
-  Bit::Vector
 
 Needed is a more flexible hash table that can serve to replace
 os_Dictionary and also be used as an ObjStore::Index.

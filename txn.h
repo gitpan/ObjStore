@@ -8,6 +8,17 @@ struct osp_bridge {
   virtual void invalidate();		// when transaction ends
   virtual int ready();			// can delete bridge now?
   virtual int invalid();		// error to dereference?
+
+#ifdef OSP_DEBUG  
+  int br_debug;
+#define BrDEBUG(b) b->br_debug
+#define BrDEBUG_set(b,to) BrDEBUG(b)=to
+#define DEBUG_bridge(br,a)   if (BrDEBUG(br) || osp_thr::fetch()->debug & 4) a
+#else
+#define BrDEBUG(b) 0
+#define BrDEBUG_set(b,to)
+#define DEBUG_bridge(br,a)
+#endif
 };
 
 struct osp_txn;
@@ -24,7 +35,6 @@ struct osp_thr {
   SV *errsv;
   HV *CLASSLOAD;
   SV *stargate;
-  int tie_objects;
   struct osp_txn *txn;
   tix_handler handler;
   osp_bridge *bridge_top;   //should be invalid
@@ -34,12 +44,12 @@ struct osp_thr {
   void destroy_bridge();
 
   //glue methods
-  os_segment *sv_2segment(SV *);
-  ospv_bridge *sv_2bridge(SV *, int force, os_segment *seg=0);
-  
-  SV *ossv_2sv(OSSV *);
-  SV *ospv_2sv(OSSVPV *);
-  SV *wrap(OSSVPV *ospv, SV *br);
+  static os_segment *sv_2segment(SV *);
+  static ospv_bridge *sv_2bridge(SV *, int force, os_segment *seg=0);
+  static SV *ossv_2sv(OSSV *);
+  static SV *ospv_2sv(OSSVPV *);
+  static SV *wrap(OSSVPV *ospv, SV *br);
+
   OSSV *plant_sv(os_segment *, SV *);
   OSSV *plant_ospv(os_segment *seg, OSSVPV *pv);
   void push_ospv(OSSVPV *pv);

@@ -23,7 +23,7 @@ struct OSPV_fattree_av : OSPV_Generic {
   virtual void CLEAR();
   virtual int FETCHSIZE();
   virtual OSSV *traverse(char *keyish);
-  virtual void XSHARE(int on);
+  virtual void ROSHARE_set(int on);
 };
 
 

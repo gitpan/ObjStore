@@ -1,6 +1,6 @@
 # This is -*-perl-*- !
 use Test;
-BEGIN { plan tests => 25, todo => [3,15] }
+BEGIN { plan tests => 23 }
 
 use strict;
 use ObjStore;
@@ -22,14 +22,10 @@ sub testify {
     ok($ah->os_class eq 'ObjStore::HV');
     ok($ah->rep_class eq $rep) or warn "$rep ne ".$ah->rep_class;
 
-    begin sub { %$ah = (); };  #broken!
-    ok(! $@);
-    undef $@;
-
     ok(!defined $ah->FIRSTKEY());
 
     for (1..2) {
-	$ah->CLEAR;
+	%$ah = ();
 	for (1..8) {
 	    my $tostore = ObjStore::translate($ah, { at => $_ });
 	    my $stored = $ah->{$_} = $tostore;

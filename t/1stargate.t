@@ -17,6 +17,7 @@ my $refs;
 &open_db;
 begin 'update', sub {
     my $john = $db->root('John');
+#    $john->_debug(1);
     $refs = $john->_refcnt;
     chk_refs($john->_refcnt, $refs); #1
 

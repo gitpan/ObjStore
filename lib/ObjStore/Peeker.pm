@@ -16,24 +16,27 @@ sub debug {
 sub new {
     my ($class, @opts) = @_;
     my $o = bless {
-	vareq => 0,
+	vareq => 0,          # make it look like an assignment
 	prefix => '',
 	indent => '  ',
 	sep => "\n",
-	addr => 0,
-	refcnt => 0,
-	summary_width => 3,
+	all => 0,            # ObjStore::Database - show private root
+	addr => 0,           # show addresses
+	refcnt => 0,         # show refcnts
+	summary_width => 3,  # used if data is wider than width
 	width => 30,
 	depth => 20,
 	to => 'string',
-	all => 0,
-	pretty => 1,
+	pretty => 1,         # use object specific methods
     }, $class;
     $o->reset;
     croak "Odd number of parameters" if @opts & 1;
     while (@opts) {
 	my ($k, $v) = (shift @opts, shift @opts);
-	if (!exists $o->{$k}) { carp "Attribute '$k' unrecognized"; next; }
+	if (!exists $o->{$k}) { 
+	    # don't be so restrictive? XXX
+	    carp "attribute '$k' unrecognized"; next;
+	}
 	$o->{$k} = $v;
     }
     $o;
@@ -245,3 +248,13 @@ sub peek_hash {
 }
 
 1;
+
+=head1 NAME
+
+    ObjStore::Peeker - Like Data::Dumper, Except for B<Very Large> Data
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=cut

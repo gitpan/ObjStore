@@ -37,8 +37,8 @@ hvent2::hvent2() : hk(0)
 
 hvent2::~hvent2()
 {
-  OSvXSHARED_set(&hv, 0);
-  set_undef();
+  //  OSvROCLEAR(&hv); //?XXX
+  if (hk) delete [] hk; hk=0;
 }
 
 void hvent2::FORCEUNDEF()
@@ -147,10 +147,10 @@ OSSV *OSPV_avarray::traverse(char *keyish)
   return avx(atol(keyish));
 }
 
-void OSPV_avarray::XSHARE(int on)
+void OSPV_avarray::ROSHARE_set(int on)
 {
   for (int xx=0; xx < av.count(); xx++) {
-    OSvXSHARED_set(&av[xx], on);
+    OSvROSHARE_set(&av[xx], on);
   }
 }
 
@@ -330,10 +330,10 @@ OSSV *OSPV_hvarray2::hvx(char *key)
 OSSV *OSPV_hvarray2::traverse(char *keyish)
 { return hvx(keyish); }
 
-void OSPV_hvarray2::XSHARE(int on)
+void OSPV_hvarray2::ROSHARE_set(int on)
 {
   for (int xx=0; xx < hv.count(); xx++) {
-    OSvXSHARED_set(&hv[xx].hv, on);
+    OSvROSHARE_set(&hv[xx].hv, on);
   }
 }
 

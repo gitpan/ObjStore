@@ -1,5 +1,5 @@
 #!/nw/dev/usr/bin/perl -w
-# It would be cool if this file could be put inside a /Safe/ object...
+
 use strict;
 package Posh;
 use Carp;
@@ -14,6 +14,9 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	$open_mode = 'update';
     } elsif ($o =~ m/^-mvcc$/) {
 	$open_mode = 'mvcc';
+    } elsif ($o =~ m/^-remote$/) {
+	#assume osperlserver is running; create a posh instance; etc...!
+	$open_mode = 'remote';
     } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
 	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
 	eval "require $m";
@@ -76,8 +79,6 @@ use base 'ObjStore::HV';
 use vars qw($VERSION);
 $VERSION = '1.00';
 
-# Refcnts are wildly inaccurate unless you are in read_only mode? XXX
-
 my $Lser    = new ObjStore::Peeker(depth => 0);
 my $Peeker  = new ObjStore::Peeker(to => 'stdout', depth => 0);
 my $Results = new ObjStore::Peeker(to => 'stdout', vareq => 1);
@@ -112,7 +113,6 @@ sub enter {
 	$o->{cursor} = ObjStore::Path::Ref->new($o);
 	my $db;
 	my ($dbname,$class) = @Posh::direct;
-	$dbname = cwd."/$dbname" if $dbname !~ m{^/};
 	if (-d $dbname) {
 	    $o->{'cwd'} = $dbname;
 	} else {
@@ -234,13 +234,6 @@ sub execute {
     local($input::db, $input::at, $input::view, $input::cursor);
     my ($o, $input) = @_;
 
-    if (ref $input) {
-	# This code ref did not come from the user.
-	eval { $input->(); };
-	print $@ if $@;
-	return;
-    }
-
     # Any commands that are not straight perl syntax are
     # parsed and executed here.  (cd, ls)
 
@@ -301,7 +294,7 @@ sub execute {
 		    my $at2 = $at->POSH_ENTER();
 		    if (!blessed $at2) {
 			warn "$at->POSH_ENTER() returned junk ($at2)\n";
-		    } elsif ($at == $at2) {
+		    } elsif ("$at" eq "$at2") {
 		    } elsif (!$at2->can('_is_persistent') or
 			     !$at2->_is_persistent) {
 			warn "$at->POSH_ENTER() returned junk ($at2)\n";
@@ -369,6 +362,7 @@ sub execute {
     my @ret = eval $eval_setup.$input;
 
     if ($@) {
+	ObjStore::Transaction::get_current()->abort();
 	if ($Posh::open_mode eq 'mvcc' and
 	    $@ =~ m/Operation not allowed during a read-only transaction/i) {
 	    print "# Attempt to write to a read-only database denied.\n";
@@ -376,7 +370,6 @@ sub execute {
 	    print $@;
 	}
 	print "# Type 'help' for help!\n";
-	ObjStore::Transaction::get_current()->abort();
     } else {
 	$Results->reset;
 	for (@ret) { $Results->Peek($_) }
@@ -442,7 +435,7 @@ sub pwd {
     ();
 }
 
-# revisit this once perl-porters figure out how to mark methods XXX
+# revisit once perl-porters figure out how to mark methods XXX
 sub methods {
     my ($ref) = @_;
     my $pack = ref $ref? ref $ref : $ref;
@@ -511,15 +504,12 @@ sub new {
 
     $o->{user} ||= scalar(getpwuid($>));
     $o->{app} = ObjStore::AppInstance->new('posh', $o->{user});
+    $o->{ttype} = $open_mode eq 'mvcc'? 'read' : 'update';
 
     ObjStore::set_max_retries(0);
     $ObjStore::TRANSACTION_PRIORITY = 0x100; #don't conflict with real jobs
     begin('update', sub {
 	      my $t = $o->{app}->top();
-
-	      # ignore persistent copy ?
-	      $t->{ttype} = $open_mode eq 'mvcc'? 'read' : 'update';
-	      $o->{ttype} = $t->{ttype};
 
 	      $t->{view} ||= new Posh::View($t);
 	      $o->{prompt} = $t->{view}->enter($o->{app}->get_pathname());
@@ -565,11 +555,9 @@ sub run {
 		print "posh: the database is open in mvcc mode; you can only read\n";
 		next;
 	    }
-	    $ttype = 'update';
-	    $input = sub {
-		$o->{ttype} = $mode;
-		print "[set for \U$mode]\n";
-	    };
+	    $o->{ttype} = $mode;
+	    print "[set for \U$mode]\n";
+	    next;
 	} else {
 	    $ttype = $o->{ttype};
 	}
@@ -596,7 +584,6 @@ sub run {
 		      $term->addhistory($input);
 		  }
 		  if ($ttype eq 'update') {
-		      $top->{ttype} = $ttype;
 		      $o->{app}->modified(1);
 		  }
 	});

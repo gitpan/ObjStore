@@ -73,7 +73,7 @@ sub primary {
 sub anyx {
     my ($o) = @_;
     if ($$o{_primary}) {
-	return $o->index($$o{_primary});
+	return $$o{_primary};
     } else {
 	for my $i (@{$$o{_allindices}}) {
 	    return $i if @$i;

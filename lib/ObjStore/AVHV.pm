@@ -13,11 +13,11 @@ $VERSION = '0.02';
 
 sub nuke_class_fields {
     return if $] < 5.00450;
-    warn "nuke_class_fields: debugging...";
+    warn "nuke_class_fields: this is for debugging only...";
     my ($db) = @_;
     my $layouts = $db->_private_root_data('layouts');
     return if !$layouts;
-    $layouts->CLEAR();
+    %$layouts = ();
 }
 
 sub is_compat {
@@ -124,7 +124,7 @@ sub _avhv_relayout {
     require 5.00450;
     my ($o, $to) = @_;
     my $new = 'ObjStore::AVHV::Fields'->new($o->database_of, $to);
-    return if $new == $o->[0];
+    return if $$o[0] && $new == $o->[0];
     
     my $old = $o->[0];
     ObjStore::peek($old), croak "Found $old where ObjStore::AVHV::Fields expected"
@@ -153,8 +153,6 @@ sub BLESS {
 }
 
 sub evolve { bless $_[0], ref($_[0]); }
-
-#sub POSH_CD { my ($a, $f) = @_; $a->{$f}; }  # now XS!
 
 # Hash style, but in square brackets
 sub POSH_PEEK {
@@ -201,7 +199,8 @@ Support for extremely efficient records.
 
 Even without optimization or benchmarks, the memory savings achieved
 by factoring the hash keys is quite significant and a large
-performance win.
+performance win.  Perl implements a similar strategy by globally
+sharing hash keys across all (transient) hashes.
 
 =head1 TODO
 

@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { plan tests => 9 }
+BEGIN { plan tests => 7 }
 
 use ObjStore ':ADV';
 use lib "./t";
@@ -14,11 +14,9 @@ begin 'update', sub {
     $john->{a} = [];
     $john->{h} = {};
 
-    ok($john);
-    ok(! ($john == 'john'));
-    ok($john != 'john');
-    ok($john == $john_copy);
-    ok("$john" eq "$john_copy");
+    ok $john;
+    ok $john == $john_copy;
+    ok "$john" eq "$john_copy";
 
     my @fun = grep(ref, values %$john);
     ok(@fun > 2);

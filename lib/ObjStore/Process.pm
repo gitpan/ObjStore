@@ -13,7 +13,7 @@ use vars (qw($VERSION @ISA @EXPORT_OK),
 	  qw($HOST $EXE $PROCESS $AUTONOTE $MAXPENDING %METERS),
 	  qw($Status $LoopLevel $ExitLevel),  #loop
 	 );
-$VERSION = '0.04';
+$VERSION = '0.05';
 @ISA = qw(ObjStore::HV Event);
 @EXPORT_OK = qw(meter checkpoint);  #Loop Exit ?XXX
 #
@@ -86,7 +86,7 @@ sub autonotify {
 	    warn "lost ".($over-$overflow)." messages";
 	    $overflow = $over;
 	}
-	my $max = 10;
+	my $max = 10;  # XXX?
 	begin 'update', sub { # ?XXX
 	    while (my $note = ObjStore::Notification->receive(0) and $max--) {
 		my $why = $note->why();
@@ -137,7 +137,7 @@ sub do_debug {
 
 # configure checkpoint policy?
 
-use vars qw($TXN $ABORT $TxnTime $Checkpoint $Elapsed $TType $UseOSChkpt
+use vars qw($TXN $TxnTime $Checkpoint $Elapsed $TType $UseOSChkpt
 	    @ONDIE);
 
 $TType = 'update';  #default to read XXX
@@ -149,12 +149,15 @@ sub set_mode {
 # another API for full transaction commit?  do we run out of memory otherwise? XXX
 sub checkpoint { ++$Checkpoint }
 
+use vars qw($ABORT); # DEPRECIATED
+
 # WARNING: please do not call this directly!
 sub _checkpoint {
     my ($class, $continue) = @_;
     my $chkpt_timer = 2;
     if ($TXN) {
 	my $ok=0;
+	# record stats about aborts!
 	if (!$ABORT) {
 	    $ok = eval {
 		if ($PROCESS) {
@@ -181,7 +184,10 @@ sub _checkpoint {
 	    warn if $@;
 	}
 	my $t1 = [gettimeofday];
+	# check $TXN->is_aborted !!
 	if ($ok and $continue and $UseOSChkpt) {
+	    # This will not work properly until the bridge code
+	    # is rewritten. XXX
 	    $TXN->checkpoint();
 	} else {
 	    $ok? $TXN->commit() : $TXN->abort();
@@ -211,12 +217,25 @@ sub ondie { push @ONDIE, $_[1]; }
 
 sub meter { ++ $METERS{ $_[$#_] }; }
 
+use vars qw($SigInit);
+
 sub Loop {
     my ($o,$waiter) = @_;
     local $Status = 'abnormal';
     local $LoopLevel = $LoopLevel+1;
     ++$ExitLevel;
 #    warn "Loop enter $LoopLevel $ExitLevel";
+
+    if (!$SigInit) {
+	$SIG{HUP} = sub {};
+	for my $sig (qw(INT TERM)) {
+	    $SIG{$sig} = sub { 
+		my $why = "SIG$sig\n";
+		ObjStore::Process->Exit($why);
+	    };
+	}
+	$SigInit = 1;
+    }
 
     $o->_checkpoint(1) if !$TXN;
     while ($ExitLevel >= $LoopLevel) {
@@ -278,22 +297,8 @@ sub exit {
 sub NOREFS {}
 sub DESTROY {}
 
-$SIG{__WARN__} = sub { warn localtime()." $EXE($$): $_[0]" };
-$SIG{__DIE__} = sub { die localtime()." $EXE($$): $_[0]" };
-
-# END blocks need to run...
-if (!defined %Posh::) {
-    $SIG{HUP} = sub {};
-    for my $sig (qw(INT TERM)) {
-	$SIG{$sig} = sub { 
-	    my $why = "SIG$sig\n";
-	    ObjStore::Process->Exit($why);
-	    die "ABORT $why";
-	};
-    }
-}
-
-END{ warn "exiting...\n"; } #optional? generic? XXX
+$SIG{__WARN__} = sub { warn '['.localtime()."] $EXE($$): $_[0]" };
+$SIG{__DIE__} = sub { die '['.localtime()."] $EXE($$): $_[0]" };
 
 1;
 
@@ -320,11 +325,11 @@ Read the source, Luke!
 
 =head1 AUTONOTIFY
 
-Enables automatic dispatch of notifications.  I'm still trying to come
-up with an appropriate buzz phrase.  "Active Database" sounds pretty
-slick, but it would really warm my heart to hear people discuss the
-possibilities of an "Open Objects DataBus" as I walk by in the
-hallway!
+Provides a remote method invokation service for persistent objects.
+(I'm still trying to come up with an appropriate buzz phrase.  "Active
+Database" will probably have to do, but it would really warm my heart
+to hear people discuss the possibilities of an "Open Objects
+DataBus". :-)
 
 =head1 DEADLOCK AVOIDANCE STRATEGIES
 

@@ -1,20 +1,21 @@
+package MY;
+
+$self->{OPTIMIZE} =~ /-g/ and $debug=1;
 
 $self->{CC}="cxx -xtaso";
-$self->{PERLMAINCC}="cc -xtaso";
+$self->{LD}="cxx -taso";   
 $self->{LIBS}=["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losthr"];
+$self->{FULLPERL}='perl32';
 
-
-# link with cxx ! it adds cxx release specific objects...
-
-#$self->{LD}="cxx -taso -g";   
-
-$self->{LD}="cxx -taso -v -g";  # cxx forgets to propagate -g :-)
-$self->{LDDLFLAGS}='-shared -expect_unresolved "*" -O4 -msym -L/usr/local/lib'; # remove -s, if you want debugging
-
-$self->{MAP_TARGET}="perl32";
-$self->{LINKTYPE}="static";
-
+check_perl32();
 check_cxx_version();
+
+sub check_perl32() {
+	my $out=`perl32 -e 'print 1+1'`;
+	die "cant run perl32\n" if @?;
+	return if $out eq "2";
+	die "your perl32 might be buggy. 1+1=$out ?\n";
+}
 
 sub check_cxx_version {
 	my $out=`cxx -V`;
@@ -28,23 +29,17 @@ sub check_cxx_version {
 	warn "Compiler version untested\n";
 }
 
+# MakeMaker overrides
 
-package MY;
+sub const_config {
+        my $out=shift->SUPER::const_config;
+        $out=~s/^(LDDLFLAGS)(.*)-s/$1$2/m if $debug;    # remove -s for debugging
+        $out;
+}
 
-sub install {
-	my $out=shift->SUPER::install(@_);
-
-	# We do NOT want our ObjStore.a or our extralibs.ld to be installed
-	# in INSTALL_ARCHLIB. If we do, other modules couldn't be linked
-	# static, because they would try to include ObjStore.a and the
-	# ObjectStore libraries. And other modules wont have OS_ROOTDIR
-	# defined, dont need it and are not -xtaso anyway.
-	#
-	# To remove these from blib would need many changes to
-	# MM_Unix. So we create them in blib (where we need them to link
-	# our perl32) and skip them only during install.
-
-	$out=~s/^.*INST_ARCHLIB.*\n//gm;
+sub test {
+	my $out=shift->SUPER::test;
+	$out=~s/PERL_DL_NONLAZY=1/PERL_DL_NONLAZY=0/g;  # I have NO idea, what symbols are missing
 	$out;
 }
 
@@ -62,22 +57,11 @@ sub c_o {
 sub cflags {
 
 	my $out=shift->SUPER::cflags(@_);
-	#
-	# DEC cxx5.5 doesn't know the -std flags, which we possibly used
-	# to compile perl with cc. cxx 5.6 does.
-	#
-	$out=~s/-std//;             # cxx5.5-004 doesnt want this.
-      $out=~s/-fprm d//;          # buggy if given cxx forgets to pass args to cc :-)
+	$out=~s/-std//;             # cxx5.5-004 doesn't want this.
+	$out=~s/-fprm d//;          # cxx5.5-004 bug: if given cxx forgets to pass args to cc :-)
 	$out;
 }
 
-#
-# Overlay Makefile.PLs postamble :-)
-# we want to add something to the makefile.
-#
-# create our perl executable as a default.
-#
-#
 
 # MY::postamble allready defined by Makefile.PL.
 # we are going to redefine it. Save old method.
@@ -91,11 +75,7 @@ sub postamble {
 	# add -xtaso flag to the ossg rule
 	#
 
-	$out=~s/^(\t\s*)ossg(\s)/$1ossg -xtaso$2/gm;
-	$out.<<'_EOF_';
-all :: $(MAP_TARGET)
-pure_install :: $(MAP_TARGET)
-	$(MAKE) -f $(MAKE_APERL_FILE) pure_inst_perl
-_EOF_
+	$out=~s/^(\t\s*)ossg(\s)/$1ossg -xtaso$2/gm;   # add -xtaso to ossg rule
+	$out;
 }
 

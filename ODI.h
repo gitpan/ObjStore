@@ -27,7 +27,7 @@ struct OSPV_hvdict : OSPV_Generic {
   virtual SV *NEXT(ospv_bridge*);
   virtual int FETCHSIZE();
   virtual OSSV *traverse(char *keyish);
-  virtual void XSHARE(int on);
+  virtual void ROSHARE_set(int on);
 };
 
 struct OSPV_hvdict_cs : OSPV_Cursor {

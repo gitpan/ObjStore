@@ -1,25 +1,17 @@
 use strict;
 package ObjStore::Job;
 use ObjStore;
-use base 'ObjStore::HV';  #use fields XXX
+use base 'ObjStore::HV';  #use fields? XXX
 use vars qw($VERSION);
-$VERSION = '0.01';
-
-# Job States:
-#
-# R running
-# L infinite loop detected
-# S sleeping                - will retry every second
-# T suspended
-# D done
-# K killed
+$VERSION = '0.02';
 
 sub new {
     # $id should be probably be formed with:
     #    join('.', `hostname`, $$, $id++);
 
     my ($class, $near, $id, $priority) = @_;
-    my $t = $near->database_of->hash->{jobs};
+    # uses real pointers so must be per-database...
+    my $t = $near->database_of->hash->{'ObjStore::Job::Table'};
     my $o = shift->SUPER::new($t);
     # $id is a string!
     if ($id) { $$o{id} = "$id"; }
@@ -27,7 +19,7 @@ sub new {
     $$o{priority} = defined $priority? $priority : 10;
     $$o{job_table} = $$t{SELF};
     $$o{state} = 'R';
-    $$o{why} = '';
+    $$o{why} = '';   #why killed
     $t->add($o);
     $o;
 }
@@ -47,6 +39,7 @@ sub do_work {
     # override this method!
     my $used = int rand 8;
     warn "$o->work(): consuming $used slices";
+    $$o{state} = 'S' if $used == 0;  #avoid 'L' state
     $slices - $used;  # how many left
 }
 sub do_set_priority {
@@ -69,140 +62,52 @@ sub do_signal {
 sub do_acknowledge {  #like wait(2)
     my ($o) = @_;
     return if $o->runnable;
-    $$o{job_table}->focus->remove($o);
+    $o->cancel();
     ()
 }
 
-package ObjStore::Job::Table;
-use ObjStore;
-require Event;
-use base 'ObjStore::Table3';
-use builtin qw(max min);           # available via CPAN
-use vars qw($VERSION $Interrupt $WorkLevel $RunningJob);
-$VERSION = '0.01';
-
-sub evolve {
+sub cancel {
     my ($o) = @_;
-    $$o{SELF} ||= $o->new_ref($o,'hard');
-    #number of slices to do before returning to the event loop
-    $$o{quantum} ||= 42;
-    $$o{nextid} ||= 1;
-
-    $o->add_index('id', sub { ObjStore::Index->new($o, path => 'id') });
-    # might contain only runnable jobs?
-    $o->add_index('priority',
-		  sub { ObjStore::Index->new($o, path => 'priority', unique=>0 ) })
-}
-
-sub restart {
-    my ($o) = @_;
-    my $jref = $o->new_ref('transient','hard');
-    my $worker;
-    $worker = sub {
-	my $left = $jref->focus->work();
-	Event->idle($worker) if $left <= 0;
-    };
-    Event->timer(-interval => 1, -callback => $worker);
-}
-
-# assumes one Job::Table per database
-# interruptable (non-preemptively)
-# cannot span transactions
-# cannot be nested
-# a slice is the smallest unit of work worth the overhead of a method call
-
-sub _run1job {
-    my ($j,$max) = @_;
-    $RunningJob = $j->new_ref('transient','hard');
-    my $used = $max - min $j->do_work($max), $max;
-    $RunningJob = undef;
-    $$j{state} = 'L' if $used == 0 && $$j{state} eq 'R';
-    $used;
-}
-
-$WorkLevel = 0;
-sub work {
-    my ($o) = @_;
-    my $slices = int $$o{quantum};
-    return $slices if $WorkLevel;
-    local $WorkLevel = 1;
-
-    my $priorities = $o->index('priority');
-    return $slices if !@$priorities;
-    begin 'update', sub {
-	$Interrupt = 0;
-	my $todo = $priorities->new_cursor();
-	$todo->moveto(-1);
-
-	# high priority
-	while ($slices > 0 and !$Interrupt) {
-	    my $j = $todo->each(1);
-	    return $slices if !$j;
-	    next unless $j->running;
-	    my $pri = $$j{priority};
-	    if ($pri <= 0) {
-		$slices -= _run1job($j, $slices);
-	    } else {
-		$todo->step(-1);
-		last;
-	    }
-	}
-
-	# time-sliced
-	my @ts;
-        {
-	    my $j;
-	    while ($j = $todo->each(1) and $$j{priority} <= 20
-		   and $j->running) { push @ts, $j; }
-	}
-	$todo->step(-1);
-	while (@ts) {
-	    my @ready = @ts;
-	    @ts=();
-	    while ($slices > 0 and !$Interrupt and @ready) {
-		my $j = shift @ready;
-		my $max = min 21 - $$j{priority}, $slices;
-		$slices -= _run1job($j,$max);
-		push @ts, $j if $$j{state} eq 'R';
-	    }
-	}
-	
-	# low priority idle jobs
-	while ($slices > 0 and !$Interrupt) {
-	    my $j = $todo->each(1);
-	    last if !$j;
-	    next unless $j->running;
-	    $slices -= _run1job($j,$slices);
-	}
-    };
-    if ($@) {
-	my $j = $RunningJob->focus();
-	if (!$j) {
-	    warn $@;  #real bug!!
-	} else {
-	    $j->{'why'} = $@;
-	    $j->{state} = 'K';
-	    return 0;  #retry immediately
-	}
-    }
-    $slices
+    $$o{job_table}->focus->remove($o);
 }
 
 1;
 
 =head1 NAME
 
-ObjStore::Job - Non-Preemptive Idle-Time Job Scheduler
+ObjStore::Job - Jobs for a Non-Preemptive Idle-Time Job Scheduler
 
 =head1 SYNOPSIS
 
+=over 4
+
+=item 1
+
+Add an C<ObjStore::Job::Table> to your database.
+
+=item 2
+
+Sub-class C<ObjStore::Job> and override the C<do_work> method.
+
+=item 3
+
+  package ObjStore::Job
+  use ObjStore::Mortician;
+
+Maybe all jobs should have delayed destruction by default.
+
+=back
+
 =head1 DESCRIPTION
 
-The whole scheduling operation occurs within a single transaction.
-While this means that any job can kill the entire transaction, this
-seems a better choice than wrapping every job in its own
-mini-transaction.  Since transactions are relatively expensive, it is
-assumed that most of the time all jobs will complete without error.
+=head1 JOB STATES
+
+ R running
+ L infinite loop detected
+ S sleeping                - will retry every second
+ T suspended
+ D done
+ K killed
 
 =head1 SCHEDULING PRIORITIES
 
@@ -215,13 +120,22 @@ Allowed to consume all available pizza slices.
 =item * TIME-SLICED 1-20
 
 Given pizza slices proportional to the priority until either all the
-pizza slices are consumed or all the jobs are asleep.
+pizza slices are consumed or all the jobs are asleep (feast induced
+slumber :-).
 
 =item * IDLE > 20
 
 Given all remaining pizza slices.
 
 =back
+
+=head1 TRANSACTION STRATEGY
+
+The whole scheduling operation occurs within a single transaction.
+While this means that any job can kill the entire transaction, this
+seems a better choice than wrapping every job in its own
+mini-transaction.  Since transactions are relatively expensive, it is
+assumed that most of the time all jobs will complete without error.
 
 =head1 BUGS
 

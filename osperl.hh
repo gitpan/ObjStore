@@ -148,7 +148,8 @@ struct OSSVPV : os_virtual_behavior {
   virtual SV *FIRST(ossv_magic*);
   virtual SV *NEXT(ossv_magic*);
   // hash
-  virtual OSSV *FETCHp(char *key);
+  virtual SV *ATp(char *key);
+  virtual SV *FETCHp(char *key);
   virtual SV *STOREp(char *key, SV *value);
   virtual void DELETE(char *key);
   virtual int EXISTS(char *key);
@@ -216,7 +217,8 @@ struct OSPV_hvdict : OSSVPV {
   virtual char *base_class();
   virtual int get_perl_type();
   virtual ~OSPV_hvdict();
-  virtual OSSV *FETCHp(char *key);
+  virtual SV *FETCHp(char *key);
+  virtual SV *ATp(char *key);
   virtual SV *STOREp(char *key, SV *value);
   virtual void DELETE(char *key);
   virtual void CLEAR();
@@ -237,7 +239,7 @@ struct OSPV_hvarray : OSSVPV {
   virtual int get_perl_type();
   int index_of(char *key);
   int first(int start);
-  virtual OSSV *FETCHp(char *key);
+  virtual SV *FETCHp(char *key);
   virtual SV *STOREp(char *key, SV *value);
   virtual void DELETE(char *key);
   virtual void CLEAR();
@@ -272,6 +274,7 @@ struct osperl {
   static ossv_magic *force_sv_2magic(os_segment *seg, SV *nval);
   static os_segment *sv_2segment(SV *);
   static SV *ossv_2sv(OSSV *);
+  static SV *ospv_2sv(OSSV *);
   static SV *ospv_2sv(OSSVPV *);
   static SV *hkey_2sv(hkey *);
 };

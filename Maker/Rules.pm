@@ -202,8 +202,12 @@ sub _populate_install {
 		    }
 		} else {
 		    if (!$real) {
+			my $base = $f;
+			$base =~ s|^.*/||;
 			if (-e $f and newer("$blib/$f", $f)) {
 			    $o->x('cp', $f, "$blib/$f");
+			} elsif (-e $base and newer("$blib/$f", $base)) {
+			    $o->x('cp', $base, "$blib/$f");
 			}
 		    } else {
 			if (-e "$blib/$f") {

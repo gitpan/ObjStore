@@ -36,11 +36,17 @@ indexing, including Verity TOM.  Verity full text indexing.
 
 Programmer friendly C++ / Java access to persistent perl data structures
 
+Move ObjStore::Peeker to a separate file!
+
 Support for notification.
 
 Support for database access control?
 
 Support for the database utility API?  Who cares?
+
+ossv_magic could do refcnts during update transactions...?
+
+ospeek option to re-bless all classes?
 
 Does anyone want ObjectStore pvars?
 
@@ -56,6 +62,7 @@ Why do FIRSTKEY, NEXTKEY accept a string instead of a (string, length) pair
 or an (SV*)?  The TIE interfaces should be more XS friendly!
 
 Make 'reftype' an official built-in!
+
 
 + BIGGISH PROJECTS +
 

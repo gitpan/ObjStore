@@ -39,6 +39,7 @@ use ObjStore;
 	    my $bob = new ObjStore::HV($h, 200);
 	    my $dict = new ObjStore::HV($h, 200);
 	    $h->{dict} = $dict;
+	    my @check;
 	    for (1..300) { $dict->{$_} = $bob; }
 
 	    # segment is determined by OSSVPV, not from OSSV

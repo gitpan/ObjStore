@@ -14,7 +14,7 @@ sub new {
     my ($class, $where) = @_;
     my $o = $class->SUPER::new($where, 10);
     $o->{is} = 1;
-    bless $o, 'PTest';
+    bless $o, $class;
 }
 
 sub bonk {

@@ -484,7 +484,7 @@ OSSVPV::_bless(pstr)
 	OSSV_RAW *pstr
 	CODE:
 	if (pstr->natural() != ossv_pv)
-	  croak("Can only give literal blessings you idiot!");
+	  croak("Can only give literal blessings you idiot");
 	assert(pstr->vptr);
 	THIS->BLESS( (char*) pstr->vptr);
 
@@ -496,9 +496,32 @@ OSSVPV::_ref()
 	RETVAL
 
 SV *
-OSSVPV::persistent_name()
+OSSVPV::_pstringify(...)
+	PROTOTYPE: ;$$
 	CODE:
-	ST(0) = sv_2mortal(newSVpvf("%s=OBJ(0x%x)", THIS->get_blessing(), THIS));
+	char *rtype = sv_reftype(SvRV(ST(0)), 0);
+	ST(0) = sv_2mortal(newSVpvf("%s=%s(0x%x)",THIS->get_blessing(),rtype,THIS));
+
+SV *
+OSSVPV::_paddress(...)
+	CODE:
+	ST(0) = sv_2mortal(newSViv((long) THIS));
+
+int
+OSSVPV::_pcmp(to_sv, ...)
+	SV *to_sv
+	PROTOTYPE: $;$
+	CODE:
+	OSSVPV *to=0;
+	ossv_magic *to_mg = osperl::sv_2magic(to_sv);
+	if (!to && to_mg) to = to_mg->ospv();
+	if (!to && SvIOK(to_sv)) to = (OSSVPV*) SvIV(to_sv);
+	if (!to) XSRETURN_UNDEF;
+	if (THIS == to) RETVAL = 0;
+	else if (THIS < to) RETVAL = -1;
+	else RETVAL = 1;
+	OUTPUT:
+	RETVAL
 
 double
 OSSVPV::cardinality()
@@ -522,14 +545,13 @@ SV *
 OSSVPV::FETCH(key)
 	char *key;
 	CODE:
-	ST(0) = osperl::ossv_2sv(THIS->FETCHp(key));
+	ST(0) = THIS->FETCHp(key);
 
 SV *
-OSSVPV::at(key)
+OSSVPV::_at(key)
 	char *key;
 	CODE:
-	ST(0) = sv_setref_pv(sv_newmortal(), "ObjStore::Raw",
-			THIS->FETCHp(key));
+	ST(0) = THIS->ATp(key);
 
 SV *
 OSSVPV::STORE(key, nval)

@@ -67,13 +67,13 @@ double OSPV_hvarray::percent_unused()
   return (hv.size_allocated() - cardinality()) / (double) hv.size_allocated();
 }
 
-OSSV *OSPV_hvarray::FETCHp(char *key)
+SV *OSPV_hvarray::FETCHp(char *key)
 {
   int xx = index_of(key);
   if (xx == -1) {
     return 0;
   } else {
-    return &hv[xx].hv;
+    return osperl::ospv_2sv(&hv[xx].hv);
   }
 }
 
@@ -86,7 +86,7 @@ SV *OSPV_hvarray::STOREp(char *key, SV *value)
   }
   hv[xx].hv = value;
   if (GIMME_V == G_VOID) return 0;
-  return osperl::ossv_2sv(&hv[xx].hv);  // may become invalid if array grows... XXX
+  return osperl::ospv_2sv(&hv[xx].hv);
 }
 
 void OSPV_hvarray::DELETE(char *key)
@@ -200,13 +200,23 @@ double OSPV_hvdict::cardinality()
 double OSPV_hvdict::percent_unused()
 { return .30; }  //???
 
-OSSV *OSPV_hvdict::FETCHp(char *key)
+SV *OSPV_hvdict::ATp(char *key)
+{
+  OSSV *ret = hv.pick(key);
+  if (ret) {
+    return sv_setref_pv(sv_newmortal(), "ObjStore::Raw", ret);
+  } else {
+    return &sv_undef;
+  }
+}
+
+SV *OSPV_hvdict::FETCHp(char *key)
 {
   OSSV *ret = hv.pick(key);
 #ifdef DEBUG_HVDICT
   warn("OSPV_hvdict::FETCH %s => %s", key, ret? ret->as_pv() : "<0x0>");
 #endif
-  return ret;
+  return osperl::ossv_2sv(ret);
 }
 
 SV *OSPV_hvdict::STOREp(char *key, SV *nval)

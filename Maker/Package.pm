@@ -155,8 +155,8 @@ sub pm_2version {
     $fh->open($file) or croak "open $file: $!";
     my $ok=0;
     while (defined (my $l =<$fh>)) {
-	if ($l =~ m/\$VERSION\s*\=\s*([\d.]+)/) {
-	    $o->{version} = $1;
+	if ($l =~ m/\$VERSION\s*\=\s*['"]([\d\.]+)['"]/) {
+	    $o->{version} = "$1";
 	    $ok=1;
 	    last;
 	}

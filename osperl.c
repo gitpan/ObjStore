@@ -33,16 +33,23 @@ void osperl::register_spec(char *name, MkOSPerlObj_t fun)
 ossv_magic *osperl::sv_2magic(SV *nval)
 {
   assert(nval);
-  if (SvROK(nval)) nval = SvRV(nval);
+  if (!SvROK(nval)) return 0;
+  nval = SvRV(nval);
   assert(nval);
 
   if (SvMAGICAL(nval) && (SvTYPE(nval) == SVt_PVHV || SvTYPE(nval) == SVt_PVAV)) {
 
     MAGIC *magic = mg_find(nval, '~');
-    if (!magic) return 0;
+    if (!magic) {
+      //      warn("~ magic missing");
+      return 0;
+    }
     SV *mgobj = (SV*) magic->mg_obj;
     assert(mgobj);
-    if (!sv_isobject(mgobj)) return 0;
+    if (!sv_isobject(mgobj)) {
+      //      warn("junk attached via ~ magic");
+      return 0;
+    }
     ossv_magic *mg = (ossv_magic*) SvIV((SV*)SvRV(mgobj));
     assert(mg);
     return mg;
@@ -64,7 +71,7 @@ os_segment *osperl::sv_2segment(SV *sv)
     return ((os_database*) SvIV((SV*)SvRV(sv)))->get_default_segment();
 
   ossv_magic *mg = osperl::sv_2magic(sv);
-  if (!mg) croak("Allocation area outside of persistent memory");
+  if (!mg) croak("osperl::sv_2segment(SV*): allocation area outside of persistent memory");
   return os_segment::of(mg->get_location());
 }
 
@@ -106,6 +113,7 @@ SV *osperl::wrap_object(OSSV *ossv, OSSVPV *ospv)
     break;
   case SVt_PVHV:
   case SVt_PVAV:{
+    // This typemap scares me.  Will it work everywhere? XXX
       SV *tied;
       if (ospv->get_perl_type() == SVt_PVHV) {
 	tied = sv_2mortal((SV*) newHV());	// %tied
@@ -119,11 +127,14 @@ SV *osperl::wrap_object(OSSV *ossv, OSSVPV *ospv)
       assert(stash);
       (void)sv_bless(rv, stash);
       
+      //      SV *tie_rv = newRV(tied);			// $rv = \tied
+      //      --SvREFCNT(SvRV(tie_rv));			// undo ref
       sv_magic(tied, rv, 'P', Nullch, 0);	// tie tied, CLASS, $rv
       MAGIC *tie_mg = mg_find(tied, 'P');	// undo tie refcnt (yikes!)
       assert(tie_mg);
       tie_mg->mg_flags &= ~(MGf_REFCOUNTED);
       --SvREFCNT(rv);
+
       SV *mgobj = sv_setref_pv(sv_newmortal(),	// magic %tied, '~', $mgobj
 			       "ObjStore::Magic",
 			       magic);
@@ -139,6 +150,21 @@ SV *osperl::ospv_2sv(OSSVPV *pv)
 {
   if (!pv) return &sv_undef;
   return osperl::wrap_object(0, pv);
+}
+
+SV *osperl::ospv_2sv(OSSV *ossv)
+{
+  if (!ossv) return &sv_undef;
+  switch (ossv->natural()) {
+  case ossv_undef: return &sv_undef;
+  case ossv_iv:    return newSViv(((OSPV_iv*)ossv->vptr)->iv);
+  case ossv_nv:    return newSVnv(((OSPV_nv*)ossv->vptr)->nv);
+  case ossv_pv:    return newSVpv((char*) ossv->vptr, 0);
+  case ossv_obj:   return osperl::wrap_object(0, (OSSVPV*) ossv->vptr);
+  default:
+    warn("OSSV %s is not implemented", ossv->type_2pv());
+    return &sv_undef;
+  }
 }
 
 //    if (GIMME_V == G_VOID) return 0;  // fold into ossv_2sv? XXX
@@ -199,6 +225,9 @@ OSSV *ossv_magic::force_ossv()
 
 OSSVPV *ossv_magic::ospv()
 {
+#if !defined NDEBUG
+  if (sv && pv) assert(sv->vptr == pv);
+#endif
   if (pv) return pv;
   if (sv && sv->PvREFok()) return (OSSVPV*) sv->vptr;
   return 0;
@@ -283,16 +312,17 @@ OSSVPV *OSSV::get_ospv()
 
 void OSSV::PvREF_inc(void *nval)
 {
-  if (PvREFok()) {
-    if (nval) vptr = nval;
-    assert(vptr != 0);
-    ((OSSVPV*)vptr)->REF_inc();
-  }
+  assert (PvREFok());
+  if (nval) vptr = nval;
+  assert(vptr != 0);
+  ((OSSVPV*)vptr)->REF_inc();
 }
 
 void OSSV::PvREF_dec()
 {
-  if (PvREFok()) { ((OSSVPV*)vptr)->REF_dec(); vptr = 0; }
+  assert (PvREFok());
+  ((OSSVPV*)vptr)->REF_dec();
+  vptr = 0;
 }
 
 OSSV *OSSV::operator=(SV *nval)
@@ -377,7 +407,7 @@ int OSSV::morph(ossvtype nty)
     croak("Can't coerce %s to an object", type_2pv());
   }
 
-  PvREF_dec();
+  if (PvREFok()) PvREF_dec();
   switch (_type) {
   case ossv_undef: break;
   case ossv_iv:    delete ((OSPV_iv*)vptr); vptr=0; break;
@@ -468,8 +498,8 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)
 
 void OSSV::s(ossv_magic *mg)
 {
-  if (mg->sv) { s(mg->sv); return; }
   if (mg->pv) { s(mg->pv); return; }
+  if (mg->sv) { s(mg->sv); return; }
   croak("OSSV::s(ossv_magic*): assertion failed");
 }
 
@@ -708,8 +738,9 @@ SV *OSSVPV::NEXT(ossv_magic*) { croak("OSSVPV::NEXT"); return 0; }
 void OSSVPV::CLEAR() { croak("OSSVPV::CLEAR"); }
 
 // hash
-OSSV *OSSVPV::FETCHp(char *) { croak("OSSVPV::FETCH"); return 0; }
-SV *OSSVPV::STOREp(char *, SV *) { croak("OSSVPV::STORE"); return 0; }
+SV *OSSVPV::FETCHp(char *) { croak("OSSVPV::FETCHp"); return 0; }
+SV *OSSVPV::ATp(char *key) { croak("OSSVPV::ATp"); return 0; }
+SV *OSSVPV::STOREp(char *, SV *) { croak("OSSVPV::STOREp"); return 0; }
 void OSSVPV::DELETE(char *) { croak("OSSVPV::DELETE"); }
 int OSSVPV::EXISTS(char *) { croak("OSSVPV::EXISTS"); return 0; }
 

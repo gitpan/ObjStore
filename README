@@ -5,12 +5,17 @@ modify it under the same terms as Perl itself.
 
 Name           DSLI  Description                                  Info
 -----------    ----  -------------------------------------------- -----
-ObjStore       Rm+O  ObjectStore DBMS Interface                   JPRIT
+ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
 
-Easy, flexible, lightning-fast persistent via ObjectStore DBMS.  Stores
-scalars, hashes, and references without flattening.  Perl databases
-can be accessed from C++ and/or Java.  Inversely, persistent C++ 
-objects can be added to Perl!
+Interface to ObjectStore OODBMS (http://www.odi.com).  Stores scalars,
+sets, hashes, and references directly in the database without
+flattening nested or circular structures.  Databases can be accessed
+from Perl, C++, or Java.  Designed for easy extension of the internal
+data representation or data types of built-in data structures.  Uses
+the virtual memory mechanism to make read/write access nearly as fast
+as memory mapped files.
+Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
+
            << This is the relational database killer app! >>
 
 
@@ -41,6 +46,15 @@ $Txt->unindex([$indexHandle]);   # called upon destruction
 
 
 ### RECENT CHANGES ###
+
+
+** 08-11-97 Released 1.10
+
+- Overloaded the '""' (stringify) operator for persistent objects.
+
+- ospeek [-addr]
+
+- Important typemap fixes plus other minor stuff.
 
 
 ** 08-06-97 Released 1.09
@@ -76,9 +90,4 @@ evolve databases in the event of future schema enhancements.
 instead of -> for greater efficiency.
 
 - Plus hundreds of fixes...
-
-
-** 08-02-97 Released 1.08
-
-- Release canidate for 1.09.
 

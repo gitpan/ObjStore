@@ -1,6 +1,6 @@
 # set -*-perl-*-
 
-BEGIN { $| = 1; $tx=1; print "1..2\n"; }
+BEGIN { $| = 1; $tx=1; print "1..6\n"; }
 sub ok { print "ok $tx\n"; $tx++; }
 sub not_ok { print "not ok $tx\n"; $tx++; }
 
@@ -17,8 +17,9 @@ for my $rep (qw(array hash)) {
 	my $set = $john->{c} = new ObjStore::Set($DB, $rep);
 	$set->a({ joe => 1 }, { bob => 2 }, { ed => 3 });
 
-	my (@k,@v);
+	my (@k,@v,@set);
 	for (my $o = $set->first; $o; $o = $set->next) {
+	    push(@set, $o);
 	    push(@k, keys %$o);
 	    push(@v, values %$o);
 	}
@@ -32,6 +33,13 @@ for my $rep (qw(array hash)) {
 	    warn join(' ', @k);
 	    warn join(' ', @v);
 	}
+
+	my $yuk = pop @set;
+	$set->r($yuk);
+	$set->contains($yuk) ? not_ok : ok;
+	$set->a($yuk);
+	$set->contains($yuk) ? ok : not_ok;
+	
 	delete $john->{c};
     }
 };

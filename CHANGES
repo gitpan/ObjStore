@@ -3,6 +3,11 @@ This package is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
+** 08-02-97 Released 1.08
+
+- Release canidate for 1.09.
+
+
 ** 07-05-97 Released 1.06 
 
 - Improved peek.  Now peek from the command line - 'ospeek <database>'!

@@ -2,11 +2,13 @@ CHANGES
 INSTALL
 MANIFEST
 MANIFEST.bak
+Maker/Maker.pod
 Maker/Package.pm
 Maker/Rules.pm
 ObjStore.pm
 ObjStore.pod
 ObjStore.xs
+Peeker.pm
 PoweredByOS.gif
 README
 TODO
@@ -36,6 +38,7 @@ t/bless.t
 t/chk_arraybug.t
 t/cursor.t
 t/hash.t
+t/overload.t
 t/segment.t
 t/set.t
 t/transact.t

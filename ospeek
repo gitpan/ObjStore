@@ -2,16 +2,17 @@
 
 use strict;
 use ObjStore ':ALL';
+use ObjStore::Peeker;
 use Getopt::Long;
 use IO::Handle;
 
 sub usage {
-    print "ospeek [-all] <database>\n";
+    print "ospeek [-all] [-addr] <database>\n";
     exit;
 }
 
 my %opt=();
-GetOptions(\%opt, 'all') or &usage;
+GetOptions(\%opt, 'all', 'addr') or &usage;
 &usage if @ARGV != 1;
 
 ObjStore::_enable_blessings(0);
@@ -20,7 +21,7 @@ my $DB = ObjStore::Database->open($db, 0, 0666);
 my $fh = new IO::Handle;
 $fh->fdopen(fileno(STDOUT),"w") or die "fdopen(STDOUT): $!";
 try_read {
-    my $pk = new ObjStore::Peeker(to => $fh, all => $opt{all});
+    my $pk = new ObjStore::Peeker(to => $fh, all => $opt{all}, addr => $opt{addr});
     $pk->Peek($DB);
     my ($sum, $count) = $pk->PercentUnused;
     my $pct = $sum*100/$count;

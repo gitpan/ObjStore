@@ -6,7 +6,7 @@ require 5.004;
 use strict;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $Exception);
 
-$VERSION = 1.09;
+$VERSION = '1.10';  #is string, not a number!
 
 use Carp;
 use Config;
@@ -24,7 +24,7 @@ bootstrap ObjStore $VERSION;
 sub reftype ($);
 sub bless ($;$);
 
-sub PoweredByOS { "$Config{sitelib}/PoweredByOS.gif"; }
+sub PoweredByOS { "$Config{sitelib}/ObjStore/PoweredByOS.gif"; }
 
 sub _PRIVATE_ROOT { "_osperl_private"; }
 
@@ -50,240 +50,30 @@ sub DEFAULT_GATEWAY {
 };
 gateway(\&DEFAULT_GATEWAY);
 
-# Bless should be members of UNIVERSAL so it
+# Bless should be a member of UNIVERSAL so it
 # could be overridden in a reasonable way.
 
 sub bless ($;$) {
     my ($ref, $class) = @_;
     $class = caller if !defined $class;
-    if ($class->isa('ObjStore::UNIVERSAL') and
-	ref($ref) and
-	ref($ref) ne reftype($ref) and
-	$ref->isa('ObjStore::UNIVERSAL')) {
+    CORE::bless $ref, $class;
 
+    if ($ref->isa('ObjStore::UNIVERSAL')) {
 	my $DB = ObjStore::Database::of($ref);
 	my $root = $DB->_get_private_root;
-	$root->{Brahma} = new ObjStore::HV($DB, 100) if !defined $root->{Brahma};
+	$root->{Brahma} = new ObjStore::HV($DB, 'dict')
+	    if !defined $root->{Brahma};
 	my $bhava = $root->{Brahma};
 	$bhava->{$class} = $class if !defined $bhava->{$class};
-        ObjStore::UNIVERSAL::_bless($ref, $bhava->at($class));
+        ObjStore::UNIVERSAL::_bless($ref, $bhava->_at($class));
     }
-    CORE::bless $ref, $class;
+    $ref;
 }
 
 sub peek {
+    require ObjStore::Peeker;
     my $pk = new ObjStore::Peeker;
     $pk->Peek(@_);
-}
-
-package ObjStore::Peeker;
-use strict;
-use Carp;
-use vars qw($LinePrefix $LineIndent $LineSep $SummaryWidth $MaxWidth $MaxDepth
-	    $To $All);
-
-$LinePrefix='';
-$LineIndent='  ';
-$LineSep="\n";
-$SummaryWidth=3;
-$MaxWidth=20;
-$MaxDepth=20;
-$To='string';
-$All=0;
-
-sub new {
-    my ($class, %cnf) = @_;
-    my $o = bless {
-	prefix => $LinePrefix,
-	indent => $LineIndent,
-	sep => $LineSep,
-	summary_width => $SummaryWidth,
-	width => 20,
-	depth => 20,
-	level => 0,
-	seen => {},
-	to => $To,
-	all => $All,
-	output => '',
-	has_sep => 0,
-	has_prefix => 0,
-	pct_unused => [],
-    }, $class;
-    while (my ($k,$v) = each %cnf) { $o->{$k} = $v; }
-    $o;
-}
-
-sub Peek {
-    my $o = shift;
-    for my $top (@_) { $o->_peek($top); }
-    $o->{output};
-}
-
-sub PercentUnused {
-    my ($o) = @_;
-    my $count=0;
-    my $sum=0;
-    for my $h (@{$o->{pct_unused}}) {
-	$count += $h->{card};
-	$sum += $h->{card} * $h->{unused};
-    }
-    $count = -1 if $count == 0;
-    ($sum, $count);
-}
-
-sub prefix {
-    my ($o) = @_;
-    return if $o->{has_prefix};
-    $o->o($o->{prefix}, $o->{indent} x $o->{level});
-    $o->{has_prefix}=1;
-}
-
-sub nl {
-    my ($o) = @_;
-    return if $o->{has_sep};
-    $o->o($o->{sep});
-    $o->{has_sep}=1;
-}
-
-sub o {
-    my $o = shift;
-    $o->{has_sep}=0;
-    $o->{has_prefix}=0;
-    my $t = ref $o->{to};
-    if (!$t and $o->{to} eq 'string') {
-	$o->{output} .= join('', @_);
-    } elsif ($t eq 'CODE') {
-	$o->{to}->(@_);
-    } elsif ($t->isa('IO::Handle') or $t->isa('FileHandle')) {
-	$o->{to}->print(join('',@_));
-    } else {
-	die "ObjStore::Peeker: Don't know how to write to $o->{to}";
-    }
-}
-
-sub _peek {
-    my ($o, $val) = @_;
-    my $type = ObjStore::reftype $val;
-    my $class = ref $val;
-
-    # Since persistent blessing might be turned off...
-    $class = $val->_ref if ($class and $class->isa('ObjStore::UNIVERSAL'));
-
-    if (!$class) {
-	if (!defined $val) {
-	    $o->o('undef,');
-	} elsif ($val =~ /^-?[1-9]\d{0,8}$/) {
-	    $o->o("$val,");
-	} else {
-	    $val =~ s/([\\\'])/\\$1/g;
-	    $o->o("'$val',");
-	}
-	return;
-    }
-
-    # Stringification returns the transient address,
-    # we want the persistent address!
-    my $name;
-    $name = $val->persistent_name if $val->can('persistent_name');
-    $name = "$val" if !$name;
-
-    if ($o->{level} > $o->{depth} or $o->{seen}{$name}) {
-	if ($type eq 'HASH') {
-	    $o->o("{ ... }");
-	} elsif ($type eq 'ARRAY') {
-	    $o->o("[ ... ]");
-	} elsif ($class->isa('ObjStore::Set')) {
-	    $o->o("[ ... ]");
-	} else {
-	    $o->o("$class ...");
-	}
-	return;
-    }
-    $o->{seen}{$name}=1;
-
-    if ($val->can('cardinality') and $val->can('percent_unused')) {
-	push(@{$o->{pct_unused}}, {card=>$val->cardinality,
-				   unused=>$val->percent_unused});
-    }
-
-    $o->prefix;
-    if ($class eq 'ObjStore::Database') {
-	for my $r ($val->get_all_roots) {
-	    next if (!$o->{all} and $r->get_name eq ObjStore::_PRIVATE_ROOT);
-
-	    $o->prefix;
-	    ++$o->{level};
-	    $o->o("$r ",$r->get_name," = ");
-	    $o->{has_prefix}=1;
-	    $o->_peek($r->get_value);
-	    --$o->{level};
-	    $o->nl;
-	}
-    } elsif ($class->isa('ObjStore::Set')) {
-	my @S;
-	my $x=0;
-	for (my $v=$val->first; $v; $v=$val->next) {
-	    last if $x++ > $o->{width}+1;
-	    push(@S, $v);
-	}
-	my $big = @S > $o->{width};
-	my $limit = $big ? $o->{summary_width}-1 : @S;
-
-	$o->o($name . " [");
-	$o->nl;
-	++$o->{level};
-	for (my $v=$val->first; $v; $v=$val->next) {
-	    last if $limit-- <= 0;
-	    $o->prefix;
-	    $o->_peek($v);
-	    $o->nl;
-	}
-	if ($big) {
-	    $o->prefix;
-	    $o->o("...");
-	    $o->nl;
-	}
-	--$o->{level};
-	$o->prefix;
-	$o->o("],");
-	$o->nl;
-    } elsif ($type eq 'HASH') {
-	my @S;
-	my $x=0;
-	while (my($k,$v) = each %$val) {
-	    last if $x++ > $o->{width}+1;
-	    push(@S, [$k,$v]);
-	}
-	@S = sort { $a->[0] cmp $b->[0] } @S;
-	my $big = @S > 20;
-	my $limit = $big ? $o->{summary_width}-1 : $#S;
-
-	$o->o($name . " {");
-	$o->nl;
-	++$o->{level};
-	for $x (0..$limit) {
-	    my ($k,$v) = @{$S[$x]};
-
-	    $o->prefix;
-	    $o->o("$k => ");
-	    $o->{has_prefix}=1;
-	    $o->_peek($v);
-	    $o->nl;
-	}
-	if ($big) {
-	    $o->prefix;
-	    $o->o("...");
-	    $o->nl;
-	}
-	--$o->{level};
-	$o->prefix;
-	$o->o("},");
-	$o->nl;
-    } elsif ($type eq 'ARRAY') {
-	croak "Peek doesn't do arrays yet";
-    } else {
-	die "Unknown type '$type'";
-    }
 }
 
 package ObjStore::Database;
@@ -292,9 +82,11 @@ use Carp;
 sub root {
     my ($o, $roottag, $nval) = @_;
     my $root = $o->find_root($roottag);
-    $root = $o->create_root($roottag) unless $root;
-    $root->set_value($nval) if $nval;
-    $root->get_value();
+    if ($nval) {
+	$root ||= $o->create_root($roottag);
+	$root->set_value($nval) if $nval;
+    }
+    $root? $root->get_value() : undef;
 }
 
 sub destroy_root {
@@ -325,6 +117,16 @@ sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
 
 package ObjStore::UNIVERSAL;
+use Carp;
+use overload (#'<=>' => \&_pcmp,
+	      #'0+' => \&_paddress,
+	      '""' => \&_pstringify,
+	      'bool' => sub {1});
+
+sub persistent_name {
+    carp 'persistent_name is depreciated, string operator is now overloaded';
+    $_[0]->_pstringify;
+}
 
 #XS: sub new($area, $rep, $card)
 
@@ -363,6 +165,8 @@ package ObjStore::Set;
 use vars qw(@ISA $PICK_REP);
 @ISA=qw(ObjStore::UNIVERSAL);
 use Carp;
+#use overload ('+=' => \&a,
+#	      '-=' => \&r);
 
 $PICK_REP = sub {
     my ($loc, $rep) = @_;

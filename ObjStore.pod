@@ -1,6 +1,6 @@
 =head1 NAME
 
-ObjStore - Perl extension for ObjectStore ODMS
+ObjStore - Perl extension for ObjectStore ODBMS
 
 =head1 SYNOPSIS
 
@@ -199,10 +199,13 @@ Here is an outline of how to go extension crazy.
 
 C<ObjStore::UNIVERSAL> is the base class for all persistent types.
 
-In general, you cannot access scalars from Perl.  So this base class
-is only for objects or collections.  The C<'at'> method can be used to
-access scalars.  They are blessed into the C<'ObjStore::Raw'> package
-but there are no methods to access them except from C++.
+In general, you cannot directly access persistent scalars from Perl;
+they are always immediately copied into transient scalars.  So the
+C<ObjStore::UNIVERSAL> base class is used only for objects or
+collections.  The C<'_at'> method can be used to access scalars as
+C<'ObjStore::Raw'> objects in some cases, but there are no methods to
+manipulate them except from C++.  Currently, only C<bless> makes use
+of the C<_at> method.
 
 C<ObjStore::Set> is the base class for sets.
 

@@ -5,6 +5,7 @@ GENERIC.c
 GENERIC.h
 INSTALL
 MANIFEST
+MANIFEST.SKIP
 MGBridge.h
 Makefile.PL
 ODI.h
@@ -36,6 +37,8 @@ lib/ObjStore/CSV.pm
 lib/ObjStore/Config.pm
 lib/ObjStore/HV/Database.pm
 lib/ObjStore/Internals.pod
+lib/ObjStore/Job.pm
+lib/ObjStore/NoInit.pm
 lib/ObjStore/Path/Cursor.pm
 lib/ObjStore/Path/Ref.pm
 lib/ObjStore/Peeker.pm
@@ -61,6 +64,7 @@ notes/hints_on_allocating_large_objects
 notes/mysource
 notes/protected_references_info
 notes/static_linking_and_vector_delete
+notes/tiehash.1
 osp_copy
 osp_hack
 osp_hkey.c
@@ -92,6 +96,7 @@ t/2root.t
 t/2transact.t
 t/3avset.t
 t/3csv.t
+t/3noinit.t
 t/3stash.t
 t/9set.t
 t/9table.t

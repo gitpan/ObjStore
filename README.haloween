@@ -3,11 +3,12 @@ ObjStore 1.19 (Haloween Edition)
 
 
 ObjStore is a perl interface to the ObjectStore high performance
-relational database engine.  ObjStore is able to achieve as yet
-unmatched performance numbers and unmatched ease of development.
+relational engine.  ObjStore is able to achieve as yet unmatched ease
+of development while at the same time offering benchmark obsoleting
+performance.
 
-* Directly-memory-access 64-bit channels to Sybase, Informix, or Oracle
-relational databases.
+* Directly-memory-access 64-bit channels to Sybase, Informix, or
+Oracle relational databases.
 
 * Terminate and stay resident SQL emulator written in perl.
 
@@ -24,6 +25,7 @@ blue hued glows in high spectrum telemetry.)
 * Internet ready.
 
 Available via http://www.perl.com/CPAN/modules/by-module/ObjStore
+  (Requires 2 AA-batteries.  Not included.)
 
 
 see ./INSTALL for hints on installation

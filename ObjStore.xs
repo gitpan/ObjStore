@@ -83,7 +83,8 @@ BOOT:
   //
 #ifdef _OS_CPP_EXCEPTIONS
   // Must tell perl to use ANSI C++ exceptions!
-  perl_require_pv("ExtUtils::ExCxx");
+  perl_require_pv("ExtUtils/ExCxx.pm");
+  if (SvTRUE(ERRSV)) croak(SvPV(ERRSV,na));
 #endif
   //
   OSSV::verify_correct_compare();
@@ -151,16 +152,35 @@ os_version()
 	XSRETURN_NV(objectstore::release_major() + objectstore::release_minor()/100 + objectstore::release_maintenance()/10000);
 
 void
-set_client_name(name)
+_set_client_name(name)
 	char *name;
 	CODE:
 	objectstore::set_client_name(name);
+
+char *
+_get_application_schema_pathname()
+	CODE:
+	RETVAL = (char*) objectstore::get_application_schema_pathname();
+	OUTPUT:
+	RETVAL
+
+void
+_set_application_schema_pathname(path)
+	char *path
+	CODE:
+	objectstore::set_application_schema_pathname(path);
+
+void
+_set_cache_size(sz)
+	int sz
+	CODE:
+	objectstore::set_cache_size(sz);
 
 void
 initialize()
 	CODE:
 {
-	objectstore::initialize(); //support reinit? XXX
+	objectstore::initialize(1);  //any harm in allowing reinit? XXX
 	SV* isv = perl_get_sv("ObjStore::INITIALIZED", FALSE);
 	sv_inc(isv);
 	objectstore::set_auto_open_mode(objectstore::auto_open_disable);
@@ -561,6 +581,9 @@ os_database::_open_mvcc()
 
 void
 os_database::close()
+	CODE:
+	/*warn("%p=ObjStore::Database->close()", THIS); /*XXX*/
+	THIS->close();
 
 void
 os_database::_destroy()
@@ -942,11 +965,12 @@ _pstringify(THIS, ...)
 	  assert(str);
 	  ret = newSVpv(str, len);
 	} else {
-	  char *rtype = sv_reftype(THIS, 0);
-	  //just read the stash? XXX
-	  STRLEN CLEN;
-	  char *CLASS = br->ospv()->blessed_to(&CLEN);
-	  ret = newSVpvf("%s=%s(0x%p)",CLASS,rtype,br->ospv());
+	  //This doesn't work after some exceptions!!
+	  //STRLEN CLEN;
+	  //char *CLASS = br->ospv()->blessed_to(&CLEN);
+	  //
+	  ret = newSVpvf("%s=%s(0x%p)",	HvNAME(SvSTASH(SvRV(THIS))),
+			 sv_reftype(SvRV(THIS), 0), br->ospv());
 	}
 	XPUSHs(sv_2mortal(ret));
 

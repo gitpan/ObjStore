@@ -10,7 +10,7 @@ sub import {
 	# add more intelligence for extra call tracking?
 #	croak "can't find method $ {p}::do_$m" 
 #	    unless defined *{"$ {p}::do_$m"}{CODE};
-	eval "sub $ {p}::$m { shift->notify(join(\$;, '$m', \@_), 'now'); }";
+	eval "sub $ {p}::$m { shift->notify(join(\$;, '$m', \@_), 'now'); () }";
 	warn if $@;
     }
 }

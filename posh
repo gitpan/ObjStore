@@ -517,8 +517,8 @@ sub new {
     begin('update', sub {
 	      my $t = $o->{app}->top();
 
-	      $t->{ttype} ||= 'read';
-	      $t->{ttype} = 'read' if $open_mode eq 'mvcc';
+	      # ignore persistent copy ?
+	      $t->{ttype} = $open_mode eq 'mvcc'? 'read' : 'update';
 	      $o->{ttype} = $t->{ttype};
 
 	      $t->{view} ||= new Posh::View($t);

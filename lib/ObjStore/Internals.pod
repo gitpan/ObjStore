@@ -146,7 +146,7 @@ relaxed...)
 
 If you are a suspicious person (like my mom) you might have suspected
 that the ObjStore module installs its own version of C<bless>.
-Natually it does.  The augmented C<bless> implements extra quality
+Natually it does!  The augmented C<bless> implements extra quality
 assurance to insure that blessings are correctly stored persistently.
 For example:
 
@@ -166,19 +166,22 @@ For example:
     my Scottie $dog = new Scottie($db);
     # once a Scottie, always a Scottie
 
-Persistent C<bless> also does some extra work to make evolution easier.
-It stores the current C<@ISA> tree along with the C<$VERSION> of every
-class in the C<@ISA> tree.  The C<isa> method is tweaked such that it
-reports according to the moment of the C<bless> and the C<versionof>
-method lets you query the saved C<$VERSION>s.  This is helpful when
-doing evolution, as you can compare the old C<@ISA> and C<$VERSION>s
-to figure out what to change (and how). (C<UNIVERSAL::can> is
-unmodified.)
+Persistent C<bless> also does some extra work to make evolution
+easier.  It stores the current C<@ISA> tree along with the C<$VERSION>
+of every class in the C<@ISA> tree.  (This necessitates assigning a
+C<$VERSION> to every class in the C<@ISA> tree.  If this seems
+draconeion, recall that you have been spared the maintanance of a
+centralize schema.)  Furthermore, the C<isa> method is tweaked such
+that it reports according to the moment of the C<bless>.  Similarly,
+the C<versionof> method lets you query the saved C<$VERSION>s.  This
+is helpful when doing evolution, as you can compare the old C<@ISA>
+and C<$VERSION>s to figure out what to change (and
+how). (C<UNIVERSAL::can> is unmodified.)
 
 Technically speaking, C<bless> is re-implemented such that it can be
 extended by the I<bless from> and the I<bless to> classes via the
-C<BLESS> method.  (This is intrinsically confusing, so take a deep
-breath and prepare yourself.)
+C<BLESS> method.  Both the I<bless from> and I<bless to> operations
+are funnelled through a single C<BLESS> method like this:
 
   sub BLESS {
       my ($r1,$r2);
@@ -231,8 +234,9 @@ tonal facility will be available in the next release.
 =head2 ObjStore::Index
 
 Indices are extremely efficient because they do not copy their keys.
-It is critical that the copy is avoided, since C<OSSV>s can be
-relocated when arrays need to grow.  C<OSSVPV>s are never relocated.
+It is critical that another pointer to C<OSSV>s is not stored, since
+C<OSSV>s can be relocated when arrays need to grow.  C<OSSVPV>s are
+never relocated.
 
 =head1 BUGS
 
@@ -240,16 +244,24 @@ relocated when arrays need to grow.  C<OSSVPV>s are never relocated.
 
 =item * SIGNALS ARE UNRELIABLE
 
-Perl signal handlers are not bulletproof.  Since ObjectStore makes
-aggressive use of signals, pathelogical failure is not uncommon.
-Various solutions are under consideration.
+[This bug entry might have been entirely fixed!]
 
-Currently, we recommmend that you avoid causing lock timeouts or
-deadlocks.  This can be accomplished by restricting each database to a
-single writer, and using mvcc mode for readers.  (This is a good
-architecture anyway!)
+Perl signal handlers are not bulletproof.  Since ObjectStore makes
+aggressive use of signals, pathelogical failure is not impossible.
+Currently, it is recommmended that you avoid lock timeouts and
+deadlocks altogether.  This can be accomplished by restricting each
+database to a single writer, and using mvcc mode for readers.  (This
+is a good architecture anyway!)
+
+If you cannot use this architecture, please test the reliability of
+your signal handlers before making a large code investment.  This is
+worth testing because with conservative and careful use of perl signal
+handlers, you should be able to avoid triggering any of the known
+failure modes.
 
 =item * MIXING WITH EVAL
+
+[This bug entry might have been entirely fixed!]
 
 It is possible to use C<eval> within transactions, but B<you
 absolutely must not> use the C<ObjectStore> API or access any
@@ -268,6 +280,8 @@ exceptions.  I understand how to fix it, just haven't had time.  In
 general, you should global replace C<eval> to C<begin>.
 
 =item * ABORT MANUAL-OVERRIDE
+
+[A proper fix is on the TODO list.]
 
 Since C<eval> does not imply a nested transaction, if you use C<eval>
 you can have situations where a transaction must be manually aborted.
@@ -312,8 +326,9 @@ mechanisms are being developed to solve this problem correctly.
 
 =item * C<ObjStore::AVHV> EVOLUTION
 
-Indexed records temporarily cannot be evolved due to const-ness.  This
-will be fixed soon.
+Indexed records temporarily cannot be evolved due to const-ness.  For
+now, it is recommended that records be removed, changed, and re-added
+to the table when changing indexed fields.
 
 =item * C<os_protected_reference>
 

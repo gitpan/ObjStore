@@ -1,8 +1,16 @@
 
 $self->{CC}="cxx -xtaso";
+$self->{PERLMAINCC}="cc -xtaso";
 $self->{LIBS}=["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losthr"];
 
-$self->{LD}="ld -taso";
+
+# link with cxx ! it adds cxx release specific objects...
+
+#$self->{LD}="cxx -taso -g";   
+
+$self->{LD}="cxx -taso -v -g";  # cxx forgets to propagate -g :-)
+$self->{LDDLFLAGS}='-shared -expect_unresolved "*" -O4 -msym -L/usr/local/lib'; # remove -s, if you want debugging
+
 $self->{MAP_TARGET}="perl32";
 $self->{LINKTYPE}="static";
 
@@ -59,6 +67,7 @@ sub cflags {
 	# to compile perl with cc. cxx 5.6 does.
 	#
 	$out=~s/-std//;             # cxx5.5-004 doesnt want this.
+      $out=~s/-fprm d//;          # buggy if given cxx forgets to pass args to cc :-)
 	$out;
 }
 

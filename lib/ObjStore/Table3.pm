@@ -6,7 +6,7 @@ use ObjStore ':ADV';
 require ObjStore::AV::Set;
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 sub new {
     my ($class, $where) = @_;
@@ -64,10 +64,22 @@ sub fetch {
     }
 }
 
-sub anyx {
+sub primary {
     my ($o) = @_;
     return if !$$o{_primary};
     $o->index($$o{_primary});
+}
+
+sub anyx {
+    my ($o) = @_;
+    if ($$o{_primary}) {
+	return $o->index($$o{_primary});
+    } else {
+	for my $i (@{$$o{_allindices}}) {
+	    return $i if @$i;
+	}
+    }
+    undef;
 }
 
 sub rows {
@@ -161,9 +173,13 @@ when needed.
 
 =over 4
 
+=item * $t->primary()
+
+Returns the primary index.
+
 =item * $t->anyx
 
-Returns any non-empty index in the table.
+Returns a non-empty index.
 
 =item * $t->add($e)
 
@@ -217,8 +233,6 @@ Expand migration options?
 =head1 TODO
 
 =over 4
-
-=item * Primary index?
 
 =item * INTERFACE
 

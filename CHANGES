@@ -1,3 +1,25 @@
+** 03-13-98 RELEASE 1.31
+
+- Posh will move directly to a database specified on the command line.
+Also, the default is now mvcc mode.  Fixed a problem with persisting
+command history.
+
+- Changed the behavior ObjStore::AV::Set::exists(...) to be more
+consistent.
+
+- Fixed a problem in the is_evolved() method.
+
+- $ObjStore::TRANSACTION_PRIORITY is now a tied scalar.
+
+- Replaced (get|set)_(read|write)lock_timeout (yikes!) with a single
+perl-style lock_timeout API.
+
+- Reorganized the BOOT section to meet the requirements of the perl
+compiler.  ObjStore::shutdown is now called in an END block to insure
+proper clean up (abort pending transactions, etc.) and initialization
+is now delayed until run-time (vs. compile-time).
+
+
 ** 03-06-98 RELEASE 1.30
 
 - Instant, effortless event dispatching for network distributed perl

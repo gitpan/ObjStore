@@ -87,34 +87,38 @@ sub autonotify {
 	    $overflow = $over;
 	}
 	my $max = 10;
-	while (my $note = ObjStore::Notification->receive(0) and $max--) {
-	    my $why = $note->why();
-	    my $f = $note->focus();
-	    my @args = split /$;/, $why;
-	    my $call = shift @args;
-	    warn "$f->$call(".join(', ',@args).")\n"
-		if $ObjStore::Notification::DEBUG_RECEIVE;
-	    ++$METERS{ $call };
-	    my $mname = "do_$call";
-	    my $m = $f->can($mname);
-	    if (!$m) {
-		no strict 'refs';
-		if ($ { ref $f . "::UNLOADED" }) {
-		    warn "autonotify: attempt to invoke method '$mname' on unloaded class ".ref $f."\n";
-		} else {
-		    warn "autonotify: don't know how to $f->$mname(".join(', ',@args).") (ignored)\n";
-#		    warn "Loaded: ".join(" ",sort keys %INC)."\n";
+	begin 'update', sub { # ?XXX
+	    while (my $note = ObjStore::Notification->receive(0) and $max--) {
+		my $why = $note->why();
+		my $f = $note->focus();
+		my @args = split /$;/, $why;
+		my $call = shift @args;
+		warn "$f->$call(".join(', ',@args).")\n"
+		    if $ObjStore::Notification::DEBUG_RECEIVE;
+		++$METERS{ $call };
+		my $mname = "do_$call";
+		my $m = $f->can($mname);
+		if (!$m) {
+		    no strict 'refs';
+		    if ($ { ref $f . "::UNLOADED" }) {
+			warn "autonotify: attempt to invoke method '$mname' on unloaded class ".ref $f."\n";
+		    } else {
+			warn "autonotify: don't know how to $f->$mname(".join(', ',@args).") (ignored)\n";
+			#		    warn "Loaded: ".join(" ",sort keys %INC)."\n";
+		    }
+		    next
 		}
-		next
+		$m->($f, @args);
+		# search @{ blessed($m)."::NOTIFY" } ?XXX
 	    }
-	    $m->($f, @args);
-	    # search @{ blessed($m)."::NOTIFY" } ?XXX
-	}
+	};
+	warn if $@;
     };
     $AUTONOTE = Event->io(-handle => $fh, -events => POLLRDNORM,
 			  -callback => $dispatcher);
 }
 
+# depreciated?
 sub do_debug {
     my ($o,$what) = @_;
     if ($what =~ m/^\s+$/) {
@@ -133,7 +137,7 @@ sub do_debug {
 
 # configure checkpoint policy?
 
-use vars qw($TXN $ABORT $TxnTime $Checkpoint $Elapsed $TType
+use vars qw($TXN $ABORT $TxnTime $Checkpoint $Elapsed $TType $UseOSChkpt
 	    @ONDIE);
 
 $TType = 'update';  #default to read XXX
@@ -177,14 +181,10 @@ sub _checkpoint {
 	    warn if $@;
 	}
 	my $t1 = [gettimeofday];
-	if ($ok and $continue) {
+	if ($ok and $continue and $UseOSChkpt) {
 	    $TXN->checkpoint();
 	} else {
-	    if ($ok) {
-		$TXN->commit();
-	    } else {
-		$TXN->abort();
-	    }
+	    $ok? $TXN->commit() : $TXN->abort();
 	    $TXN->post_transaction(); #2
 	    confess "transaction mismatch"
 		if pop @ObjStore::TxnStack != $TXN;
@@ -209,9 +209,7 @@ sub _checkpoint {
 
 sub ondie { push @ONDIE, $_[1]; }
 
-sub meter {
-    ++ $METERS{ $_[$#_] };
-}
+sub meter { ++ $METERS{ $_[$#_] }; }
 
 sub Loop {
     my ($o,$waiter) = @_;
@@ -334,8 +332,6 @@ hallway!
 
 Research unix-style daemonization code
   default stderr/stdout redirect (or Tee) to /usr/tmp
-
-Proc::Daemon ?
 
 =head1 SEE ALSO
 

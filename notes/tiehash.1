@@ -1,0 +1,40 @@
+#! /usr/local/bin/perl
+# Demonstrate difference between hash slice assignment and magic AVHV slices
+
+use strict;
+use Data::Dumper;
+
+my $works = Bar->new("Above", "Below", "Across");
+print "This one works:\n", Dumper($works);
+my $fum = Foo->new("Above", "Below", "Across");
+print "\nThis one doesn't:\n", Dumper($fum);
+
+my $here = {};
+
+print "\nCopy slice from hash...\n";
+# print Dumper(@$works{qw(top side)});
+@$here{qw(top side)} = @$works{qw(top side)};
+print Dumper($here);
+
+print "\nCopy slice from AVHV...\n";
+# Uncomment the following line for a core...
+# print Dumper(@$fum{qw(top side)});
+@$here{qw(top side)} = @$fum{qw(top side)};
+print Dumper($here);
+
+
+package Foo;
+use fields qw(top bottom side);
+sub new($@) {
+    my $class = shift;
+
+    return bless [\%Foo::FIELDS, @_], 'Foo';
+}
+
+package Bar;
+sub new($@) {
+    return bless {'top' => $_[1], 'bottom' => $_[2], 'side' => $_[3]}, $_[0];
+}
+
+1;
+

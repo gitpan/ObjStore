@@ -2,12 +2,11 @@
 
 use strict;
 package osperlserver;
-use ObjStore;
+use ObjStore::NoInit;
 use vars qw($VERSION @DB $DAEMON);
 $VERSION = '0.01';
 $DAEMON = 1;
 
-# Getopt::* doesn't do it for me...vestiges of C programmers...like gills...
 for (my $arg=0; $arg < @ARGV; $arg++) {
     my $o = $ARGV[$arg];
     if ($o =~ m/^ -d (ebug)? $/x) {
@@ -60,6 +59,17 @@ Usage: osperlserver [switches] database[=Package] [databases...]
 }
 die "osperlserver: which db?\n" if @DB==0;
 
+if ($DAEMON) {
+    require Proc::Daemon;          #available via CPAN
+    Proc::Daemon::init();
+}
+$SIG{HUP} = sub { warn "SIGHUP" if !$DAEMON };
+
+$ObjStore::CLIENT_NAME = 
+    "osperl[".join(',', map { $_=~m,/([^=/]+)(\=[^/]+)?$,?$1:$_ } @DB)."]";
+
+ObjStore::initialize();
+
 for (@DB) {
     no strict 'refs';
     my @c = split m'/';
@@ -74,11 +84,6 @@ for (@DB) {
     $class->new($db, 'update');
 }
 
-if ($DAEMON) {
-    require Proc::Daemon;          #available via CPAN
-    Proc::Daemon::init();
-}
-$SIG{HUP} = sub { warn "SIGHUP" if !$DAEMON };
-
 require ObjStore::Process;
+warn "Started!!\n";
 ObjStore::Process->Loop();

@@ -99,7 +99,7 @@ begin 'update', sub {
     my $code = sub {
 	warn "begin bogus code" if $debug;
 	my $quiet = 1? '2>/dev/null':'';
-	system("perl -Mblib t/deadlock.pl 1>/dev/null $quiet &");
+	system("$^X -Mblib t/deadlock.pl 1>/dev/null $quiet &");
 	warn "[1]sleep\n" if $debug;
 	sleep 5;
 	warn "[1]left\n" if $debug;

@@ -63,6 +63,21 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 ##################
 
 
+** 03-28-98 RELEASE 1.33
+
+- Stringification of persistent objects can no longer cause
+ObjectStore exceptions.  Error reporting is therefore much more
+robust.
+
+- Use ObjStore::NoInit to delay initialization of the ObjectStore
+library.  This opens time to modify configuration parameters (or
+for forking) before becoming a known OS client.
+
+- First-cut at database job scheduling.  See ObjStore::Job.
+
+- Blessings were not sticking to databases in certain cases.  Fixed.
+
+
 ** 03-21-98 RELEASE 1.32
 
 - Major improvements to serverization code.  See osperlserver,
@@ -71,28 +86,6 @@ changes are backward compatible to 1.30 (but I'm pretty sure
 improvements will outweigh breakage :-).
 
 - ObjStore::AV::Set now checks for duplicates.
-
-
-** 03-13-98 RELEASE 1.31
-
-- Posh will move directly to a database specified on the command line.
-Also, the default is now mvcc mode.  Fixed a problem with persisting
-command history.
-
-- Changed the behavior ObjStore::AV::Set::exists(...) to be more
-consistent.
-
-- Fixed a problem in the is_evolved() method.
-
-- $ObjStore::TRANSACTION_PRIORITY is now a tied scalar.
-
-- Replaced (get|set)_(read|write)lock_timeout (yikes!) with a single
-perl-style lock_timeout API.
-
-- Reorganized the BOOT section to meet the requirements of the perl
-compiler.  ObjStore::shutdown is now called in an END block to insure
-proper clean up (abort pending transactions, etc.) and initialization
-is now delayed until run-time (vs. compile-time).
 
 
 see ./INSTALL for hints on installation

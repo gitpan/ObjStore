@@ -10,9 +10,16 @@ following in the body of your message:
 
 + IDEAS +
 
+bugs:
+  where $j is persistent and $$j{errors} doesn't exist yet
+  push @{$j->{errors}}, $m;
+
+osperlserver
+  test coverage analysis?
+
 configure unique index duplicate row behavior?
 
-$ref->notify(['m1','m2',...], 'now'); ??
+$ref->notify('m1', 'batch'); ???
 
 transactions
   keep a single transaction stack
@@ -139,7 +146,7 @@ optional pool allocation of numeric types
   store offset in xiv!
   think about performance
 
-Support for multiple application schemas (expected 1Q98)
+Support for multiple application schemas
   generic scalar object typemap
   XPVMG abstraction
   REFCNT
@@ -147,12 +154,3 @@ Support for multiple application schemas (expected 1Q98)
 
 Needed is a more flexible hash table that can serve to replace
 os_Dictionary and also be used as an ObjStore::Index.
-
-
-+ CORE-PERL WISH LIST +
-
-The TIE interfaces are not as detailed as the built-ins.  I should be
-able to hide whatever necessary complexity in the module that
-implements the 'tie' so the user doesn't have to know anything
-special.  How about lvalues?  How about proper support for nested
-structures?

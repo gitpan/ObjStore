@@ -9,14 +9,16 @@ package ObjStore;
 require 5.00404;
 use strict;
 use Carp;
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
-	    $DEFAULT_OPEN_MODE $EXCEPTION %CLASSLOAD $CLASSLOAD
-	    $INITIALIZED $RUN_TIME $CLIENT_NAME $TRANSACTION_PRIORITY
-	    $OS_CACHE_DIR $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof
-	    $SAFE_EXCEPTIONS
-	    );
+use vars
+    qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS 
+       %sizeof $INITIALIZED $RUN_TIME $OS_CACHE_DIR),
+    qw($FATAL_EXCEPTIONS $SAFE_EXCEPTIONS $REGRESS),           # exceptional
+    qw($SCHEMA_DB $CLIENT_NAME $CACHE_SIZE
+       $TRANSACTION_PRIORITY),                                 # tied
+    qw($DEFAULT_OPEN_MODE $MAX_RETRIES),                       # simulated
+    qw($EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.32';
+$VERSION = '1.33';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -57,11 +59,13 @@ require DynaLoader;
 }
 
 $EXCEPTION = sub {
-    my $reason = shift;
-    $reason = ObjStore::Transaction::SEGV_reason() if $reason eq 'SEGV';
-    $reason ||= 'SEGV';
+    my $m = shift;
     local $Carp::CarpLevel = $Carp::CarpLevel + 1;
-    my $m = "ObjectStore: $reason\t";
+    if ($m eq 'SEGV') {
+	$m = ObjStore::Transaction::SEGV_reason();
+	$m = "ObjectStore: $m\t" if $m;
+    }
+    $m ||= 'SEGV';  # (probably not our fault? :-)
     warn $m if $ObjStore::REGRESS;
 
     # Due to bugs in perl, confess can cause a SEGV if the signal
@@ -89,9 +93,12 @@ END {
 	ObjStore::shutdown();
     }
 }
-# delay init with 'use ObjStore "no-init"' ?XXX
-set_client_name($CLIENT_NAME ||= $0);
-initialize();
+
+tie $CACHE_SIZE, 'ObjStore::Config::CacheSize';
+tie $CLIENT_NAME, 'ObjStore::Config::ClientName';
+tie $SCHEMA_DB, 'ObjStore::Config::SchemaPath';
+
+ObjStore::initialize() if !$ObjStore::NoInit::INIT_DELAYED;
 
 warn "You need at least ObjectStore 4.0.1!  How were you able to compile this extension?\n" if ObjStore::os_version() < 4.0001;
 
@@ -115,7 +122,6 @@ sub blessed ($);
 sub bless ($;$);
 
 tie $TRANSACTION_PRIORITY, 'ObjStore::Transaction::Priority';
-
 sub set_transaction_priority {
     carp "just assign to \$TRANSACTION_PRIORITY directly";
     $TRANSACTION_PRIORITY = shift;
@@ -137,6 +143,7 @@ sub fatal_exceptions {
 }
 
 $MAX_RETRIES = 10;
+# goofy?
 sub get_max_retries { $MAX_RETRIES; }
 sub set_max_retries { $MAX_RETRIES = $_[0]; }
 
@@ -352,6 +359,14 @@ sub debug {
 }
 
 #------ ------ ------ ------
+sub set_cache_size {
+    carp "set_cache_size() depreciated, just assign to \$CACHE_SIZE";
+    $CACHE_SIZE = shift;
+}
+sub set_client_name {
+    carp "set_client_name() depreciated, just assign to \$CLIENT_NAME";
+    $CLIENT_NAME = shift;
+}
 sub schema_dir() {
     carp "schema_dir is depreciated.  Instead use ObjStore::Config";
     require ObjStore::Config;
@@ -373,26 +388,68 @@ sub try_abort_only(&) {
 *rethrow_exceptions = \&fatal_exceptions; # depreciated
 *ObjStore::disable_class_auto_loading = \&disable_auto_class_loading; #silly me
 
+package ObjStore::Config::CacheSize;
+
+sub TIESCALAR {
+    my $p = $ENV{OS_CACHE_SIZE} || 1024 * 1024 * 8;
+    bless \$p, shift;
+}
+
+sub FETCH { ${$_[0]} }
+sub STORE {
+    my ($o, $new) = @_;
+    ObjStore::_set_cache_size($new);
+    $$o = $new;
+}
+
+package ObjStore::Config::SchemaPath;
+
+sub TIESCALAR {
+    my $p;
+    ObjStore::_set_application_schema_pathname($ENV{OSPERL_SCHEMA_DB})
+	if $ENV{OSPERL_SCHEMA_DB};
+    $p = ObjStore::_get_application_schema_pathname();
+    bless \$p, shift;
+}
+
+sub FETCH { ${$_[0]} }
+sub STORE {
+    my ($o, $new) = @_;
+    ObjStore::_set_application_schema_pathname($new);
+    $$o = $new;
+}
+
+package ObjStore::Config::ClientName;
+
+sub TIESCALAR {
+    my $o = $0;
+    $o =~ s,^.*/,,;
+    ObjStore::_set_client_name($o);
+    bless \$o, shift;
+}
+
+sub FETCH { ${$_[0]} }
+sub STORE {
+    my ($o, $new) = @_;
+    ObjStore::_set_client_name($new);
+    $$o = $new;
+}
+
 package ObjStore::Transaction::Priority;
 
 sub TIESCALAR {
-    my ($class) = @_;
     my $p = 0x8000;
-    bless \$p, $class;
+    bless \$p, shift;
 }
 
-sub FETCH {
-    my ($o) = @_;
-    $$o;
-}
-
+sub FETCH { ${$_[0]} }
 sub STORE {
     my ($o,$new) = @_;
     ObjStore::_set_transaction_priority($new);
     $$o = $new;
 }
 
-# Psuedo-class to animate persistent bless!  (Kudos to Devel::Symdump!)
+# Psuedo-class to animate persistent bless!  (Kudos to Devel::Symdump :-)
 #
 package ObjStore::BRAHMA;
 use Carp;
@@ -575,8 +632,8 @@ sub isa_versions {
 sub _engineer_blessing {
     my ($br, $bs, $o, $toclass) = @_;
     if (! $bs) {
-	# This warning doesn't detect the right thing when there are
-	# multiple databases, since each database needs its own copy
+	# This warning is broken since it doesn't detect the right thing
+	# when there are multiple databases.  Each database needs its own copy
 	# of bless-info.
 #	warn "ObjStore::BRAHMA must be notified of run-time manipulation of VERSION strings by changing \$ObjStore::RUN_TIME to be != \$CLASS_DOGTAG{$toclass}" 
 #	    if ($CLASS_DOGTAG{$toclass} or 0) == $ObjStore::RUN_TIME; #majify? XXX
@@ -735,7 +792,7 @@ sub BLESS {
 	return if !$br;
 	my $bs = _get_certified_blessing($br, $db, $class);
 	return if !$bs;
-	if ($bs->[1] eq $class) {
+	if ($db->_blessto_slot() == $bs and $bs->[1] eq $class) {
 	    # Already blessed and certified: way cool dude!
 	    $need_rebless = 0;
 	}

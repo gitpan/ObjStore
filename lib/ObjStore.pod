@@ -669,7 +669,7 @@ Reports the representation's class.
 
 =item * C<bless>
 
-C<bless> stores the current C<@ISA> tree and the version of every
+C<bless> stores the current C<@ISA> tree and the C<VERSION> of every
 member of the C<@ISA> tree.  (In addition to the usual meaning of
 bless.)
 
@@ -1137,6 +1137,10 @@ general ease of use.
 
 C<bless> and C<begin> by default.  Most other static methods can also
 be exported.
+
+=head1 ENVIRONMENT VARIABLES
+
+OSPERL_SCHEMA_DB
 
 =head1 AUTHOR
 

@@ -6,24 +6,31 @@ use ObjStore ':ADV';
 use lib './t';
 use test;
 
-ok(!defined ObjStore::get_all_servers());
+#
+# THIS DOESN'T PASS ALL TESTS IF YOU SET OSPERL_SCHEMA_DB
+#
+# I haven't tracked down the cause but it's probably not important.
+# (None of these tests are all that important. :-)
+#
+
+ok !defined ObjStore::get_all_servers();
 
 &open_db;
 
 ObjStore::network_servers_available();
 ObjStore::get_page_size();
-ok(ObjStore::get_n_databases() == 2);  #who cares?
+ok ObjStore::get_n_databases(), 2;  #who cares?
 
 my $s = ObjStore::get_all_servers();
 $s->get_host_name();
-ok(! $s->connection_is_broken);
+ok ! $s->connection_is_broken;
 
 for ($s->get_databases) { $_->close; }
 $s->disconnect();
 
-ok($s->connection_is_broken);
+ok $s->connection_is_broken;
 $s->reconnect();
-ok(! $s->connection_is_broken);
+ok !$s->connection_is_broken;
 
 for (qw(read mvcc update)) {
     for my $db ($s->get_databases) { 
@@ -35,7 +42,7 @@ for (qw(read mvcc update)) {
 }
 
 ok(ObjStore::debug('off') == 0);
-ok(ObjStore::release_name() =~ m/ObjectStore/);
+ok ObjStore::release_name() =~ m/ObjectStore/;
 
 $db->get_pathname;
 $db->get_relative_directory;

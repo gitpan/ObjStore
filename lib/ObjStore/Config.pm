@@ -13,13 +13,14 @@ use vars qw(@ISA @EXPORT_OK $TMP_DBDIR $SCHEMA_DBDIR);
 sub DEBUG() { 1 };
 
 #   Specify a directory for the schemas (and recompile):
-#   (override with $ENV{OSPERL_SCHEMA_DBDIR})
 
-$SCHEMA_DBDIR = 'elvis:/research2/ODB/schema';
+$SCHEMA_DBDIR = $ENV{OSPERL_SCHEMA_DBDIR} ||
+    'elvis:/data/research2/ODB/schema';
 
 #   Specify a directory for temporary databases (posh, perltest, etc):
 
-$TMP_DBDIR = 'elvis:/research2/ODB/tmp';
+$TMP_DBDIR = $ENV{OSPERL_TMP_DBDIR} ||
+    'elvis:/data/research2/ODB/tmp';
 
 #   Paths should not have a trailing slash.
 

@@ -1,3 +1,10 @@
+** 04-26-00 RELEASE 1.59
+
+- Added OSPERL_TMP_DBDIR to mirror OSPERL_SCHEMA_DBDIR.
+
+- NetServer::ProcessTop -> NetServer::Portal
+
+
 ** 11-23-99 RELEASE 1.58 [Guru Nanak's Birthday]
 
 - More Makefile flexibility with os_schema_rule_ext.

@@ -294,6 +294,7 @@ sub dyn_begin {
 	dyn_commit(1) if $TXN; #was aborted
 	dyn_start(); 
 	$ChkptEv->again
+	    if defined $ChkptEv;
     };
     if ($@) { warn; unloop_all() }
 }

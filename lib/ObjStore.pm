@@ -9,7 +9,7 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                         # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.58';
+$VERSION = '1.59';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -94,8 +94,6 @@ tie $CACHE_SIZE, 'ObjStore::Config::CacheSize';
 tie $CLIENT_NAME, 'ObjStore::Config::ClientName';
 
 require ObjStore::Config;
-$ObjStore::Config::SCHEMA_DBDIR = $ENV{OSPERL_SCHEMA_DBDIR} if
-    exists $ENV{OSPERL_SCHEMA_DBDIR};
 
 END {
 #    debug(qw(bridge txn));

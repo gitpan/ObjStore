@@ -123,8 +123,11 @@ for (@DB) {
     }
 }
 
-$ObjStore::CLIENT_NAME = $ClientName ||
-    "osperl[".join(',',map { $_->[0] =~ m,/([^/]+)$, ? $1:$_->[0] } @DB)."]";
+$ClientName ||= "osperl[".join(',',map {
+    $_->[0] =~ m,/([^/]+)$, ? $1:$_->[0]
+} @DB)."]";
+
+$ObjStore::CLIENT_NAME = $ClientName;
 
 sub do_load_module {
     no strict 'refs';
@@ -199,11 +202,11 @@ for (@DB) {
 }
 
 if ($Top) {
-    eval { require NetServer::ProcessTop };
-    if ($@) { die "osperlserver: -top failed: $@" }
+    eval { require NetServer::Portal };
+    if ($@) { die "osperlserver -top failed: $@" }
     else {
-	eval { $Top = NetServer::ProcessTop->new(); };
-	warn if $@;
+	NetServer::Portal->set_storefile("/var/tmp/".$ClientName.".npc");
+	$Top = NetServer::Portal->default_start();
     }
 }
 if ($TimeWarp) {

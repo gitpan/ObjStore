@@ -99,7 +99,7 @@ sub do_boot_class {
 
 sub boot {
     my $o = shift;
-    for my $p (@_) { $o->do_boot_class($p) }
+    map { $o->do_boot_class($_) } @_;
 }
 
 1;

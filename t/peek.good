@@ -13,21 +13,6 @@ TestDB {
     h => ObjStore::HV (1) {
     },
     heap => ObjStore::Index (1) (0) [
-      ObjStore::AV (1) [
-        1,
-      ],
-      ObjStore::AV (1) [
-        2,
-      ],
-      ObjStore::AV (1) [
-        4,
-      ],
-      ObjStore::AV (1) [
-        5,
-      ],
-      ObjStore::AV (1) [
-        3,
-      ],
     ],
     junk_in_seg => ObjStore::HV (1) {
       nums => ObjStore::AV (1) [
@@ -67,4 +52,4 @@ TestDB {
   tripwire => ObjStore::HV (1) {
   },
 },
-count = 171
+count = 156

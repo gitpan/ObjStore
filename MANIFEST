@@ -125,6 +125,7 @@ t/1typemap.t
 t/2bless.t
 t/2heap.t
 t/2index.t
+t/2leak.t
 t/2ref.t
 t/2root.t
 t/2transact.t

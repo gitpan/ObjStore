@@ -4,7 +4,7 @@ use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
 use vars qw($VERSION @DB $DAEMON $Loop %Debug $Shutdown $AutoReloader);
-$VERSION = '1.00';
+$VERSION = '1.01';
 $DAEMON = 1;
 my $default_server = 'ObjStore::ServerDB';
 
@@ -36,7 +36,6 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	warn, next if $@;
 	if ($way eq 'M') {
 	    $m->import(@im);
-	    $AutoReloader = 1 if $m eq 'blib' && !defined $AutoReloader;
 	} else {
 	    $m->unimport(@im);
 	}
@@ -81,11 +80,16 @@ $SIG{HUP} = $DAEMON ? 'IGNORE' : sub { warn "SIGHUP" };
 for (@DB) {
     # Not foolproof... Hm.
     if (m/^(.*) \= (.*) \+ (.*)$/x) {
+	# depreciated?
 	$_ = [$1,$2,$3];
+
     } elsif (m/^(.*) \+\= (.*)$/x) {
 	$_ = [$1,$default_server,$2];
+
     } elsif (m/^(.*) \= (.*)$/x) {
+	# depreciated?
 	$_ = [$1,$2,''];
+
     } else {
 	$_ = [$_,$default_server,''];
     }
@@ -123,18 +127,31 @@ for (@DB) {
 	    $class ne $default_server || blessed $top eq 'ObjStore::HV';
 	my @boot = split /,/, $_->[2];
 	$top->boot(@boot);
-
+	$top->restart() if $top->can('restart'); #dubious
+	
+	# Restart top level objects until no more are created.
+	# Is order important?
 	my %objs;
-	for (values %$top) { $objs{$_} = $_ if blessed $_ }
+	while (1) {
+	    my $more = 0;
+	    for my $z (values %$top) {
+		next if !blessed $z || exists $objs{ $z };
+		++$more;
+		$objs{$z} = $z;
+	    }
+	    last if !$more;
+	    for my $k (keys %objs) {
+		my $o = $objs{$k};
+		next if !ref $o;
+		$o->restart() if $o->can('restart');
+		$objs{$k} = undef;
 
-	$top->restart() if $top->can('restart');
-#	$Loop = ref $top if !$Loop && $top->isa('osperlserver'); #?XXX
-	for (values %objs) {
-	    $_->restart() if $_->can('restart');
-	    $Loop = ref $_ if !$Loop && $_->isa('osperlserver');
+		# allow override of default event loop stuff
+		$Loop = ref $o if !$Loop && $o->isa('osperlserver'); #?
+	    }
 	}
 
-	# default to our built-in service
+	# default to our built-in event dispatch service
 	if (!$Loop) {
 	    $Loop = 'ObjStore::Serve';
 	    $top->do_boot_class($Loop)->restart;
@@ -146,12 +163,9 @@ for (@DB) {
 # checkpoint timer should be a command line option?
 
 if ($AutoReloader) {
-    eval {
-	require Module::Reload;
-	$Module::Reload::Debug = $Module::Reload::Debug = 1;
-	Event->timer(interval => 1, callback => sub { Module::Reload->check });
-    };
-    warn if $@;  #ok if not available
+    require Module::Reload;
+    $Module::Reload::Debug = $Module::Reload::Debug = 1;
+    Event->timer(interval => 1, callback => sub { Module::Reload->check });
 }
 if ($Shutdown) {
     require Date::Manip;
@@ -201,9 +215,6 @@ Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
 
     server:/full/path/to/database+=My::Class1,My::Class2
        $default_server->new(...); boot('My::Class1','My::Class2')
-
-    server:/full/path/to/database=My::Database+My::Class1,My::Class2
-       My::Database->new(...); boot('My::Class1','My::Class2')
 
 ";
     exit;

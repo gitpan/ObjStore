@@ -119,7 +119,7 @@ sub init_signals {
 ################################################# STATS
 
 use vars qw($BeforeCheckpoint $ChkptTime $TxnTime $Aborts $Commits
-	    $LoopTime);
+	    $LoopTime @Commit);
 $LoopTime = 2;
 
 my $LoopState;
@@ -138,13 +138,11 @@ sub before_checkpoint {
 	    # make sure we're still in charge
 	    ObjStore::Server->touch($$now[0]);
 
-	    # MAKE EXTENDABLE? XXX
-
-	    # include StatINC by default?
-	    # 
-
 	    # update various stats
 	    my $o = $SERVE->focus;
+
+	    for (@Commit) { $_->($o, $now) }
+
 	    my $r = $o->{history}[0];
 	    
 	    my ($max_commit,$max_loop) = (0)x2;

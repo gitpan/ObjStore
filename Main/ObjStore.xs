@@ -1039,7 +1039,7 @@ _pstringify(THIS, ...)
 	}
 	XPUSHs(sv_2mortal(ret));
 
-int
+bool
 _peq(a1, a2, ign)
 	SV *a1
 	SV *a2
@@ -1053,7 +1053,7 @@ _peq(a1, a2, ign)
 	OUTPUT:
 	RETVAL
 
-int
+bool
 _pneq(a1, a2, ign)
 	SV *a1
 	SV *a2
@@ -1187,9 +1187,14 @@ OSPV_Container::FETCHSIZE()
 MODULE = ObjStore	PACKAGE = ObjStore::PathExam
 
 static osp_pathexam *
-osp_pathexam::new()
+osp_pathexam::new(...)
+	PROTOTYPE: $;$
 	CODE:
-	RETVAL = new osp_pathexam();
+	int desc=0;
+	if (items == 2) {
+	  desc = sv_true(ST(1));
+	}
+	RETVAL = new osp_pathexam(desc);
 	OUTPUT:
 	RETVAL
 

@@ -62,7 +62,7 @@ sub do_signal {
     return if $sig eq 'kill';    # (saving throw... made!)
     $o->SUPER::do_signal($sig);
 }
-++$ObjStore::REGRESS;
+
 sub do_work {
     my ($j,$slices) = @_;
     my $now = time; #again XXX

@@ -80,7 +80,7 @@ sub _run1job {
     $RunningJob = $j->new_ref('transient','hard');
     my $used = $max - min $j->do_work($max), $max;
     $RunningJob = undef;
-    $$j{cpu} = $used;
+    $$j{cpu} += $used;
     $$j{state} = 'R' if $used && $$j{state} eq 'S';
     $$j{state} = 'L' if $used == 0 && $$j{state} eq 'R';
     $used;

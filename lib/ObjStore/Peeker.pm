@@ -57,6 +57,7 @@ sub reset_class {
 
 sub Peek {
     my ($o, $top) = @_;
+    $o = $o->new() if !ref $o;
     $o->{_level} = 0;
     $o->{has_sep} = 0;
     $o->{has_prefix} = 0;

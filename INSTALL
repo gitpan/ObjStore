@@ -1,7 +1,7 @@
 ------------------------------------------------------------ INSTALLATION
 
-*** IF DO NOT HAVE (OR CANNOT UPGRADE) TO OBJECTSTORE 5.1, YOU SHOULD ***
-*** STICK WITH VERSION 1.41 OF THIS EXTENSION.                        ***
+*** IF DO NOT HAVE (AND CANNOT UPGRADE) TO OBJECTSTORE 5.1, YOU SHOULD ***
+*** STICK WITH VERSION 1.41 OF THIS EXTENSION!!                        ***
 
 
 Tested Configurations:
@@ -29,13 +29,13 @@ Tested Configurations:
 
 4. make
 
-5. make test
+5. LD_LIBRARY_PATH=blib/arch/auto/ObjStore make test  (or somesuch)
 
 6. make install
 
 You have to install the API separately before building the rest of the
-package.  The reason is because everything depends on the libosperl.so
-library being in the right place.  (Is there a better way?)
+package since everything depends on libosperl.so being in the right
+place.  (There must be a better way?)
 
 -------------------------------------------------------------------------
 *** TEST SUITE

@@ -27,6 +27,18 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 =head1 R!CENT CHANGES
 
 
+** 08-05-98 RELEASE 1.44
+
+- Improved backward compatibility with respect to blessings in old
+databases.  (Now that we have old databases...  :-)
+
+- As threatened, new_ref() without arguments now creates a hard
+reference instead of a protected reference.
+
+- Fixed a nasty pathexam problem exposed by ObjStore::REP::HashRecord.
+Sort comparisons were being botched.
+
+
 ** 07-28-98 RELEASE 1.43
 
 - Fixed index bugs.  The lexicographical ordering logic was broken.

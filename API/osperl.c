@@ -51,6 +51,7 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
 
   DEBUG_decode(Perl_sv_dump(ref));
 
+  // Must check before SvOK
   if (SvGMAGICAL(ref))
     mg_get(ref);
 
@@ -59,6 +60,7 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
       croak("sv_2bridge: Use of uninitialized value");
     return 0;
   }
+
   if (!SvROK(ref)) {
     if (force) {
       Perl_sv_dump(ref);
@@ -903,6 +905,7 @@ HV *OSSVPV::get_stash()
 
   // will need to lock? XXX
   SV **msvp = hv_fetch(osp_thr::CLASSLOAD, CLASS, CLEN, 0); //in CACHE?
+  //  warn("classload fetch '%s' => 0x%x", CLASS, msvp? *msvp : 0);
   if (msvp) return (HV*) *msvp;
 
   return load_stash_cache(CLASS, CLEN, blessinfo);
@@ -912,6 +915,12 @@ HV *OSSVPV::load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo)
 {
   // CAN BE SLOW AS MUD; SAFETY SAFETY SAFETY!
   STRLEN len;
+  // MAYBE READ-ONLY!!
+  //  if (OSPvINUSE(this)) {
+  //    char *name = os_class(&len);
+  //    return gv_stashpvn(name,len,1);
+  //  }
+  //  OSPvINUSE_on(this);
   SV *bsv = osp_thr::ospv_2sv(blessinfo);
   char *oscl = os_class(&len);
   if (len != strlen(oscl)) croak("os_class(): length of %s is wrong", oscl);
@@ -936,8 +945,8 @@ HV *OSSVPV::load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo)
   SPAGAIN;
   SV *toclass = POPs;
   if (SvTRUE(ERRSV) || count != 1) {
-    croak("&$ObjStore::CLASSLOAD('%s', '%s') failure", 
-	  SvPV(sv1, na), SvPV(sv2, na));
+    croak("&$ObjStore::CLASSLOAD('%s', '%s') failure (count=%d)", 
+	  SvPV(sv1, na), SvPV(sv2, na), count);
   }
   sv_setsv(ERRSV, olderr);
   if (!SvPOK(toclass)) {
@@ -947,12 +956,14 @@ HV *OSSVPV::load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo)
   HV *stash = gv_stashsv(toclass, 1);
   SvREFCNT_inc(stash);
   hv_store(osp_thr::CLASSLOAD, CLASS, CLEN, (SV*)stash, 0);
+  //  warn("classload '%s' => 0x%x", CLASS, stash);
 #ifdef POPSTACK
   POPSTACK;
 #endif
   PUTBACK;
   FREETMPS;
   LEAVE;
+  //  OSPvINUSE_off(this);
   return stash;
 }
 
@@ -1350,6 +1361,7 @@ int osp_pathexam::load_target(char _mode, OSSVPV *pv)
   if (!pathcnt) croak("no path loaded");
   keycnt = 0;
   conflict = 0;
+  tmpkey = 0;
   target = pv;
   if (pv->is_OSPV_Ref2())
     pv = ((OSPV_Ref2*)pv)->focus();
@@ -1383,6 +1395,7 @@ void osp_pathexam::load_args(SV **top, int items)
 {
   SV *copy[PATHEXAM_MAXKEYS];
   int xa;
+  if (items >= PATHEXAM_MAXKEYS) items = PATHEXAM_MAXKEYS-1;
   for (xa=0; xa < items; xa++) {
     copy[xa] = sv_mortalcopy(top[xa]);
   }
@@ -1436,6 +1449,7 @@ int osp_pathexam::compare(OSSVPV *dat)
 {
   if (!pathcnt) croak("no path loaded");
   if (dat->is_OSPV_Ref2()) dat = ((OSPV_Ref2*)dat)->focus();
+  tmpkey = PATHEXAM_MAXKEYS;
   int cmp;
   for (int kx=0; kx < pathcnt; kx++) {
     OSSV *k1 = keys[kx];
@@ -1456,6 +1470,7 @@ int osp_pathexam::compare(OSSVPV *d1, OSSVPV *d2)
   if (!pathcnt) croak("no path loaded");
   if (d1->is_OSPV_Ref2()) d1 = ((OSPV_Ref2*)d1)->focus();
   if (d2->is_OSPV_Ref2()) d2 = ((OSPV_Ref2*)d2)->focus();
+  tmpkey = PATHEXAM_MAXKEYS;
   int cmp;
   for (int kx=0; kx < pathcnt; kx++) {
     OSSV *z1 = path_2key(kx, d1);

@@ -25,7 +25,7 @@ $TMP_DBDIR = 'elvis:/research/tmp';
 
 #---------------------------------------------------------------#
 
-sub API_VERSION() { '02' };     #do not edit!!
+sub API_VERSION() { '03' };     #do not edit!!
 sub SCHEMA_VERSION() { '13' };  #do not edit!!
 
 1;

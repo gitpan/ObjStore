@@ -10,8 +10,6 @@ following in the body of your message:
 
 + IDEAS +
 
-Devel::Leak!
-
 think about avoiding string copies again?
 can BLESS be faster? (at least the first time?)
 
@@ -21,9 +19,6 @@ tests
   todo test for unsuccessful path traversals (yuck!)
 
 any traverse2 should check for RV (&die)
-
-ObjStore::Serve
-  customization of pre-commit stats?
 
 performance
   modification counters?
@@ -40,9 +35,9 @@ RE-THINK:
   sub is_evolved { _is_evolved(@_, 1); }
 
 patches
-  PERL_OBJECT / ExCxx
+  PERL_OBJECT / ExCxx !!
+  VTBL collections implementation!
   XSthr.h
-  ref overload
   fold osp_croak back into perl
   MakeMaker patch for blib shared libraries
 

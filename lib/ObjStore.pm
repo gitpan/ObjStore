@@ -17,7 +17,7 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                    # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.43';
+$VERSION = '1.44';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -60,7 +60,7 @@ require DynaLoader;
 
 $EXCEPTION = sub {
     my $m = shift;
-    local $Carp::CarpLevel = $Carp::CarpLevel + 1;
+#    local $Carp::CarpLevel = $Carp::CarpLevel + 1;  # too ambitious
     if ($m eq 'SEGV') {
 	$m = ObjStore::Transaction::SEGV_reason();
 	if ($m) {
@@ -91,7 +91,7 @@ $EXCEPTION = sub {
 $SIG{SEGV} = \&$EXCEPTION
     unless defined $SIG{SEGV}; # MUST NOT BE CHANGED! XXX
 
-eval { require Thread::Specific; } or do {
+eval { require Thread::Specific } or do {
     sub lock {}
     undef $@;
 };
@@ -264,22 +264,36 @@ $CLASS_AUTO_LOAD = 1;
 sub _isa_loader {
     no strict 'refs';
     my ($bs, $base, $class) = @_;
-#    warn "_isa_loader $bs $base $class";
+#    Carp::cluck "_isa_loader $bs $base $class";
     if (!@{"$class\::ISA"} and $CLASS_AUTO_LOAD) {
 	return $class if $class eq 'ObjStore::Database';
-	my $isa = $bs ? $bs->[3] : [$base,[]];
-	($class,$isa) = @$isa
-	    if ($class =~ m/^_fake\:\:/ and @$isa == 2);
+	my $isa;
+	if (!$bs) {
+	    $isa = [$base,[]];
+	} else {
+	    $isa = $bs->[3];
+	}
+	if ($class =~ m/^_fake\:\:/ and @$isa == 2) {
+	    # pop fake blessing
+	    ($class,$isa) = @$isa;
+	}
 	require_isa_tree($class, $isa);
+	while (!$class->isa($base) and @$isa) {
+	    # pop classes until we get a winner
+	    ($class,$isa) = @$isa;
+	}
+	if (!$class->isa($base)) {
+	    # oops!  hope this works...
+	    return $base;
+	}
 	force_load($class, $isa);
     }
+#    warn $class;
     $class;
 };
 $CLASSLOAD = \&_isa_loader;
 
-sub disable_auto_class_loading {
-    $CLASS_AUTO_LOAD = 0;
-}
+sub disable_auto_class_loading { $CLASS_AUTO_LOAD=0 }
 
 sub lookup {
     my ($path, $mode) = @_;
@@ -345,7 +359,7 @@ sub debug {
     if ($mask) {
 	Carp->import('verbose');
     }
-    $ObjStore::REGRESS = $mask != 0;
+    ++$ObjStore::REGRESS if $mask != 0;
     _debug($mask);
 }
 
@@ -625,7 +639,7 @@ sub isa_versions {
 }
 
 sub _engineer_blessing {
-    my ($br, $bs, $o, $toclass) = @_;
+    my ($br, $bs, $o, $toclass, $os_class) = @_;
     if (! $bs) {
 	# This warning is broken since it doesn't detect the right thing
 	# when there are multiple databases.  Each database needs its own copy
@@ -633,9 +647,11 @@ sub _engineer_blessing {
 #	warn "ObjStore::BRAHMA must be notified of run-time manipulation of VERSION strings by changing \$ObjStore::RUN_TIME to be != \$CLASS_DOGTAG{$toclass}" 
 #	    if ($CLASS_DOGTAG{$toclass} or 0) == $ObjStore::RUN_TIME; #majify? XXX
 
-	$bs = $br->{$toclass} =
-	    [1, $toclass, $ObjStore::RUN_TIME,
-	     isa_tree($toclass,0), isa_versions($toclass, {}, 0)];
+	$bs = $br->{$toclass} = [1,
+				 $toclass,
+				 $ObjStore::RUN_TIME,
+				 isa_tree($toclass,0),
+				 isa_versions($toclass, {}, 0)];
 	$bs->const;
 	$CLASS_DOGTAG{$toclass} = $bs->[2];
 #	warn "fix $toclass ".$bs->[2];
@@ -752,12 +768,19 @@ sub new {
     ObjStore::bless($db, $class) if $db;
 }
 
+use vars qw(%BLESSMAP);
 sub import_blessing {
     my ($db) = @_;
     my $bs = $db->_blessto_slot;
     if ($bs) {
-	my $class = &ObjStore::_isa_loader($bs, 'ObjStore::Database', $bs->[1]);
+	# This is essentially the same as what is done for
+	# ObjStore::UNIVERSAL.
 
+	my $class = $BLESSMAP{ $bs->[1] };
+	if (!$class) {
+	    $class = $BLESSMAP{ $bs->[1] } =
+		&ObjStore::_isa_loader($bs, 'ObjStore::Database', $bs->[1]);
+	}
 	# Must use CORE::bless here -- the database is _already_ blessed, yes?
 	CORE::bless($db, $class);
     }
@@ -811,7 +834,7 @@ sub BLESS {
 
 	&ObjStore::begin('update', sub {
 		my $br = $db->_conjure_brahma;
-		_engineer_blessing($br, scalar(_get_certified_blessing($br, $db, $class)), $db, $class);
+		_engineer_blessing($br, scalar(_get_certified_blessing($br, $db, $class)), $db, $class, 'ObjStore::Database');
 	    });
 	die if $@;
     }
@@ -1048,7 +1071,7 @@ use vars qw($VERSION);
 $VERSION = '1.00';
 use Carp;
 use overload ('""' => \&_pstringify,
-	      'bool' => sub {1},
+	      'bool' => sub () {1},
 	      '==' => \&_peq,
 	      '!=' => \&_pneq,
 #	      'nomethod' => sub { croak "overload: ".join(' ',@_); }
@@ -1073,7 +1096,7 @@ sub BLESS {
     if (_is_persistent($r) and !$ {"$class\::UNLOADED"}) {
 	# recode in XS ? XXX
 	my $br = $r->database_of->_conjure_brahma;
-	_engineer_blessing($br, scalar(_get_certified_blessing($br, $r, $class)), $r, $class);
+	_engineer_blessing($br, scalar(_get_certified_blessing($br, $r, $class)), $r, $class, $r->os_class());
     }
     $class->SUPER::BLESS($r);
 }
@@ -1095,8 +1118,7 @@ sub new_ref {
 	if !defined $seg;
     my $type;
     if (!defined $safe) {
-	carp "default reference type will change to unsafe soon";
-	$type = 0;
+	$type = 1;
     }
     elsif ($safe eq 'safe') { $type=0; }
     elsif ($safe eq 'unsafe' or $safe eq 'hard') { $type=1; }

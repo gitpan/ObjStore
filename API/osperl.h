@@ -210,7 +210,7 @@ public:
   OSPVptr() :rv(0) {}
   ~OSPVptr() { set_undef(); }
   void set_undef() { if (rv) { rv->REF_dec(); rv=0; } }
-  void operator=(OSSVPV *npv) { set_undef(); rv=npv; rv->REF_inc(); }
+  void operator=(OSSVPV *npv) { set_undef(); rv=npv; if (rv) rv->REF_inc(); }
   operator OSSVPV*() { return rv; }
   OSSVPV *resolve() { return rv; }
   void steal(OSPVptr &nval) { set_undef(); rv = nval.rv; nval.rv=0; }
@@ -331,6 +331,7 @@ private:						\
   os_unsigned_int8 len;					\
   char ch[ W ];						\
 public:							\
+  osp_str##W() { len=0; }				\
   void set(char *pv, STRLEN pvn) {			\
     len = (pvn > maxlen)? maxlen : pvn;			\
     memcpy(ch, pv, len);				\
@@ -342,7 +343,6 @@ public:							\
     char *pv = SvPV(sv, tmp);				\
     set(pv,tmp);					\
   }							\
-  SV *svcopy() { return newSVpvn(ch, len); }		\
 };							\
 OSP_INIT(int osp_str##W::maxlen = W;)
 
@@ -434,7 +434,10 @@ protected:
   int keycnt;
   char *thru;
   STRLEN thru_len;
-  OSSV tmpkeys[PATHEXAM_MAXKEYS]; //should never be RVs
+  int tmpkey;
+  // The first set of tmpkeys are used for the loaded target.
+  // The seconds and third sets are used for the other records in compare.
+  OSSV tmpkeys[PATHEXAM_MAXKEYS * 3]; //should never be RVs
   OSSV *keys[PATHEXAM_MAXKEYS];
   char *conflict;
   OSSVPV *target;
@@ -463,7 +466,7 @@ public:
   int get_keycnt() { return keycnt; }
   int get_pathcnt() { return pathcnt; }
   OSSV *get_key(int kx) { return keys[kx]; }
-  OSSV *get_tmpkey() { return &tmpkeys[keycnt]; }
+  OSSV *get_tmpkey() { return &tmpkeys[tmpkey++]; }
 };
 
 // ODI seemed to want to restrict tix_handlers to lexical scope.

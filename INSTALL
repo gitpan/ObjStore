@@ -6,17 +6,21 @@ modify it under the same terms as Perl itself.
 ** Installation
 
 
-Supported systems:
-   sun4-solaris / SunPro 4.0 C++ / ObjectStore 5.0
+Tested Systems:
+   sun4-solaris / SunPro 4.0 C++ / ObjectStore 4.0 or better
 
 
-The build process is non-standard and needs some hand-holding.  (Sorry!)
+The build process is a bit radical and needs some hand-holding.
 
-1. Type './m help'  This is a new-style makefile!
+1. perl ./be helpful
 
-2. Make the necessary changes and run './m'.
+2. Make any necessary changes and run 'perl ./be'.
 
-3. It should build an './osperl' binary and run the test scripts.
+3. It should build an './blib/bin/osperl' binary and run the test scripts.
    './t/hash.t' fails 2/4 until bugrep015834 is fixed.
 
-4. './m install'
+4. 'perl ./be installed'
+
+
+If you suceed at building on a system that is not listed in above,
+please send a message to the mailing list announcing your success!

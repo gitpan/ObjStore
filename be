@@ -4,7 +4,7 @@ use lib '.';
 use Devel::Maker;
 
 {
-    # Specify a good directory for the application schema - $SchemaDir
+    # Specify a good directory for the application schema:
     my $SchemaDir = '/opt/os/joshua';
     
     my $pkg = {
@@ -22,7 +22,7 @@ use Devel::Maker;
 	install_map => {
 	    'bin' => [ 'osperl' ],
 	    'man3' => [ 'ObjStore.pm' ],
-	    'sitelib' => [ 'ObjStore.pm' ],
+	    'lib' => [ 'ObjStore.pm', 'PoweredByOS.gif' ],
 	},
 	clean => [qw(osperl-osschema.* ObjStore.c osperl)],
     };
@@ -30,19 +30,15 @@ use Devel::Maker;
     my $o = new Devel::Maker($pkg);
     $o->pm_2version('ObjStore.pm');
 
-    $o->help('
-1. Please set the following environment variables before compiling:
+    $o->help('1. Please set the following environment variables before compiling:
 
-OS_ROOTDIR=/nw/dist/vendor/os/4.0.2/sunpro
-OS_LDBBASE=/export2/os/4.0.2/sunpro
+OS_ROOTDIR=/nw/dist/vendor/os/4.0.2/sunpro (or whatever)
+OS_LDBBASE=/export2/os/4.0.2/sunpro (as appropriate)
  
-PATH+=$OS_ROOTDIR/bin
-LD_LIBRARY_PATH+=$OS_ROOTDIR/lib
-MANPATH+=$OS_ROOTDIR/man
+PATH+=$OS_ROOTDIR/bin ; LD_LIBRARY_PATH+=$OS_ROOTDIR/lib
  
-2. All *.ldb files must be on the osserver\'s local filesystem.
-
-3. Also, make sure you pick a reasonable directory for the application schema.
+2. Make sure you pick a reasonable directory for the application schema.
+See $SchemaDir in the be file.
 
 ');
 

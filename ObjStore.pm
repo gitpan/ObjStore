@@ -6,16 +6,20 @@ package ObjStore;
 
 use strict;
 use Carp;
-use vars qw($VERSION @ISA @EXPORT);
+use Config;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 require Exporter;
-@ISA     = qw(Exporter);
-@EXPORT  = qw(&try_update &try_read);
-$VERSION = '1.1';
+@ISA         = qw(Exporter);
+@EXPORT      = qw(&try_update &try_read);
+@EXPORT_OK   = qw(&peek &PoweredByOS);
+%EXPORT_TAGS = (ALL =>
+		[qw(try_update try_read peek PoweredByOS)]);
+$VERSION = 1.02;
 
 bootstrap ObjStore;
 
-package ObjStore;
+sub PoweredByOS { "$Config{sitelib}/PoweredByOS.gif"; }
 
 # try_update { complex transaction }
 # print "[Abort] $@\n" if $@;
@@ -45,6 +49,31 @@ sub try_read(&) {        # is this a dumb idea?
 	ObjStore->abort;  # Abort after reading?  Whatever.
     } else {
 	ObjStore->commit;
+    }
+}
+
+sub peek {
+    my ($lv, $h) = @_;
+    my $x=0;
+    my @S;
+    while (my($k,$v) = each %$h) {
+	last if $x++ > 21;
+	push(@S, [$k,$v]);
+    }
+    @S = sort { $a->[0] cmp $b->[0] } @S;
+    my $limit = (@S > 20) ? 2 : $#S;
+    for $x (0..$limit) {
+	my ($k,$v) = @{$S[$x]};
+	if (ref $v eq 'HASH') {
+	    print ' 'x$lv . "$k => {\n";
+	    peek($lv+1, $v);
+	    print ' 'x$lv . "},\n";
+	} elsif (!ref $v) {
+	    $v = 'undef' if !defined $v;
+	    print ' 'x$lv . "$k => '$v'\n";
+	} else {
+	    die "unknown type";
+	}
     }
 }
 
@@ -99,11 +128,8 @@ sub STORE {
     }
 }
 
-# Autoload methods go after =cut, and are processed by the autosplit program.
-
 1;
 __END__
-# Below is the stub of documentation for your module. You better edit it!
 
 =head1 NAME
 

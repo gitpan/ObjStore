@@ -32,13 +32,14 @@ Of course, there is always room for improvement!
 Copy a bunch of test scripts from the perl release and adapt them
 for ObjStore.  Add a test script to check reference counting.
 
-Turn ObjectStore exceptions into catchable perl exceptions.
-Maybe bad idea and impossible?
+Turn ObjectStore exceptions into catchable perl exceptions?
+At least dump the perl caller stack!
 
 Programmer friendly C++ access to persistent perl data structures
   easy way access tied array & tied hash in C++ (?)
 
 Get or $h->{foo}=undef should not attempt to modify during read transaction!
+This is hard to fix until OS exceptions print the perl caller stack.
 
 Fix typemap bug that forces users to untie tied variables manually.
 
@@ -75,6 +76,7 @@ dynamically.  Split out the timeseries & text object managers into
 separate shared objects.  Dream about Apache/Perl/ObjStore integration!
 
 Add MOP support for editing & reporting of abritrary databases!
+--> ObjectDesign - Claudio Demarco - 617-674-5346
 
 Expand Make.pm to encompass all architectures/compilers/situations.
 Integrate with and replace MakeMaker.

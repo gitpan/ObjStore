@@ -10,7 +10,7 @@
 # This should probably be redesigned to be completely generic and
 # integrated with MakeMaker.
 
-# Make compile steps more order independent
+# Compile steps should be more order independent
 
 # Do recursive directories!
 
@@ -36,18 +36,29 @@ use File::Path;
 use Test::Harness;
 use ExtUtils::Manifest qw(&mkmanifest &manicheck);
 use ExtUtils::Embed;
-use vars qw($CMDS $Dest);
+use vars qw($CMDS $Dest %CMD_ALIAS);
 
-$CMDS = [qw(help automake manifest check make test install uninstall clean dist)];
+$CMDS = [qw(helpful checked made tested automade
+	    installed uninstalled cleaned manifest guitarred)];
+
+%CMD_ALIAS = qw(help helpful
+		check checked
+		make made
+		test tested
+		automake automade
+		install installed
+		uninstall uninstalled
+		clean cleaned
+		manifest manifested
+		dist guitarred);
 
 $Dest = {
     'bin' => ["./blib/bin", $Config{installbin}],
     'man1' => ["./blib/man/man1", $Config{installman1dir}],
-    'man3' => ["./blib/lib/perl5/man/man3",  $Config{installman3dir}],
+    'man3' => ["./blib/man/man3", $Config{installman3dir}],
     'script' => ["./blib/bin", $Config{installscript}],
-    'sitearch' => ["./blib/lib/perl5/site_perl/$Config{archname}",
-		   $Config{installsitearch}],
-    'sitelib' => ["./blib/lib/perl5/site_perl", $Config{installsitelib}],
+    'arch' => ["./blib/arch", $Config{installsitearch}],
+    'lib' => ["./blib/lib", $Config{installsitelib}],
 };
 
 sub new {
@@ -71,7 +82,7 @@ sub flags {
     @{$o->{flags}{$exe}};
 }
 
-# factor this out into 'PerlShell.pm' ?
+# factor this out into 'Shell.pm' ?
 sub x {
     my ($o, @cmd) = @_;
     confess '$o->x(@cmd)' if !ref $o;
@@ -89,6 +100,7 @@ sub x {
 	print "cp $cmd[1] $cmd[2]\n" if $o->{verbose};
 	if (!$o->{nop}) {
 	    copy($cmd[1], $cmd[2]) or die "copy $cmd[1] $cmd[2]: $!";
+	    chmod(0777, $cmd[2]) if -x $cmd[1];  # copy doesn't do this..?
 	}
 
     } elsif ($cmd[0] eq 'mv') {
@@ -104,21 +116,13 @@ sub x {
 	    system(@cmd);
 	    my ($kill, $exit) = ($? & 255, $? >> 8);
 	    if ($kill) {
-		print "*** Break $kill\n";
-		exit;
+		die "*** Break $kill\n";
 	    }
 	    if ($exit) {
-		print "*** Exit $exit\n";
-		exit;
+		die "*** Exit $exit\n";
 	    }
 	}
     }
-}
-
-sub xsh {
-    my $o = shift;
-    confess 'xsh($o, @cmd)' if !ref $o;
-    $o->x(join(" ", @_));
 }
 
 sub configure {
@@ -134,6 +138,7 @@ sub configure {
 	} elsif ($k eq 'test_bin') {
 	    $o->{test_bin} = $v;
 	} elsif ($k eq 'install_map') {
+	    $v->{arch} = [] if !$v->{arch};  # make blib happy
 	    $o->{install_map} = $v;
 	} elsif ($k eq 'clean') {
 	    push(@{$o->{clean}}, @$v);
@@ -285,8 +290,8 @@ sub xs {
     my ($o, $f) = @_;
     $f =~ s/\.xs$//;
     if (newer("$f.o", "$f.xs", "typemap")) {
-	$o->xsh($o->exe('perl'), $o->exe('xsubpp'), '-C++', '-prototypes',
-		$o->flags('xsubpp'), "$f.xs", ">$f.tc");
+	$o->x(join(' ', $o->exe('perl'), $o->exe('xsubpp'), '-C++', '-prototypes',
+		   $o->flags('xsubpp'), "$f.xs", ">$f.tc"));
 	$o->x('mv', "$f.tc", "$f.c");
 	$o->cxx("$f.c");
     } else {
@@ -308,7 +313,7 @@ sub link {
     }
 }
 
-sub op_test {
+sub op_tested {
     my ($o) = @_;
 #    system("./osperl t/basic.t");
 #    system("./osperl t/cursor.t");
@@ -333,16 +338,16 @@ sub mk_installdirs {
     }
 }
 
-sub op_build {
+sub op_made {
     my ($o) = @_;
     $o->mk_installdirs(0);
     &{$o->{build}}($o);
-    $o->op_install(0);
+    $o->op_installed(0);
 }
 
 # not real - move from ./ to ./blib
 # real     - copy from ./blib to real install area
-sub op_install {
+sub op_installed {
     my ($o, $real) = @_;
     $real = 1 if !defined $real;  #sloppy XXX
 
@@ -381,7 +386,7 @@ sub op_install {
     print "\nCongratulations!  $o->{name}-$o->{version} is installed.\n" if $real;
 }
 
-sub op_uninstall {
+sub op_uninstalled {
     print "As you wish...\n";
     my ($o) = @_;
     my $what = $o->{install_map};
@@ -402,20 +407,19 @@ sub op_uninstall {
     }
 }
 
-sub op_clean {
+sub op_cleaned {
     my ($o) = @_;
     for my $yuck (@{$o->{clean}}) { $o->x('rm', glob($yuck)); }
 }
 
-sub op_dist {
+sub op_guitarred {
     my ($o) = @_;
     die "version missing" if !$o->{version};
     die "name missing" if !$o->{name};
-    die "'./m manifest' first" if !-e './MANIFEST';
+    $o->op_checked;
     my $dir = cwd;
     $dir =~ s|^.*/||;
     my @all = `cat ./MANIFEST`;
-#    for (@all) { chop; }
     chop @all;
     my $all = join(' ', map { "$dir/$_" } @all);
     $o->x("cd ..; tar -cf - $all | gzip -c > $o->{name}-$o->{version}.tar.gz");
@@ -426,13 +430,15 @@ sub pm_2version {
     my ($o, $file) = @_;
     my $fh = new IO::File;
     $fh->open($file) or die "open $file: $!";
+    my $ok=0;
     while (defined (my $l =<$fh>)) {
-	if ($l =~ m/\$VERSION\s*\=\s*['"]([\d.]+)["']/) {
+	if ($l =~ m/\$VERSION\s*\=\s*([\d.]+)/) {
 	    $o->{version} = $1;
+	    $ok=1;
 	    last;
 	}
     }
-    croak "Couldn't retrieve version from $file" if !$o->{version};
+    croak "Couldn't retrieve \$VERSION from $file" if !$ok;
 }
 
 sub help {
@@ -440,42 +446,50 @@ sub help {
     $o->{help} = $str;
 }
 
-sub op_help {
-    my ($o) = @_;
-    if ($o->{'help'}) {
-	print $o->{'help'};
-    } else {
-	print "Sorry!  I am helpless.\n";
-    }
-}
-
 sub enable {
     my ($o, @cmds) = @_;
     if (@cmds == 1 and $cmds[0] eq 'all') {
 	@cmds = @$CMDS;
     }
-    for (@cmds) { $o->{OK}{$_} = 1; }
+    for (@cmds) {
+	$_ = $CMD_ALIAS{$_} if defined $CMD_ALIAS{$_};
+	$o->{OK}{$_} = 1;
+    }
 }
 
-sub usage {
-    # do something fancy...
+sub op_helpful {
+    my ($o) = @_;
+    print "
+perl ./be [-nop] [-silent] [-verbose] <cmd>
+   checked      - verify that the package is complete
+   made         - run the compiler, etc.
+   installed    - copy files to final install area
+   uninstalled  - delete any files that were installed
+   cleaned      - delete all temporary files
+   manifested   - update the MANIFEST file
+   guitarred    - create a pkg.tar.gz distribution file
+";
+    if ($o->{'help'}) {
+	print "\n".$o->{'help'};
+    }
+    exit;
 }
 
 sub op_manifest {
     mkmanifest;
 }
 
-sub op_check {
+sub op_checked {
     my ($o) = @_;
     print "Package $o->{name}-$o->{version} looks complete.\n" if ! manicheck;
 }
 
-sub op_automake {
+sub op_automade {
     my ($o) = @_;
-    $o->op_clean;
-    print "Looks good.\n" if ! manicheck;
-    $o->op_build;
-    $o->op_test;
+    $o->op_cleaned;
+    $o->op_checked;
+    $o->op_made;
+    $o->op_tested;
 }
 
 # should only be called once
@@ -484,14 +498,18 @@ sub go {
     $o->enable(@ok);
 
     my %opts;
-    GetOptions(\%opts, 'nop', 'silent', 'verbose') or $o->usage;
+    GetOptions(\%opts, 'nop', 'silent', 'verbose') or $o->op_helpful;
     $o->{nop} = 1 if $opts{'nop'};
     $o->{verbose} = 0 if $opts{'silent'};
     $o->{verbose} = 1 if $opts{'verbose'};
 
     my $cmd = $ARGV[0];
-    $cmd = 'automake' if !$cmd;
-    die "$cmd not available" if !$o->{OK}{$cmd};
+    $cmd = 'automade' if !$cmd;
+    $cmd = $CMD_ALIAS{$cmd} if defined $CMD_ALIAS{$cmd};
+    if (!$o->{OK}{$cmd}) {
+	print "'$cmd' is not available here.\n";
+	$o->op_helpful;
+    }
 
     $o->opt($o->{optimize});
 

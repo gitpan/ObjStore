@@ -1,6 +1,9 @@
 # You might need to use GNU diff to see differences in -*-perl-*-
 # output due to embedded nulls.
 
+my $diff = `which gdiff` || `which diff`;
+chomp $diff;
+
 use Test;
 BEGIN { plan tests => 3 }
 
@@ -51,7 +54,7 @@ $fh->close;
 sub check {
     my ($new,$old) = @_;
     if (-e $old) {
-	if (system("diff -a -c $old $new")==0) {
+	if (system("$diff -a -c $old $new")==0) {
 	    unlink $new;
 	    ok(1);
 	} else {

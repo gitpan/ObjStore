@@ -251,6 +251,7 @@ sub resolve {
 	    ObjStore::Transaction::get_current()->abort();
 	    return;
 	}
+	#@r = (undef) if !@r; XXX is this right?
 	(@at,(@r>1?\@r:@r));
     }
 }

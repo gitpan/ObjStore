@@ -5,8 +5,8 @@ use Event 0.32;
 use base 'ObjStore::Table3';
 use ObjStore::Serve qw(txretry);
 use builtin qw(max min);           # available via CPAN
-use vars qw($VERSION $Interrupt $WorkLevel $RunningJob);
-$VERSION = '0.02';
+use vars qw($VERSION $Interrupt $WorkLevel $RunningJob @LOG_HOOK);
+$VERSION = '0.5';
 
 require ObjStore::Job;
 
@@ -125,11 +125,18 @@ sub work {
 	    $RunningJob = undef;
 	    $j->{'why'} = $@;
 	    $j->{state} = 'K';
+	    for my $h (@LOG_HOOK) { $h->($j); }
 	    return 0;  #retry immediately
 	}
 	$slices = 0;  #did work and also lost it!
     }
     $slices
+}
+
+sub add_log_hook {
+    my ($o, $hook) = @_;
+    die "$hook must be CODE" if ref $hook ne 'CODE';
+    push @LOG_HOOK, $hook;
 }
 
 sub find_jobs {
@@ -146,3 +153,5 @@ __END__
 TODO:
 
 time each slice for per job slice stats
+
+adaptive scheduling (yah right :-)

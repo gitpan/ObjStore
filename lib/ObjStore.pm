@@ -9,7 +9,7 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                         # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.56';
+$VERSION = '1.57';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {

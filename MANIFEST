@@ -72,6 +72,7 @@ lib/ObjStore/REP.pm
 lib/ObjStore/Serve.pm		server utilities
 lib/ObjStore/Serve/Notify.pm	dispatch notifications
 lib/ObjStore/ServerDB.pm	base class for server databases
+lib/ObjStore/ServerDB/Top.pm
 lib/ObjStore/ServerInfo.pm
 lib/ObjStore/Set.pm		deprecated
 lib/ObjStore/SetEmulation.pm	deprecated

@@ -1,3 +1,17 @@
+** 03-23-99 RELEASE 1.55 [STABLE]
+
+- Switch to new mailing list.
+
+
+** 03-22-99 RELEASE 1.54 [STABLE]
+
+- Minor updates to ObjStore::Serve and ObjStore::Table3.
+
+- Better searching heuristics for MakeMaker.
+
+- Minor documentation updates.
+
+
 ** 02-11-99 RELEASE 1.53 [STABLE]
 
 - osperlserver no longer subscribes to notifications by default.  Use

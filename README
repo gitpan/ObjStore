@@ -56,6 +56,20 @@ query is unique among database architectures.
 =head1 R!CENT CHANGES
 
 
+** 06-23-99 RELEASE 1.57 [STABLE]
+
+- Split up ServerDB.pm into two files for smoother integration with
+posh/qtposh.
+
+- ObjStore::Job::Table::add_log_hook
+
+- Minor code reorg in ObjStore::Serve.
+
+- osperlserver: specific custom client-name.
+
+- zpeek.t: try to find GNU-diff.
+
+
 ** 04-21-99 RELEASE 1.56 [STABLE]
 
 - Fix ObjStore::Table3::add() to return the post-translated instead of
@@ -67,20 +81,6 @@ ObjStore::Serve::Notify, ObjStore::Job, ObjStore::Job::Table.
 - Fixed ObjAV[] = undef.  Added tests.
 
 - Documentation updates.
-
-
-** 03-23-99 RELEASE 1.55 [STABLE]
-
-- Switch to new mailing list.
-
-
-** 03-22-99 RELEASE 1.54 [STABLE]
-
-- Minor updates to ObjStore::Serve and ObjStore::Table3.
-
-- Better searching heuristics for MakeMaker.
-
-- Minor documentation updates.
 
 
 see ./INSTALL for hints on installation

@@ -76,7 +76,7 @@ sub cache_todayseconds {
 }
 cache_todayseconds();
 
-sub format_time {
+sub form_time {
     my $t;
     $t = Event::time() - $TodaySeconds;
     if ($t > 3600 * 24) {
@@ -93,20 +93,26 @@ sub format_time {
     sprintf "%02d:%02d:%02d%s", $h, $m, $s, substr($f,1);
 }
 
-sub restart {
-    my ($o) = @_;
+sub install_warn_timestamp {
+    # This is useful in general.  Split this into a separate tarball? XXX
 
     my $epat = qr/\[\d\d:\d\d:\d\d\.\d\d\d \d+\]/;
     $SIG{__WARN__} =
 	sub { 
-	    if ($_[0] !~ /$epat/) {
-		warn '['.format_time()." $$]: $_[0]"
+	    if ($_[0] !~ /^$epat/) {
+		warn '['.form_time()." $$]: $_[0]"
 	    } else {
 		warn $_[0];
 	    }
 	};
 
     # $SIG{__DIE__} can wreck havoc on the exception system
+}
+
+sub restart {
+    my ($o) = @_;
+
+    install_warn_timestamp();
 
     # If we made it here, our assumption is that the database
     # is not currently being serviced by a live server.

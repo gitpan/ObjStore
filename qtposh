@@ -274,6 +274,8 @@ sub refresh {
 	my $remote = $top->{ $myclass };
 	if (!$remote) {
 	    $$o{out}->setText("creating $myclass...");
+	    return warn "Can't invoke $top->boot_class"
+		if !$top->can('boot_class');
 	    $top->boot_class($myclass);
 	    return;
 	}

@@ -4,8 +4,8 @@ use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
 use vars qw($VERSION @DB $DAEMON $Loop $LoopMeth %Debug
-	    $Top $Subscribe $Shutdown $AutoReloader);
-$VERSION = '1.04';
+	    $Top $Subscribe $Shutdown $AutoReloader $ClientName);
+$VERSION = '1.05';
 $DAEMON = 1;
 $LoopMeth = 'defaultLoop';
 my $default_server = 'ObjStore::ServerDB';
@@ -51,7 +51,10 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	} else {
 	    $m->unimport(@im);
 	}
-    } elsif ($o =~ m/^-loop$/) {
+    } elsif ($o eq '-n') {
+	$ClientName = $ARGV[++$arg];
+	
+    } elsif ($o eq '-loop') {
 	$LoopMeth = $ARGV[++$arg];
 
     } elsif ($o =~ m/^-I (\S*) $/x) {
@@ -118,7 +121,7 @@ for (@DB) {
     }
 }
 
-$ObjStore::CLIENT_NAME = 
+$ObjStore::CLIENT_NAME = $ClientName ||
     "osperl[".join(',',map { $_->[0] =~ m,/([^/]+)$, ? $1:$_->[0] } @DB)."]";
 
 sub do_load_module {
@@ -258,6 +261,7 @@ Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
   -Idirectory       specify \@INC directory (may be used more than once)
   -loop <method>    use a different event loop method             [defaultLoop]
   -[mM]module..     executes `use/no module...' (just like perl)
+  -n <client_name>  the client name given to osserver
   -shutdown <when>  exit at <when> (requires Date::Manip)
   -subscribe_all    subscribe to notifications for all databases
   -top              activate NetServer::ProcessTop

@@ -54,14 +54,13 @@ public:
         first= n>>firstshift;
 	allocated= n;
 	allocinc= 0; //unused
-	DEBUG_splash(warn("SPListBase(int %d) a= %p, first= %d\n",
-			  allocinc, a, first));
+	DEBUG_splash(warn("SPListBase a= %p, first= %d\n", a, first));
     }
 
 //    SPListBase(const SPListBase<T>& n);
 //    SPListBase<T>& SPListBase<T>::operator=(const SPListBase<T>& n);
     virtual ~SPListBase(){
-      DEBUG_splash(warn("~SPListBase() a= %p, allocinc= %d\n", a, allocinc));
+      DEBUG_splash(warn("~SPListBase() a= %p\n", a));
       delete [] a;
     }
 
@@ -114,10 +113,13 @@ INLINE T& SPListBase<T>::operator[](const int i)
     int indx= first+i;
         
     if(indx >= allocated){  // need to grow it
-	grow((indx-allocated)+allocinc, i+1); // index as yet unused element
+	grow((indx-allocated)+3, i+1); // index as yet unused element
 	indx= first+i;			  // first will have changed in grow()
     }
-    assert(indx >= 0 && indx < allocated);
+    if (!(indx >= 0 && indx < allocated)) {
+	croak("Can't access [%d/%d]; first=%d",
+	      indx, allocated, first);
+    }
 
     if(i >= cnt) cnt= i+1;  // it grew
     return a[indx];
@@ -180,8 +182,8 @@ void SPListBase<T>::grow(int amnt, int newcnt){
     NEW_OS_ARRAY(tmp, WHERE, T::get_os_typespec(), T, allocated);
 //    tmp = new(WHERE, T::get_os_typespec(),allocated) T[allocated];
     newfirst= (allocated>>firstshift) - (newcnt>>firstshift);
-    DEBUG_splash(warn("SPListBase(0x%x)->grow(): old= %p, a= %p, allocinc= %d, newfirst= %d, amnt= %d, cnt= %d, allocated= %d\n",
-		      this, a, tmp, allocinc, newfirst, amnt, cnt, allocated));
+    DEBUG_splash(warn("SPListBase(0x%x)->grow(): old= %p, a= %p, newfirst= %d, amnt= %d, cnt= %d, allocated= %d\n",
+		      this, a, tmp, newfirst, amnt, cnt, allocated));
     memcpy(tmp+newfirst, a+first, cnt*sizeof(T));
     for(int i=0;i<cnt;i++) a[first+i].FORCEUNDEF();
     DEBUG_splash(warn("SPListBase(0x%x)->grow(): done copying\n", this));

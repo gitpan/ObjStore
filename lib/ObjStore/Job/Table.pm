@@ -1,10 +1,10 @@
 use strict;
 package ObjStore::Job::Table;
 use ObjStore;
-use Event 0.32;
+use Event 0.42;
 use base 'ObjStore::Table3';
 use ObjStore::Serve qw(txretry);
-use builtin qw(max min);           # available via CPAN
+use List::Util qw(max min);
 use vars qw($VERSION $Interrupt $WorkLevel $RunningJob @LOG_HOOK);
 $VERSION = '0.5';
 
@@ -43,9 +43,9 @@ sub restart {
     # this should be (more) configurable
     my $jref = $o->new_ref('transient','hard');
     my $min_interval = 1;
-    Event->idle(e_desc => 'ObjStore::Job::Table',
-		e_min => \$min_interval, e_max => 3,
-		e_max_cb_tm => 10, e_cb => sub {
+    Event->idle(desc => 'ObjStore::Job::Table',
+		min => \$min_interval, max => 3,
+		max_cb_tm => 10, cb => sub {
 		    my $left = $jref->focus->work();
 		    $min_interval = $left <= 0 ? 0 : 1;
 		});

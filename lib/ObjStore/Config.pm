@@ -15,11 +15,11 @@ sub DEBUG() { 1 };
 #   Specify a directory for the schemas (and recompile):
 #   (override with $ENV{OSPERL_SCHEMA_DBDIR})
 
-$SCHEMA_DBDIR = 'elvis:/research/schema';
+$SCHEMA_DBDIR = 'elvis:/research2/ODB/schema';
 
 #   Specify a directory for temporary databases (posh, perltest, etc):
 
-$TMP_DBDIR = 'elvis:/research/tmp';
+$TMP_DBDIR = 'elvis:/research2/ODB/tmp';
 
 #   Paths should not have a trailing slash.
 

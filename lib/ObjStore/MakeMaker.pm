@@ -7,7 +7,7 @@ use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS
 	    $CXX $OS_ROOTDIR $OS_LIBDIR);
 @ISA       = 'Exporter';
 @EXPORT_OK = qw($OS_ROOTDIR $OS_LIBDIR
-		&add_os_args &os_schema_rule);
+		&add_os_args &os_schema_rule &os_schema_rule_ext);
 %EXPORT_TAGS = (ALL => \@EXPORT_OK);
 
 # ++$main::Verbose;
@@ -27,9 +27,14 @@ sub in_main_dist {
     ''
 }
 
-# add this to MY::postamble
 sub os_schema_rule {
     my ($schema, @LDB) = @_;
+    os_schema_rule_ext($schema, '', @LDB);
+}
+
+# add this to MY::postamble
+sub os_schema_rule_ext {
+    my ($schema, $extra, @LDB) = @_;
     my $dir = $ObjStore::Config::SCHEMA_DBDIR;
     if ($schema =~ s,^(.*)/,,) {
 	$dir = $1;
@@ -48,6 +53,7 @@ sub os_schema_rule {
 	  -asdb '.$dir.'/'.$db.' \
 	  -assf '.$out.' \
 	  '.$schema.' '.join(' ',@LDB).'
+'.$extra.'
 
 clean ::
 	-rm -f '.$out.' neutral.out

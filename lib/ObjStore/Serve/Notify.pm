@@ -1,6 +1,6 @@
 use strict;
 package ObjStore::Serve::Notify;
-use Event 0.32;
+use Event 0.42;
 use ObjStore;
 use ObjStore::Serve qw(dyn_begin);
 use vars qw($OVERFLOW);
@@ -13,10 +13,10 @@ sub init_autonotify {
     my $cb = ($Q? sub { $Q->enqueue(DATA => \&dispatch_notifications,
 				    PRIORITY => 2) }
 	      : \&dispatch_notifications);
-    $notifyEv = Event->io(e_desc => 'ObjStore::Serve::Notify',
-			  e_fd => ObjStore::Notification->_get_fd(),
-			  e_reentrant => 0, e_poll => 'r',
-			  e_max_cb_tm => 60, e_cb => $cb);
+    $notifyEv = Event->io(desc => 'ObjStore::Serve::Notify',
+			  fd => ObjStore::Notification->_get_fd(),
+			  reentrant => 0, poll => 'r',
+			  max_cb_tm => 60, cb => $cb);
 }
 
 #    ObjStore::Notification->set_queue_size(512);

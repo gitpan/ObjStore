@@ -3,7 +3,7 @@ use strict;
 package ObjStore::Serve;
 use Carp;
 use Exporter ();
-use Event 0.38 qw(loop unloop_all);
+use Event 0.42 qw(loop unloop_all);
 use ObjStore;
 use base 'ObjStore::HV';
 use vars qw($VERSION @ISA @EXPORT_OK $SERVE $Init $TXOpen);
@@ -142,8 +142,8 @@ for (qw(read write)) { ObjStore::lock_timeout($_,15); }
 
 sub init_signals {
     for my $sig (qw(INT TERM)) {
-	Event->signal(e_desc => "ObjStore::Serve $sig", e_signal => $sig,
-		      e_cb => sub { unloop_all("SIG$sig\n"); });
+	Event->signal(desc => "ObjStore::Serve $sig", signal => $sig,
+		      cb => sub { unloop_all("SIG$sig\n"); });
     }
 }
 
@@ -252,20 +252,20 @@ sub dyn_commit {
 
 ################################################# default
 use vars qw($ChkptEv);
-sub defaultLoop {
+sub prepare_default {
     require ObjStore::Serve::Notify;
     ObjStore::Serve::Notify::init_autonotify();
     if (!$Init) { &init_signals; ++$Init }
-    $ChkptEv = Event->timer(e_desc => 'ObjStore::Serve checkpoint',
-			    e_nice => -1, e_hard => 0, e_repeat => 0,
-			    e_interval => \$LoopTime, e_max_cb_tm => 60,
-			    e_cb => sub {
-				eval { dyn_commit($ChkptEv->{e_repeat}) };
+    $ChkptEv = Event->timer(desc => 'ObjStore::Serve checkpoint',
+			    nice => -1, hard => 0, repeat => 0,
+			    interval => \$LoopTime, max_cb_tm => 60,
+			    cb => sub {
+				eval { dyn_commit($ChkptEv->repeat) };
 				if ($@) { warn; unloop_all() }
 			    });
     $Event::DIED = sub {
 	my ($run, $why) = @_;
-	my $desc = $run ? $run->w->{e_desc} : '?';
+	my $desc = $run ? $run->w->desc : '?';
 	my $how = 'died';
 	if ($TXN and !$TXN->is_aborted) {
 	    $TXN->abort;
@@ -275,6 +275,10 @@ sub defaultLoop {
 	$m .= "\n" if $m !~ m/\n$/;
 	warn $m;
     };
+}
+
+sub defaultLoop {
+    prepare_default();
     loop();
 }
 

@@ -446,6 +446,8 @@ Most commands support limited shell-style output redirection:
    ... > snap          # send output to snap (overwrite)
    ... >>snap          # append output to snap
    ... | cmd           # not implemented!
+or
+   ! <unix shell command>
 
 ';
     if ($at and $at->can('help')) {

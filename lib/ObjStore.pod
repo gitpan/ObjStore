@@ -818,8 +818,8 @@ ftp://ftp.wolfman.com/users/morris/public/splash
 
 =head1 SEE ALSO
 
-C<ObjStore::Table3>, examples in the t/ directory,
-C<ObjStore::Internals>, C<Event>, C<PerlQt>, and C<The SQL Reference
-Manual> (I<just kidding> :-)
+C<ObjStore::Reference>, C<ObjStore::Table3>, examples in the t/
+directory, C<ObjStore::Internals>, C<Event>, C<PerlQt>, and C<The SQL
+Reference Manual> (I<just kidding> :-)
 
 =cut

@@ -1,3 +1,39 @@
+** 11-23-99 RELEASE 1.58 [Guru Nanak's Birthday]
+
+- More Makefile flexibility with os_schema_rule_ext.
+
+- osperlserver support for Time::Warp.
+
+- builtin -> List::Util.
+
+
+** 06-23-99 RELEASE 1.57 [STABLE]
+
+- Split up ServerDB.pm into two files for smoother integration with
+posh/qtposh.
+
+- ObjStore::Job::Table::add_log_hook
+
+- Minor code reorg in ObjStore::Serve.
+
+- osperlserver: specific custom client-name.
+
+- zpeek.t: try to find GNU-diff.
+
+
+** 04-21-99 RELEASE 1.56 [STABLE]
+
+- Fix ObjStore::Table3::add() to return the post-translated instead of
+pre-translated record.
+
+- Various updates for Event 0.38: qtposh, ObjStore::Serve,
+ObjStore::Serve::Notify, ObjStore::Job, ObjStore::Job::Table.
+
+- Fixed ObjAV[] = undef.  Added tests.
+
+- Documentation updates.
+
+
 ** 03-23-99 RELEASE 1.55 [STABLE]
 
 - Switch to new mailing list.

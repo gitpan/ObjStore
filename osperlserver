@@ -1,11 +1,11 @@
-#!/nw/dev/usr/bin/perl -w
+#!/applications/3trade/p17/bin/perl -w
 
 use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
 use vars qw($VERSION @DB $DAEMON $Loop $LoopMeth %Debug
-	    $Top $Subscribe $Shutdown $AutoReloader $ClientName);
-$VERSION = '1.05';
+	    $Top $Subscribe $Shutdown $AutoReloader $ClientName $TimeWarp);
+$VERSION = '1.06';
 $DAEMON = 1;
 $LoopMeth = 'defaultLoop';
 my $default_server = 'ObjStore::ServerDB';
@@ -72,7 +72,9 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 	$Top=1;
     } elsif ($o =~ m/^-subscribe_all$/) {
 	$Subscribe=1;
-    } elsif ($o =~ m/^-shutdown$/) {
+    } elsif ($o eq '-time') {
+	$TimeWarp = $ARGV[++$arg];
+    } elsif ($o eq '-shutdown') {
 	$Shutdown = $ARGV[++$arg];
     } elsif ($o =~ m/^-((no)?)reload/) {
 	$AutoReloader = $1 eq 'no'? 0 : 1;
@@ -204,11 +206,23 @@ if ($Top) {
 	warn if $@;
     }
 }
+if ($TimeWarp) {
+    require Date::Manip;
+    Date::Manip->import();
+    require Time::Warp;
+    my $now = ParseDate($TimeWarp);
+    if (!$now) {
+	warn "osperlserver: do not understand -time '$TimeWarp' (ignored)\n";
+    } else {
+	Time::Warp::to(UnixDate($now, '%s'));
+	Event::cache_time_api();
+    }
+}
 if ($AutoReloader) {
     require Module::Reload;
     $Module::Reload::Debug = $Module::Reload::Debug = 1;
-    Event->timer(e_desc => 'osperlserver reload',
-		 e_interval => 1, e_cb => sub { Module::Reload->check });
+    Event->timer(desc => 'osperlserver reload',
+		 interval => 1, cb => sub { Module::Reload->check });
 }
 if ($Shutdown) {
     require Date::Manip;
@@ -217,15 +231,10 @@ if ($Shutdown) {
     if (!$at) {
 	warn "osperlserver: do not understand -shutdown '$Shutdown' (ignored)\n"
     } else {
-	my $d = DateCalc('now',$at);
 	die "osperlserver: -shutdown $at is in the past [DIED]\n"
-	    if $d !~ m/^\+/;
-	my @d = reverse split /[:]/, $d;
-	my $when = $d[0] + $d[1]*60 + $d[2]*3600 + $d[3]*24*3600;
-	die "osperlserver: -shutdown too far in the future [DIED]\n"
-	    if ($d[4] or $d[5]);
-	Event->timer(e_desc => "osperlserver shutdown",
-		     e_after => $when, e_cb => sub {
+	    if UnixDate($at, '%s') < Event::time();
+	Event->timer(desc => "osperlserver shutdown",
+		     at => UnixDate($at,'%s'), cb => sub {
 			 warn "Shutdown at ".UnixDate($at,"%u")."\n";
 			 kill 'TERM', $$
 		     });
@@ -264,6 +273,7 @@ Usage: osperlserver [switches] database[=Class[+Class[,Class,..]]] [databases..]
   -n <client_name>  the client name given to osserver
   -shutdown <when>  exit at <when> (requires Date::Manip)
   -subscribe_all    subscribe to notifications for all databases
+  -time <when>      set the time using Time::Warp
   -top              activate NetServer::ProcessTop
   -v                print version number (and exit)
 

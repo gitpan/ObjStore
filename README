@@ -35,10 +35,11 @@ needs such extreme degrees of optimization.
 Rather, I value ease of use and ease of change slightly above raw
 performance.  When I designed the perl interface, I was always trying
 to optimize for these priorities.  For example, I decided to start
-with a common, generic schema.  This gained some big advantages: All
-perl databases are compatible.  All perl databases will never
-I<require> schema evolution.  All perl databases can be edited with a
-standard perl shell.
+with a common, generic schema.  While this requires planning early in
+development, it gains some big advantages: All perl databases are
+compatible.  All perl databases will never I<require> schema
+evolution.  All perl databases can be edited with a standard perl
+shell.
 
 Even so, ObjectStore's recent support of DLL schemas allows the
 seemless integration of application specific C++ objects.  For
@@ -51,36 +52,6 @@ mathematics.
 I believe the uncommon ability to integrate with everything at the
 lowest level (C) while still remaining maximally generic and easy to
 query is unique among database architectures.
-
-
-=head1 R!CENT CHANGES
-
-
-** 06-23-99 RELEASE 1.57 [STABLE]
-
-- Split up ServerDB.pm into two files for smoother integration with
-posh/qtposh.
-
-- ObjStore::Job::Table::add_log_hook
-
-- Minor code reorg in ObjStore::Serve.
-
-- osperlserver: specific custom client-name.
-
-- zpeek.t: try to find GNU-diff.
-
-
-** 04-21-99 RELEASE 1.56 [STABLE]
-
-- Fix ObjStore::Table3::add() to return the post-translated instead of
-pre-translated record.
-
-- Various updates for Event 0.38: qtposh, ObjStore::Serve,
-ObjStore::Serve::Notify, ObjStore::Job, ObjStore::Job::Table.
-
-- Fixed ObjAV[] = undef.  Added tests.
-
-- Documentation updates.
 
 
 see ./INSTALL for hints on installation

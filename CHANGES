@@ -1,3 +1,18 @@
+** 03-28-98 RELEASE 1.33
+
+- Stringification of persistent objects can no longer cause
+ObjectStore exceptions.  Error reporting is therefore much more
+robust.
+
+- Use ObjStore::NoInit to delay initialization of the ObjectStore
+library.  This opens time to modify configuration parameters (or
+for forking) before becoming a known OS client.
+
+- First-cut at database job scheduling.  See ObjStore::Job!
+
+- Blessings were not sticking to databases in certain cases.  Fixed.
+
+
 ** 03-21-98 RELEASE 1.32
 
 - Major improvements to serverization code.  See osperlserver,

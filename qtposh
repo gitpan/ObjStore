@@ -1,0 +1,370 @@
+#!/nw/dev/usr/bin/perl -w
+
+# REQUIRES:
+#
+# PerlQt 1.06 + various patches
+# Event 0.01 + various patches
+#
+# I'm not sure if this will work out of the box yet.
+
+use strict;
+use ObjStore;
+use vars qw($DB);
+
+sub usage {
+    print q"
+Usage: qtposh [switches] database
+  -Idirectory      specify @INC directory (may be used more than once)
+  -[mM]module..    executes `use/no module...' (just like perl)
+  -v               print version number and patchlevel of qtposh (and exit)
+
+";
+    exit;
+}
+
+for (my $arg=0; $arg < @ARGV; $arg++) {
+    my $o = $ARGV[$arg];
+    if ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
+	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
+	eval "require $m";
+	warn, next if $@;
+	if ($way eq 'M') {
+	    $m->import(@im);
+	} else {
+	    $m->unimport(@im);
+	}
+    } elsif ($o =~ m/^-I (\S*) $/x) {
+	my $dir = $1;
+	$dir = $ARGV[++$arg]
+	    if !$dir;
+	if ($dir =~ m{^ \/ }x) {
+	    unshift(@INC, $dir);
+	} else {
+	    require FindBin;
+	    die "qtposh: can't find myself" if ! $FindBin::Bin;
+	    unshift(@INC, "$FindBin::Bin/$dir");
+	}
+    } elsif ($o =~ m/^-panic$/) {
+	warn "qtposh: panic ignored (qtposh is unflappable)\n";
+    } elsif ($o =~ m/^-v$/) {
+	require ObjStore;
+	print("qtposh $ObjStore::VERSION (Perl $] ".ObjStore::release_name().")\n");
+	exit;
+    } elsif ($o =~ m/^-h(elp)?$/) {
+	&usage;
+    } elsif ($o !~ m/^-/) {
+	&usage if $DB;
+	$DB = ObjStore::open($o,'mvcc');
+    } else {
+	warn "unknown option '$o' (-h for usage)\n";
+    }
+}
+&usage if !$DB;
+
+package QtREAPER;
+use Qt;
+use QObject;
+use Event;
+use IO::Poll '/POLL/';
+use vars qw(@ISA $VERSION @E);
+@ISA = 'QObject';
+$VERSION = '1.02';
+
+use slots 'shutdown()';
+sub shutdown { 
+    for (@E) { $_->cancel }
+    ObjStore::Process->Exit();
+}
+
+my $reaper = QtREAPER->new->immortal;
+$reaper->connect($qApp, 'lastWindowClosed()', 'shutdown()');
+
+my $fd = QApplication::xfd();
+push @E, Event->io(-handle => IO::Handle->new_from_fd($fd,'r'),
+		   -events => POLLRDNORM,
+		   -callback => sub { $qApp->processEvents(3000); });
+
+# and for ToolTips...
+push @E, Event->timer(-interval => 1,
+		      -callback => sub { $qApp->processEvents(3000); });
+
+package QApplication;
+use Qt;
+use vars qw($nested_exit);
+
+BEGIN { $SIG{__WARN__} = sub {}; }
+sub enter_loop {
+    local $nested_exit=0;
+    while (!$nested_exit) {
+	$qApp->processEvents(3000);
+	Event->DoOneEvent();
+    }
+}
+sub exit_loop { $nested_exit=1; }
+BEGIN { $SIG{__WARN__} = \&warn; }
+
+package QtposhAbout;
+use QFrame;
+use QLabel;
+use QLayout;
+use QPushButton;
+use QFont;
+use vars qw(@ISA);
+@ISA = 'QDialog';
+
+sub new {
+    my $o = shift->SUPER::new(@_);
+    my (@w,$f,$w,$l);
+    $o->setCaption("About...");
+    $o->resize(350,215);
+
+    $f = $o;
+    $l = QBoxLayout->new($f, $Direction{TopToBottom}, 10);
+    push @w,$l;
+    $w = QLabel->new("qtposh $ObjStore::VERSION", $f);
+    $w->setAlignment($Align{Center});
+    $w->setFont(QFont->new("times", 50, $Weight{Black}));
+    push @w,$w;
+    $l->addWidget($w,2);
+
+    $w = QLabel->new(
+q[
+Copyright © 1998 Joshua Nathaniel Pritikin.  All rights reserved.
+
+qtposh is part of the ObjStore perl extension.  This package is free
+software and is provided "as is" without express or implied warranty.
+It may be used, redistributed and/or modified under the terms of the
+Perl Artistic License (see http://www.perl.com/perl/misc/Artistic.html)
+
+], $f);
+    $w->setFont(QFont->new('helvetica',10));
+    $w->setAlignment($Align{Left});
+    push @w,$w;
+    $l->addWidget($w,3);
+
+    $w = QPushButton->new("Ok", $f);
+    $o->connect($w, 'clicked()', 'accept()');
+    push @w, $w;
+    $l->addWidget($w,1);
+
+    $$o{widgets} = \@w;
+    $o;
+}
+
+package Editor;
+use IO::File;
+use Qt;
+use QEvent;
+use QFileDialog;
+use QMenuBar;
+use QMultiLineEdit;
+use QMessageBox;
+use QPopupMenu;
+use QLayout;
+use QFrame;
+use QWidget;
+use vars qw(@ISA $USER $ABOUT);
+@ISA = qw(QWidget);
+$USER = scalar(getpwuid($>));
+
+sub new {
+    my $o = shift->SUPER::new();
+    $o->resize(500,500);
+    $$o{db} = shift;
+    $o->setCaption("qtposh ".$$o{db}->get_pathname);
+    my @w;
+    my $m = QMenuBar->new($o);
+    push @w, $m;
+
+    my $file = QPopupMenu->new();
+    push @w, $file;
+    $m->insertItem('File', $file);
+    $file->insertItem('&New Window...', $o, 'opendb()');
+    $file->insertSeparator();
+    $file->insertItem('&Open...', $o, 'load()');
+    $file->insertItem('&Save...', $o, 'save()');
+    $file->insertItem('&Print...', $o, 'printer()');
+    $file->insertSeparator();
+    $file->insertItem('&Close Window', $o, 'closepane()');
+
+    my $help = QPopupMenu->new();
+    push @w, $help;
+    $m->insertItem('Help', $help);
+    $help->insertItem('How Does it Work?...', $o, 'how()');
+    $help->insertItem('Commands...', $o, 'simple_help()');
+    $help->insertSeparator();
+    $help->insertItem('About...', $o, 'about()');
+
+    my $l = QBoxLayout->new($o, $Direction{'Down'});
+    push @w, $l;
+    $l->addSpacing($m->height()+2);
+
+    $$o{in} = QMultiLineEdit->new($o);
+    $$o{in}->setFocus();
+    $$o{in}->setFrameStyle($Frame{Box} | $Frame{Plain});
+    $$o{in}->setLineWidth(1);
+    $o->connect($$o{in}, 'returnPressed()', 'execute()');
+    $l->addWidget($$o{in},3);
+#    $l->setRowStretch(1,2);
+
+    $l->addSpacing(3);
+    $$o{out} = QMultiLineEdit->new($o);
+    $$o{out}->setFocusPolicy($Focus{No});
+    $$o{out}->setFrameStyle($Frame{Box} | $Frame{Plain});
+    $$o{out}->setLineWidth(1);
+    $$o{out}->setReadOnly(1);
+    $$o{out}->setText("connecting to ".$$o{db}->get_pathname."...");
+    $l->addWidget($$o{out},8);
+#    $l->setRowStretch(2,3);
+
+    $l->activate;
+
+    $$o{gui} = \@w;
+    $$o{timer} = Event->timer(-interval => 1, -callback => sub { $o->refresh() });
+    $o->show;
+    $o->immortal;
+}
+
+use slots 'how()';
+sub how {
+    QMessageBox::message('How Does it Work?', "
+User input is sent to an ObjStore::Posh::Cursor on the server
+where it is eval'd.  Make sure you don't do anything dangerous.
+An infinite loop will cause the server to hang!
+")
+}
+
+use slots 'simple_help()';
+sub simple_help {
+    QMessageBox::message('Commands', q[
+cd string        # interprets string according to $at->POSH_CD
+cd $at->...      # your expression should evaluate to a persistent ref
+cd ..            # what you expect
+ls
+peek             # ls but more
+raw              # ignore special POSH_PEEK methods
+pwd
+<or any perl statement!>
+]);
+}
+
+sub refresh {
+    my ($o) = @_;
+    if (!$$o{cursor}) {
+	if (!$$o{db}->isa('ObjStore::ServerDB')) {
+	    $$o{out}->setText($$o{db}->get_pathname. " is not an ObjStore::ServerDB");
+	    return;
+	}
+	my $top = $$o{db}->hash;
+	my $server = $top->{'ObjStore::Process'};
+	my $d = time - $$server{mtime};
+	if (!$server or $d > 30) {
+	    my $str = do {
+		use integer;
+		if ($d <120) {"$d secs" }
+		elsif ($d < 2*60*60) { $d/60 ." minutes" }
+		elsif ($d < 2*60*60*24) { $d/(60**2)." hours" }
+		else { $d/(60*60*24)." days" }
+	    };
+	    $$o{out}->setText($$o{db}->get_pathname." has not been\nupdated since ".scalar(localtime $$server{mtime})." ($str)");
+	}
+	my $remote = $top->{'ObjStore::Posh::Remote'};
+	if (!$remote) {
+	    $$o{out}->setText("creating Posh::Remote...");
+	    $top->boot_class('ObjStore::Posh::Remote');
+	    return;
+	}
+	$remote->enter($USER);
+	my $state = $remote->{ $USER };
+	if (!$state) {
+	    $$o{out}->setText("creating $ {USER}'s cursor...");
+	    return;
+	}
+	$$o{cursor} = $state->new_ref('transient','hard');
+    }
+    my $c = $$o{cursor}->focus;
+
+    return if ($$o{mtime}||0) == ($$c{mtime}||0);
+    $$o{mtime} = $$c{mtime};
+
+    $$o{out}->deselect();
+    my $t = $c->prompt()."\n\n";
+    $t .= "died: ".$$c{why} if $$c{why};
+    $t .= $$c{out} if $$c{out};
+    $$o{out}->setText($t);
+}
+
+use slots 'execute()';
+sub execute {
+    my ($o) = @_;
+    return if !$$o{cursor};
+    my $c = $$o{cursor}->focus;
+    $c->execute($$o{in}->text());
+    $$o{in}->clear();
+}
+
+use slots ('opendb()', 'load()', 'save()', 'printer()', 'closepane()', 'about()');
+
+sub about {
+    $ABOUT ||= QtposhAbout->new();
+    $ABOUT->show();
+}
+
+sub load {
+    my ($o) = @_;
+    my $fn = QFileDialog::getOpenFileName();
+    return if !$fn;
+    
+    my $in = $$o{in};
+    $in->setAutoUpdate(0);
+    $in->clear();
+
+    my $fh = IO::File->new();
+    $fh->open($fn) or do { QMessageBox::message('open', "open $fn: $!");return;};
+    while (<$fh>) {
+	chomp;
+	$in->append($_);
+    }
+
+    $in->setAutoUpdate(1);
+    $in->repaint();
+}
+
+sub save {
+    my ($o) = @_;
+    my $fn = QFileDialog::getSaveFileName();
+    return if !$fn;
+
+    my $fh = IO::File->new();
+    $fh->open(">$fn") or do { QMessageBox::message('save', "open >$fn: $!"); return};
+    print $fh $$o{out}->text();
+}
+
+sub opendb {
+    QMessageBox::message("not yet", "Not implemented yet...");
+}
+
+sub printer {
+    QMessageBox::message("not yet", "Not implemented yet...");
+}
+
+sub closepane {
+    my $o = shift;
+    $o->hide;
+    $o->mortal;
+}
+
+sub closeEvent {
+    my ($o,$e) = @_;
+    $$o{timer}->cancel;
+    $o->SUPER::closeEvent($e);
+}
+
+package main;
+use Qt;
+
+Editor->new($DB);
+
+require ObjStore::Process;
+ObjStore::Process->set_mode('read');
+ObjStore::Process->Loop();

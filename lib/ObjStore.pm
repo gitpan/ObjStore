@@ -18,7 +18,7 @@ use vars
     qw($DEFAULT_OPEN_MODE $MAX_RETRIES),                       # simulated
     qw($EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);     # private
 
-$VERSION = '1.35';
+$VERSION = '1.36';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -339,7 +339,8 @@ sub debug {
 	/^thread/ and $mask |= 0x2000, next;
 	/^index/  and $mask |= 0x4000, next;
 	/^norefs/ and $mask |= 0x8000, next;
-	/^PANIC/  and $mask = 0xffff, next;
+	/^decode/ and $mask |= 0x10000, next;
+	/^PANIC/  and $mask = 0xfffff, next;
 	die "Snawgrev $_ tsanik brizwah dork'ni";
     }
     if ($mask) {
@@ -1309,18 +1310,6 @@ sub TIEHASH {
     $object;
 }
 
-sub nextKey {
-    my ($o, $key) = @_;
-    return $key if !exists $o->{$key};
-    my $x=2;
-    $x = $1 if $key =~ s/\b\s\( (\d+) \)$//x;
-    while (1) {
-	my $try = "$key ($x)";
-	return $try if !exists $o->{$try};
-	++$x;
-    }
-}
-
 sub _iscorrupt {
     my ($o, $vlev) = @_;
     warn "$o->iscorrupt: checking...\n" if $vlev >= 3;
@@ -1339,6 +1328,21 @@ sub map {
 	push(@r, $sub->($v));       #pass $k too? XXX
     }
     @r;
+}
+
+#----------- ----------- ----------- ----------- ----------- -----------
+
+sub nextKey {
+    my ($o, $key) = @_;
+    carp "$o->nextKey($key): depreciated";
+    return $key if !exists $o->{$key};
+    my $x=2;
+    $x = $1 if $key =~ s/\b\s\( (\d+) \)$//x;
+    while (1) {
+	my $try = "$key ($x)";
+	return $try if !exists $o->{$try};
+	++$x;
+    }
 }
 
 package ObjStore::Index;
@@ -1388,20 +1392,6 @@ sub POP {
     $e;
 }
 
-# only for indices keyed by a single string
-sub nextKey {
-    my ($o,$key) = @_;
-    my $c = $o->new_cursor();
-    return $key if !$c->seek($key);
-    my $x=2;
-    $x = $1 if $key =~ s/\b\s\( (\d+) \)$//x;
-    while (1) {
-	my $try = "$key ($x)";
-	return $try if !$c->seek($try);
-	++$x;
-    }
-}
-
 sub map {
     my ($o, $sub) = @_;
     my @r;
@@ -1435,6 +1425,21 @@ sub POSH_PEEK {
 sub _iscorrupt {0}  #write your own!
 
 #----------- ----------- ----------- ----------- ----------- -----------
+
+# only for indices keyed by a single string
+sub nextKey {
+    my ($o,$key) = @_;
+    carp "$o->nextKey($key): depreciated";
+    my $c = $o->new_cursor();
+    return $key if !$c->seek($key);
+    my $x=2;
+    $x = $1 if $key =~ s/\b\s\( (\d+) \)$//x;
+    while (1) {
+	my $try = "$key ($x)";
+	return $try if !$c->seek($try);
+	++$x;
+    }
+}
 
 sub _count { 
     carp "_count can be done directly" if $] >= 5.00457;

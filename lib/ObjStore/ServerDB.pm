@@ -69,12 +69,13 @@ use base 'ObjStore::HV';
 use vars qw($VERSION);
 $VERSION = '0.04';
 
-# make fetch safe
-sub FETCH {
-    my ($h,$p) = @_;
-    my $o = $h->SUPER::FETCH($p);
-    return $o if $o;
-    croak "$p service is not available in ".$h->database_of;
+sub DELETE {
+    my ($h,$k) = @_;
+    if (ref $k) {
+	for (keys %$h) { $h->SUPER::DELETE($_) if $h->{$_} == $k; }
+    } else {
+	$h->SUPER::DELETE($k);
+    }
 }
 
 sub _install {

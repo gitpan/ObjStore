@@ -12,6 +12,8 @@ following in the body of your message:
 
 study the perl compiler (ExCxx)
 
+perl magic should be non-lazy
+
 bridges
   use a doubly-linked ring
   pool allocation
@@ -21,11 +23,6 @@ deleted data is not referenced.  Envision two modes:
 1. Don't increment, but enable extra code to check for improper use.
 2. Don't increment.  Performance should be better but crashes are
 possible.
-
-posh
-  merge with ObjStore::Posh::Cursor
-  display style?  web integration?  cgi-posh?
-  qt-posh?
 
 Support for multiple application schemas
   generic scalar object typemap
@@ -41,6 +38,10 @@ transactions
 
 
 + VAGUE POSSIBILITIES +
+
+posh
+  merge with ObjStore::Posh::Cursor?
+  display style?  web integration?  cgi-posh?
 
 overloaded refs
 
@@ -65,9 +66,7 @@ switch representations dynamically
 typemap
   do large strings without copying?
   SV set magic?
-  CLEAR seems broken with tied hashes:
-    verify and submit bug reports (or fix the code!)
-  there are still some mysterious problems
+  there are still some mysterious problems?
 
 permutation magic for AVHV
   ObjStore::Index::_(un)protect?

@@ -45,6 +45,7 @@ lib/ObjStore/Path/Cursor.pm
 lib/ObjStore/Path/Ref.pm
 lib/ObjStore/Peeker.pm
 lib/ObjStore/Posh/Cursor.pm
+lib/ObjStore/Posh/Remote.pm
 lib/ObjStore/Process.pm
 lib/ObjStore/REP/FatTree.pm
 lib/ObjStore/REP/ODI.pm
@@ -79,6 +80,7 @@ osperl.h
 osperlserver
 patches/base.pm.copy
 posh
+qtposh
 splash.h
 t/0illuminate.t
 t/1av.t

@@ -19,8 +19,6 @@ get_unassigned_address_space()
 	OUTPUT:
 	RETVAL
 
-*/
-/* not yet
 void
 readonly(sv)
 	SV *sv
@@ -28,6 +26,7 @@ readonly(sv)
 	if (!sv || !SvANY(sv)) XSRETURN_NO;
 	if (SvREADONLY(sv)) XSRETURN_YES;
 	XSRETURN_NO;
+
 */
 
 // A few bits of the ObjectStore API are callable outside a
@@ -1157,6 +1156,14 @@ OSPV_Generic::FETCH(xx)
 	XPUSHs(ret);
 
 void
+OSPV_Generic::readonly(xx)
+	SV *xx;
+	PPCODE:
+	OSSV *ossv = THIS->FETCH(xx);
+	if (ossv && OSvREADONLY(ossv)) XSRETURN_YES;
+	else XSRETURN_NO;
+
+void
 OSPV_Generic::STORE(xx, nval)
 	SV *xx;
 	SV *nval;
@@ -1259,13 +1266,18 @@ void
 OSPV_Generic::FETCH(key)
 	SV *key;
 	PPCODE:
-	SV **savesp = SP;
-	PUTBACK;
 	dOSP;
 	SV *ret = osp->ossv_2sv(THIS->FETCH(key));
 	SPAGAIN;
-	assert(SP == savesp);
 	if (ret) XPUSHs(ret);
+
+void
+OSPV_Generic::readonly(xx)
+	SV *xx;
+	PPCODE:
+	OSSV *ossv = THIS->FETCH(xx);
+	if (ossv && OSvREADONLY(ossv)) XSRETURN_YES;
+	else XSRETURN_NO;
 
 void
 OSPV_Generic::STORE(key, nval)

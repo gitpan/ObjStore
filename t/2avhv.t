@@ -3,7 +3,7 @@
 use Test 1.03;
 BEGIN {
     if ($] < 5.00450) { plan tests => 0; exit; }
-    else { plan tests => 7; }
+    else { plan tests => 9; }
 }
 
 use lib "./t";
@@ -73,6 +73,7 @@ begin 'update', sub {
        $o->{'is'} == 3);
     $o->{horsht} = 5;
     $o->{pretty} = 4;
+    ok !$o->readonly('name'), 1;
 
 #    ObjStore::debug('PANIC');
 #    warn join ' ', keys %$o;   #broken!
@@ -81,6 +82,7 @@ begin 'update', sub {
     my $x = new ObjStore::Index($o);
     $x->configure(path => 'name');
     $x->add($o);
+    ok $o->readonly('name'), 1;
 #    warn "size $cnt ". $o->count();
 #    ObjStore::peek($o->[0]);
 

@@ -11,9 +11,7 @@ up to 1.16		1.17 (see ** osp_evolve)
 1.17 +			Ok
 
 Also, it's generally a good idea to test your code with a new release
-before upgrading, since you usually can't downgrade.  Most of the stuff
-I've been adding recently actually changes how data is stored in the
-database.  Forward-compatibility is probably impossible.
+before upgrading, since you usually can't downgrade.
 
 -------------------------------------------------------------------
 
@@ -21,8 +19,8 @@ database.  Forward-compatibility is probably impossible.
 
 You can re-copy your databases with osp_copy.  It is more of a
 proof-of-concept than a useful tool, since it takes about 8-10 times
-at long as osp_evolve.  It does do a lot of interesting stuff and is
-written completely in perl.
+at long as osp_evolve.  However, it does do a lot of interesting stuff
+and is written completely in perl.
 
 -------------------------------------------------------------------
 

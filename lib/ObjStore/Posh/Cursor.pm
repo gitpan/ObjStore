@@ -1,15 +1,27 @@
 use strict;
 package ObjStore::Posh::Cursor;
-use ObjStore;
+use ObjStore ':ADV';
 use base 'ObjStore::HV';
 use vars qw($VERSION);
 $VERSION = '0.70';
 
+# history?
+
 sub new {
     my ($o) = shift->SUPER::new(@_);
-    $$o{where} = [];   #stack of locations
-    $$o{at} = 0;
+    my $top = $o->database_of->hash;
+    die "expecting a ServerDB" 
+	if !$top->isa('ObjStore::ServerDB::Top');
+    $$o{mtime} = time;
+    $o->do_init();
     $o;
+}
+
+use ObjStore::notify qw(init);
+sub do_init {
+    my ($o) = @_;
+    $$o{where} = [[$top->new_ref($o,'hard')]];   #array of paths
+    $$o{at} = 0;
 }
 
 use ObjStore::notify qw(configure execute);
@@ -24,8 +36,7 @@ sub myeval {
     my $w = $o->{where}[ $$o{at} ];
     my @c = map { $_->focus } @$w;
     local($input::db, $input::at, $input::cursor) = 
-	($o->database_of, @c? $c[$#$c] : $o->database_of, \@c);
-    $$o{why} = '';
+	($o->database_of, @c? $c[$#c] : $o->database_of, \@c);
 
     my @r;
     my $to_eval = "no strict; package input;\n#line 1 \"input\"\n".$perl;
@@ -34,22 +45,21 @@ sub myeval {
     else {                              eval $to_eval; }
     if ($@) {
 	ObjStore::Transaction::get_current()->abort();
-	$$o{why} = $@;
 	()
+    } else {
+	if (!defined wantarray) { () } else { wantarray ? @r : $r[0]; }
     }
-    if (!defined wantarray) { () } else { wantarray ? @r : $r[0]; }
 }
 
 sub resolve {
     my ($o,$to,$update) = @_;
     # $to already stripped of leading & trailing spaces
-    $$o{why} = '';
     my $w = $$o{where};
     my @at = map { $_->focus } @{ $$w[ $$o{at} ] };
-    if (!$to) {
+    if (!length $to) {
 	@at = ();
 	if ($update) {
-	    unshift @$w, [];
+	    $w->UNSHIFT([$o->database_of->hash->new_ref($o,'hard')]);
 	    pop @$w if @$w > 5;
 	    $$o{at} = 0;
 	}
@@ -65,12 +75,12 @@ sub resolve {
 	my @to = split m'/+', $to;
 	for my $t (@to) {
 	    next if $t eq '.';
-	    if ($c eq '..') {
+	    if ($t eq '..') {
 		pop @at if @at;
 	    } else {
 		my $at = $at[$#at];
 		if ($at->can('POSH_CD')) {
-		    $at = $at->POSH_CD($c);
+		    $at = $at->POSH_CD($t);
 		    $at = $at->POSH_ENTER()
 			if blessed $at && $at->can('POSH_ENTER');
 		    if (!blessed $at or !$at->isa('ObjStore::UNIVERSAL')) {
@@ -83,38 +93,63 @@ sub resolve {
 	    }
 	}
 	if (!$$o{why} and $update) {
-	    unshift @$w, [map { $_->new_ref($w,'hard') } @at];
+	    $w->UNSHIFT([map { $_->new_ref($w,'hard') } @at]);
 	    pop @$w if @$w > 5;
 	    $$o{at} = 0;
 	}
     } else {
-	my $at = $o->myeval($to);
-	if (!$$o{why}) {
-	    push @at, $at;
-	    if ($update) {
-		unshift @$w, [map { $_->new_ref($w,'hard') } @at];
-		pop @$w if @$w > 5;
-		$$o{at} = 0;
+	my $err;
+	my $warn='';
+	local $SIG{__WARN__} = sub { $warn.=$_[0] };
+	begin sub {
+	    my $at = $o->myeval($to);
+	    if ($@) {
+		$err .= $warn.$@;
+	    } else {
+		$$o{out} = $warn;
+		push @at, $at;
+		if ($update) {
+		    $w->UNSHIFT([map { $_->new_ref($w,'hard') } @at]);
+		    pop @$w if @$w > 5;
+		    $$o{at} = 0;
+		}
 	    }
-	}
+	};
+	warn if $@;
+	$$o{why} = $err if $err;
     }
     @at? $at[$#$a] : undef;
 }
 
 sub do_execute {
+    require ObjStore::Peeker;
     my ($o, $in) = @_;
+    $in =~ s/\s+$//;
     # use a fresh transaction: speed doesn't matter compared to safety
     begin sub {
-	if ($in =~ m/^cd \b \s* (.*?) \s* $/sx) {
+	$$o{mtime} = time;
+	$$o{why} = '';
+	$$o{out} = '';
+	
+	if ($in =~ m/^reset$/) {
+	    $o->do_init();
+	} elsif ($in =~ m/^cd \b \s* (.*?) \s* $/sx) {
 	    $o->resolve($1, 1);
+	    if (!$$o{why}) {
+		my $at = $o->{where}[ $$o{at} ];
+		my $p = ObjStore::Peeker->new(depth => 0);
+		$$o{out} .= $p->Peek($$at[$#$at]->focus);
+	    }
 	} elsif ($in =~ m/^(ls|peek|raw) \b \s* (.*?) \s* $/sx) {
 	    my ($cmd,$to) = ($1,$2);
 	    my @at;
 	    if ($to) {
 		@at = $o->resolve($to, 0);
 	    } else {
-		my $at = $o->{where}[ $$o{at} ];
-		$at[0] = @$at ? $$at[ $#$at ]->focus : undef;
+		my $at = $o->{where}[ $$o{at} ] ||= [];
+		push @$at, $o->database_of->hash->new_ref($at,'hard')
+		    if !@$at;
+		$at[0] = $$at[ $#$at ]->focus;
 	    }
 	    if (!$$o{why}) {
 		my $depth = $cmd eq 'raw' || $cmd eq 'peek'? 10 : 0;
@@ -123,31 +158,59 @@ sub do_execute {
 		$$o{out} = $p->Peek($at[0]);
 	    }
 	} elsif ($in eq 'pwd') {
-	    my $out='';
-	    my $p = ObjStore::Peeker->new(depth => 0);
-	    for (my $z=0; $z < @$cursor; $z++) {
-		$out .= '$cursor->['."$z] = ".$p->Peek($$cursor[$z]);
-	    }
-	    $$o{out} = $out;
+	    $$o{out} = $o->pwd();
 	} else {
-	    my @r = $o->myeval($in);
-	    if (!$$o{why}) {
-		my $p = ObjStore::Peeker->new(depth => 10, vareq => 1);
-		my $out='';
-		for (@r) { $out .= $p->Peek($_) }
-		$$o{out} = $out;
-	    }
+	    my $err = '';
+	    my $warn = '';
+	    local $SIG{__WARN__} = sub { $warn.=$_[0] };
+	    begin sub {
+		my @r = $o->myeval($in);
+		if ($@) {
+		    $err .= $warn.$@;
+		} else {
+		    my $p = ObjStore::Peeker->new(depth => 10, vareq => 1);
+		    my $out=$warn;
+		    for (@r) { $out .= $p->Peek($_) }
+		    $$o{out} = $out;
+		}
+	    };
+	    warn if $@;
+	    $$o{why} = $err if $err;
 	}
     };
-    warn if $@;
+    if ($@) {
+	$o->do_init();
+	$$o{why} .= "\nreinitialized after $@";
+    }
+}
+
+sub prompt {
+    my ($o) = @_;
+    my $w = $o->{where}[ $$o{at} ];
+    return "?" if !$w || !@$w;
+    "\$at = ".$$w[$#$w]->focus;
+}
+
+sub pwd {
+    my ($o) = @_;
+    my $out = '';
+    my $p = ObjStore::Peeker->new(depth => 0);
+    my $w = $o->{where}[ $$o{at} ];
+    my @c = map { $_->focus } @$w;
+    for (my $z=0; $z < @c; $z++) {
+	$out .= '$cursor->['."$z] = ".$p->Peek($c[$z]);
+    }
+    $out;
 }
 
 package input;
 use ObjStore ':ADV';
 use vars qw($at $db $cursor);
 
-package ObjStore::Posh::Remote;
-use ObjStore;
-
-
 1;
+__END__
+
+# TODO:
+#
+# 'use Safe' once it is worthwhile
+

@@ -283,6 +283,7 @@ void OSPV_fatindex2::add(OSSVPV *target)
       }
     }
   }
+  exam.commit();
   DEBUG_index(warn("%p->add(%p)", this, target));
   target->REF_inc();
   dex2tc_insert(&gl->tc, target);

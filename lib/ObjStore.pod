@@ -95,12 +95,12 @@ code and start molding it right now:
 
 Prints out databases in a style similar to Data::Dumper.
 
-=item * posh
+=item * posh & qtposh
 
 Like C<sh>/C<csh>, except that you can I<change directory> B<into>
 your database and walk around the data from the inside.  You can also
 invoke methods on your objects or write custom reports (in perl, of
-course :-).
+course :-).  (Also similar to C<isql>/C<wisql>.)
 
 =item * osperlserver
 
@@ -1019,11 +1019,11 @@ comparison:
  flexibility          brittle                   up to you
  object-oriented      yes                       up to you
  data copying         2-4 times                 0-2 times
- complex data         no                        yes
- custom types         no                        yes
  binary portability   yes                       partially
  reference counted    no (does not store data)  yes
  multivendor          yes                       not yet
+ overflow possible?   no                        yes
+ asyncronous          no                        yes
 
 =head2 Why Is Perl a Better Fit For Databases Than C<SQL>, C<C++>, or C<Java>?
 

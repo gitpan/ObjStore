@@ -154,6 +154,13 @@ sub BLESS {
 
 sub evolve { bless $_[0], ref($_[0]); }
 
+sub readonly {
+    my ($o,$k) = @_;
+    my $x = $o->[0]->{$k};
+    die "Bad index while coercing array into hash ($k)" if $x<1;
+    $o->SUPER::readonly($x);
+}
+
 # Hash style, but in square brackets
 sub POSH_PEEK {
     require 5.00450;

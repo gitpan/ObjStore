@@ -65,6 +65,15 @@ sub new {
     $o;
 }
 
+sub delay {
+    use integer;
+    my ($ign, $d) = @_;
+    if ($d <120) {"$d secs" }
+    elsif ($d < 2*60*60) { $d/60 ." minutes" }
+    elsif ($d < 2*60*60*24) { $d/(60**2)." hours" }
+    else { $d/(60*60*24)." days" }
+}
+
 sub wait_for_commit {
     my ($s) = @_;
     confess "$s->wait_for_commit" if !ref $s;

@@ -77,6 +77,7 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 #define DEBUG_thread(a)	  if (osp_thr::fetch()->debug & 8192) a
 #define DEBUG_index(a)	  if (osp_thr::fetch()->debug & 16384) a
 #define DEBUG_norefs(a)	  if (osp_thr::fetch()->debug & 32768) a
+#define DEBUG_decode(a)	  if (osp_thr::fetch()->debug & 65536) a
 #else
 #define assert(what)
 #define DEBUG_refcnt(a)
@@ -94,6 +95,7 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 #define DEBUG_thread(a)
 #define DEBUG_index(a)
 #define DEBUG_norefs(a)
+#define DEBUG_decode(a)
 #endif
 
 typedef void (*XS_t)(CV*);
@@ -131,10 +133,11 @@ STMT_START {					\
 #define OSvROSHARE_set(sv,on)	OSvFLAG_set(sv,OSVf_ROSHARE,on)
 #define OSvROEXCL(sv)		((sv)->_type & OSVf_ROEXCL)
 #define OSvROCLEAR(sv)		OSvFLAG_set(sv, OSVf_ROEXCL|OSVf_ROSHARE, 0)
+#define OSvREADONLY(sv)		((sv)->_type & (OSVf_ROEXCL|OSVf_ROSHARE))
 
 #define OSvTRYWRITE(sv)						\
 STMT_START {							\
-  if ((sv)->_type & (OSVf_ROEXCL|OSVf_ROSHARE))			\
+  if (OSvREADONLY(sv))			\
     croak("ObjStore: attempt to modify READONLY %s='%s'",	\
 	  sv->type_2pv(), sv->stringify());			\
 } STMT_END
@@ -368,6 +371,7 @@ struct osp_pathexam : osp_pathref {
   int failed;
   int trailcnt;
   int is_excl;
+  int excl_ok;
   char mode;
   osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode, int excl);
   void abort();

@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test 1.03;
-BEGIN { plan tests=>26 }
+BEGIN { plan tests=>29 }
 
 use strict;
 use ObjStore ':ADV';
@@ -58,6 +58,8 @@ begin 'update', sub {
 	}
 	my $n = $nums->[0];
 	ok $n->_rocnt, 0;
+	ok $n->readonly('num'), 1;
+	ok !$n->readonly('notnum'), 1;
 	begin sub { $n->{num} = 0; };
 	ok $@, '/READONLY/';
 	$@=undef;
@@ -85,11 +87,14 @@ begin 'update', sub {
 	ok $@, '/(?x)(not\s+ | un) supported/';
 	undef $@;
 
+	$nums->add($nums->[0]); #ok
+
 	my $numsdup = ObjStore::Index->new($j, path => 'num', unique => 0);
 	begin sub { $numsdup->add($nums->[0]); };
 	ok $@, '/twice/';
 
 	$nums->CLEAR();
+	ok !$n->readonly('num'), 1;
 	$n->{num} = 0;  #should work
     };
 

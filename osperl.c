@@ -28,7 +28,7 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
 // Is tied?  Examine tied object, extract ospv_bridge from '~'
 // Is OSSV in a PVMG?
 
-  DEBUG_assign(mysv_dump(ref));
+  DEBUG_decode(mysv_dump(ref));
 
   if (!SvROK(ref)) {
     if (SvGMAGICAL(ref))
@@ -149,6 +149,7 @@ SV *osp_thr::ospv_2sv(OSSVPV *pv)
 //    if (GIMME_V == G_VOID) return 0;  // fold into ossv_2sv? XXX
 SV *osp_thr::ossv_2sv(OSSV *ossv)
 {
+  SV *ret;
   // We must to trade speed for paranoia --
   if (!ossv) return &sv_undef;
   switch (ossv->natural()) {
@@ -156,30 +157,41 @@ SV *osp_thr::ossv_2sv(OSSV *ossv)
     return &sv_undef;
   case OSVt_IV32:
     OR_RETURN_UNDEF(ossv->vptr);
-    return sv_2mortal(newSViv(OSvIV32(ossv)));
+    ret = sv_2mortal(newSViv(OSvIV32(ossv)));
+    break;
   case OSVt_NV:
     OR_RETURN_UNDEF(ossv->vptr);
-    return sv_2mortal(newSVnv(OSvNV(ossv)));
+    ret = sv_2mortal(newSVnv(OSvNV(ossv)));
+    break;
   case OSVt_PV:
-    if (!ossv->vptr) return sv_2mortal(newSVpv("", 0));
-    // Problems with eliding the copy:
-    // 1. What if the persistent copy is deleted?  Read transactions only.
-    // 2. They can not be packaged as simple SVPV because of the need
-    //    to invalidate them.
-    // 3. There is significant bookkeeping overhead to invalidate
-    //    at the end of the transaction.  Maybe for long strings
-    //    only after the regex engine can support it?
-    return sv_2mortal(newSVpv((char*) ossv->vptr, ossv->xiv));
+    if (!ossv->vptr) ret = sv_2mortal(newSVpv("", 0)); //use immortal XXX
+    else {
+      // Problems with eliding the copy:
+      // 1. What if the persistent copy is deleted?  Read transactions only.
+      // 2. They can not be packaged as simple SVPV because of the need
+      //    to invalidate them.
+      // 3. There is significant bookkeeping overhead to invalidate
+      //    at the end of the transaction.  Maybe for long strings
+      //    only after the regex engine can support it?
+      ret = sv_2mortal(newSVpv((char*) ossv->vptr, ossv->xiv));
+    }
+    break;
   case OSVt_RV:{
     OR_RETURN_UNDEF(ossv->vptr);
     OSSVPV *pv = (OSSVPV*) ossv->vptr;
-    return wrap(pv, ospv_2bridge(pv));
+    ret = wrap(pv, ospv_2bridge(pv));
+    break;
   }
   case OSVt_IV16:
-    return sv_2mortal(newSViv(OSvIV16(ossv)));
+    ret = sv_2mortal(newSViv(OSvIV16(ossv)));
+    break;
+  default:
+    SERIOUS("OSSV %s is not implemented", ossv->type_2pv());
+    return &sv_undef;
   }
-  SERIOUS("OSSV %s is not implemented", ossv->type_2pv());
-  return &sv_undef;
+  assert(ret);
+  if (OSvREADONLY(ossv)) SvREADONLY_on(ret);
+  return ret;
 }
 
 OSSV *osp_thr::plant_ospv(os_segment *seg, OSSVPV *pv)
@@ -276,7 +288,7 @@ OSSV *OSSV::operator=(SV *nval)
   dOSP ;
   char *tmp; STRLEN tmplen;
 
-  DEBUG_assign(mysv_dump(nval));
+  DEBUG_decode(mysv_dump(nval));
 
   if (SvGMAGICAL(nval))
     mg_get(nval);
@@ -412,9 +424,8 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)
     if (xiv == nlen) {
       //already ok
       assert(vptr);
-    } else if (xiv > nlen && xiv - nlen <= 8) {
-      //small waste; just fixup null terminator
-      ((char*)vptr)[nlen] = 0;
+      //    } else if (xiv > nlen && xiv - nlen <= 8) {
+      //      ((char*)vptr)[nlen] = 0;
     } else {
       if (vptr) {
 	DEBUG_assign(warn("OSSV(0x%x)->s(): deleting string 0x%x", this, vptr));
@@ -431,7 +442,7 @@ void OSSV::s(char *nval, os_unsigned_int32 nlen)
   }
   memcpy(vptr, nval, nlen);
   xiv = nlen;
-  DEBUG_assign(warn("OSSV(0x%x)->s(%s): 0x%x", this, (char*) vptr, vptr));
+  DEBUG_assign(warn("OSSV(0x%x)->s(%s, %d): 0x%x", this, nval, nlen, vptr));
 }
 
 void OSSV::s(OSSVPV *nval)
@@ -767,7 +778,9 @@ char *OSSVPV::blessed_to(STRLEN *CLEN)
       EXTEND(SP, 3);
       PUSHs(sv_2mortal(newSVpv("the database is not relavent", 0)));
       SV *sv1, *sv2;
+      assert(len);
       PUSHs(sv1 = sv_2mortal(newSVpv(oscl, len)));
+      assert(CLEN && *CLEN);
       PUSHs(sv2 = sv_2mortal(newSVpv(CLASS, *CLEN)));
       PUTBACK;
       int count = perl_call_sv(ldr, G_SCALAR);
@@ -1052,11 +1065,13 @@ void osp_pathexam::abort()
 
 void osp_pathexam::commit()
 {
-  assert(mode == 'u');
-  if (!is_excl) {
+  if (!is_excl && mode == 'u') {
     for (int xx=0; xx < trailcnt; xx++) {
       trail[xx]->ROCNT_dec();
     }
+  } else if (is_excl && mode == 's') {
+    if (!excl_ok) 
+      croak("attempt to exclusive-index key twice"); //better diagnostics XXX
   }
 }
 
@@ -1064,6 +1079,7 @@ void osp_pathexam::commit()
 osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in,
 			   int exclusive)
 {
+  excl_ok = 1;
   is_excl = exclusive;
   int flag = is_excl? OSVf_ROEXCL : OSVf_ROSHARE;
   failed=0;
@@ -1107,8 +1123,9 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in,
       }
 
       if (mode == 's') {
-	if (is_excl && OSvROEXCL(at))
-	  croak("attempt to exclusive-index key twice (at '%s')", tr);
+	if (is_excl && OSvROEXCL(at)) {
+	  excl_ok = 0;
+	}
 	OSvFLAG_set(at, flag, 1);
       } else {
 	if (is_excl) OSvFLAG_set(at, flag, 0);

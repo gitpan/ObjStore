@@ -121,6 +121,13 @@ osp_thr::~osp_thr()
 
 /*--------------------------------------------- per-transaction context */
 
+osp_txn *osp_txn::current()
+{
+  if (av_len(osp_thr::TXStack) < 0) return 0;
+  SV *sv = *av_fetch(osp_thr::TXStack, av_len(osp_thr::TXStack), 0);
+  return (osp_txn*) typemap_any::decode(sv);
+}
+
 osp_txn::osp_txn(os_transaction::transaction_type_enum _tt,
 		 os_transaction::transaction_scope_enum scope_in)
   : tt(_tt), ts(scope_in), link(0)
@@ -137,13 +144,10 @@ osp_txn::osp_txn(os_transaction::transaction_type_enum _tt,
 		 ts==os_transaction::global? "global":
 		 "unknown"));
 
-  SV *myself = sv_setref_pv(newSV(0), "ObjStore::Transaction", this);
-  SvREADONLY_on(myself);
-  SvREADONLY_on(SvRV(myself));
+  SV *myself = osp_thr::any_2sv(this, "ObjStore::Transaction");
   SvREADONLY_off(osp_thr::TXStack);
   av_push(osp_thr::TXStack, myself);
   SvREADONLY_on(osp_thr::TXStack);
-  assert(this == (osp_txn*) SvIV((SV*) SvRV(myself)));
 }
 
 /* CCov:off */
@@ -220,10 +224,8 @@ void osp_txn::pop()
   assert(os==0);
   SvREADONLY_off(osp_thr::TXStack);
   SV *myself = av_pop(osp_thr::TXStack);
-  assert(myself != &sv_undef);
+  assert(myself != &PL_sv_undef);
   SvREADONLY_on(osp_thr::TXStack);
-  assert(sv_isobject(myself) && (SvTYPE(SvRV(myself)) == SVt_PVMG));
-  assert(this == (osp_txn*) SvIV((SV*) SvRV(myself)));
   post_transaction();
   SvREFCNT_dec(myself);
 }
@@ -252,20 +254,18 @@ void osp_bridge::init(dynacast_fn dcfn)
   manual_hold = 0;
   refs = 1;
   txsv = 0;
+}
 
-  // get transaction
-  if (AvFILL(osp_thr::TXStack) >= 0) {
-    SV *txref = *av_fetch(osp_thr::TXStack, AvFILL(osp_thr::TXStack), 0);
-    assert(SvROK(txref));
-    txsv = SvRV(txref);
-    SvREFCNT_inc(txsv);
-  }
+void osp_bridge::cache_txsv()
+{
+  assert(av_len(osp_thr::TXStack) >= 0);
+  txsv = SvREFCNT_inc(*av_fetch(osp_thr::TXStack,av_len(osp_thr::TXStack), 0));
 }
 
 osp_txn *osp_bridge::get_transaction()
 {
   assert(txsv);
-  osp_txn *txn = (osp_txn*) SvIV(txsv);
+  osp_txn *txn = (osp_txn*) typemap_any::decode(txsv);
   if (!txn) {
     // should be impossible XXX
     warn("array:");

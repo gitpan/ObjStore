@@ -6,8 +6,7 @@ use strict;
 use ObjStore ':ADV';
 use lib './t';
 use test;
-++$ObjStore::REGRESS;
-ObjStore::fatal_exceptions(0);
+
 #ObjStore::debug qw/ pathexam /;
 
 # This should be rewritten with more complete checking and better
@@ -158,7 +157,7 @@ begin 'update', sub {
     ok join('', $c->keys()), '2';
     my $at = $c->at;
     ok $at->{age}->[0], 2;
-    ok $at->{age}->[1], 4;
+    ok $at->{age}->[1], 7;
     $c->moveto($c->pos);
     ok($c->at == $at);
 

@@ -8,7 +8,7 @@
 
 /* CCov: off */
 
-#define OR_RETURN_UNDEF(cond) if (!(cond)) return &sv_undef;
+#define OR_RETURN_UNDEF(cond) if (!(cond)) return &PL_sv_undef;
 
 /* CCov: fatal OLD_SUPPORT_CODE SERIOUS RETURN_BADNAME */
 #define OLD_SUPPORT_CODE
@@ -34,25 +34,63 @@ void osp_thr::register_schema(char *cl, _Application_schema_info *sch)
   assert(cl);
   assert(sch);
   STRLEN len = strlen(cl);
-  SV *sv = sv_setref_pv(newSV(0), "ObjStore::Schema", sch);
-  SvREADONLY_on(SvRV(sv));
+  SV *sv = osp_thr::any_2sv(sch, "ObjStore::Schema");
   hv_store(Schema, cl, len, sv, 0);
 }
 
 /*--------------------------------------------- typemap services */
 
+HV *typemap_any::MyStash=0;
+
+SV *osp_thr::any_2sv(void *any, char *CLASS)
+{
+  if (!any) return &PL_sv_undef;
+  SV *ret = newSV(0);
+  sv_setref_pv(ret, CLASS, new typemap_any(any));
+  return ret;
+}
+
 os_segment *osp_thr::sv_2segment(SV *sv)
 {
-  if (sv_isa(sv, "ObjStore::Segment")) return (os_segment*) SvIV((SV*)SvRV(sv));
-  if (SvPOK(sv) && strEQ(SvPV(sv, na), "transient"))
+  if (sv_isa(sv, "ObjStore::Segment"))
+    return (os_segment*) typemap_any::decode(sv);
+  if (SvPOK(sv) && strEQ(SvPV(sv, PL_na), "transient"))
     return os_segment::get_transient_segment();
   Perl_sv_dump(sv);
   croak("sv_2segment only accepts ObjStore::Segment");
   return 0;
 }
 
-void *osp_thr::default_dynacast(void *obj, HV *stash)
+void *typemap_any::my_dynacast(void *obj, HV *stash, int failok)
 {
+  if (failok) return 0;
+  croak("Don't know how to convert ObjStore object to a '%s'", HvNAME(stash));
+  return 0;
+}
+
+void *typemap_any::decode(SV *sv, int nuke)
+{
+  SV *orig = sv;
+  if (SvROK(sv)) {
+    sv = SvRV(sv);
+    if (SvOBJECT(sv) && SvTYPE(sv) == SVt_PVMG) {
+      typemap_any *ta = (typemap_any*) SvIV(sv);
+      void *ret = ta->ptr;
+      assert(ret);
+      if (ta->dynacast != ta->my_dynacast)
+	ret = (*ta->dynacast)(ret, ta->MyStash, 0);
+      if (nuke) delete ta;
+      return ret;
+    }
+  }
+  Perl_sv_dump(orig);
+  croak("ObjStore typemap_any");
+  return 0;
+}
+
+void *osp_thr::default_dynacast(void *obj, HV *stash, int failok)
+{
+  if (failok) return 0;
   croak("Don't know how to convert ObjStore object to a '%s'", HvNAME(stash));
   return 0;
 }
@@ -95,9 +133,10 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
     } else if (SvTYPE(nval) == SVt_PVMG) {
       br = (ospv_bridge*) SvIV(nval);
       if (br->dynacast != osp_thr::default_dynacast) {
-	/* It is unlikely this will ever actually succeed, but
-	   we want to give the opportunity for a helpful error message. */
-	br = (ospv_bridge*) (br->dynacast)(br, BridgeStash);
+	DEBUG_dynacast(warn("Trying dynacast(0x%x)", br->dynacast));
+	/* unfortunately this will give an illegal instruction
+	   exception (or worse) if the dynacast isn't a function pointer */
+	br = (ospv_bridge*) (br->dynacast)(br, BridgeStash, 1);
       }
     }
   } while (0);
@@ -121,11 +160,9 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
   }
   {
     dSP;
-#ifdef PUSHSTACK
     PUSHSTACK;
-#endif
     PUSHMARK(sp);
-    XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Segment", near));
+    XPUSHs(sv_2mortal(osp_thr::any_2sv(near, "ObjStore::Segment")));
     XPUSHs(ref);
     PUTBACK ;
     assert(osp_thr::stargate);
@@ -133,10 +170,8 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
     assert(count==1);
     SPAGAIN;
     br = osp_thr::sv_2bridge(POPs, 0);
-#ifdef POPSTACK    
-    POPSTACK;
-#endif
     PUTBACK;
+    POPSTACK;
     if (!br) croak("ObjStore::stargate returned useless junk");
     //  warn("stargate returned:");
     //  br->dump();
@@ -203,11 +238,11 @@ SV *osp_thr::ossv_2sv(OSSV *ossv, int hold)
 {
   SV *ret;
   // We must to trade speed for paranoia --
-  if (!ossv) return &sv_undef;
+  if (!ossv) return &PL_sv_undef;
   switch (ossv->natural()) {
   case OSVt_UNDEF:
   case OSVt_UNDEF2:
-    return &sv_undef;
+    return &PL_sv_undef;
   case OSVt_IV32:
     OR_RETURN_UNDEF(ossv->vptr);
     ret = sv_2mortal(newSViv(OSvIV32(ossv)));
@@ -243,7 +278,7 @@ SV *osp_thr::ossv_2sv(OSSV *ossv, int hold)
     break;
   default:
     SERIOUS("OSSV %s is not implemented", ossv->type_2pv());
-    return &sv_undef;
+    return &PL_sv_undef;
   }
   assert(ret);
   if (OSvREADONLY(ossv)) SvREADONLY_on(ret); //XXX
@@ -284,7 +319,7 @@ unsigned long osp_thr::sv_2aelem(SV *sv)
   } else if (Perl_looks_like_number(sv)) {
     xx = SvIV(sv);
   } else {
-    warn("Argument \"%s\" isn't numeric in aelem", SvPV(sv,na));
+    warn("Argument \"%s\" isn't numeric in aelem", SvPV(sv,PL_na));
     xx = 0;
   }
   return xx;
@@ -307,11 +342,34 @@ OSSV::~OSSV()
   set_undef();
 }
 
+I32 OSSV::as_iv()
+{
+  switch (natural()) {
+  case OSVt_IV32: return OSvIV32(this);
+  case OSVt_NV: return OSvNV(this);
+  case OSVt_IV16: return OSvIV16(this);
+  case OSVt_UNDEF: case OSVt_UNDEF2: warn("Use of uninitialized value");
+  default: return 0;
+  }
+}
+
+double OSSV::as_nv()
+{
+  switch (natural()) {
+  case OSVt_IV32: return OSvIV32(this);
+  case OSVt_NV: return OSvNV(this);
+  case OSVt_IV16: return OSvIV16(this);
+  case OSVt_UNDEF: case OSVt_UNDEF2: warn("Use of uninitialized value");
+  default: return 0;
+  }
+}
+
 OSSVPV *OSSV::as_rv()
 { return this && natural() == OSVt_RV? (OSSVPV*) vptr : 0; }
 
 OSSVPV *OSSV::safe_rv()
 {
+  if (!this) croak("safe_rv called with null pointer");
   if (natural() != OSVt_RV) croak("%s is not an object", type_2pv());
   return (OSSVPV*)vptr;
 }
@@ -388,9 +446,6 @@ void OSSV::FORCEUNDEF()
   _type = OSVt_UNDEF;
   vptr=0;        // seems to be necessary for ObjectStore sanity
 }
-
-int OSSV::natural() const
-{ return OSvTYPE(this); }
 
 int OSSV::folded_typeof() const
 {
@@ -646,6 +701,19 @@ int OSSV::istrue()
 //        =0=
 //  1 greater than
 
+#ifdef say
+#  undef say
+#endif
+#ifdef OSP_DEBUG
+#  define say(x)				\
+STMT_START {					\
+  retval=(x);					\
+  goto RET;					\
+} STMT_END
+#else
+#  define say(x) return (x);
+#endif
+
 int OSSV::compare(OSSV *that)
 {
   int retval;
@@ -654,34 +722,33 @@ int OSSV::compare(OSSV *that)
   if (t1 == t2) {
     switch (t1) {
     case OSVt_UNDEF:
-      retval = 0; goto RET;
+      say(0);
     case OSVt_IV32:  
-      retval = OSvIV32(this) - OSvIV32(that); goto RET;
+      say(OSvIV32(this) - OSvIV32(that));
     case OSVt_NV:
       if (OSvNV(this) == OSvNV(that)) {
-	retval = 0; goto RET;
+	say(0);
       } else if (OSvNV(this) < OSvNV(that)) {
-	retval = -1; goto RET;
+	say(-1);
       } else {
-	retval = 1; goto RET;
+	say(1);
       }
     case OSVt_PV: {  //adapted from sv_cmp
       STRLEN l1,l2;
       char *pv1 = OSvPV(this, l1);
       char *pv2 = OSvPV(that, l2);
-      if (!l1) { retval = l2 ? -1 : 0; goto RET; }
-      if (!l2) { retval = 1; goto RET; }
+      if (!l1) say(l2 ? -1 : 0);
+      if (!l2) say(1);
       retval = memcmp((void*)pv1, (void*)pv2, l1 < l2 ? l1 : l2);
-      if (retval) { retval = retval < 0 ? -1 : 1; goto RET; }
+      if (retval) say(retval < 0 ? -1 : 1);
       if (l1 == l2) {
-	retval = 0; goto RET;
+	say(0);
       } else {
-	retval = l1 < l2 ? -1 : 1; goto RET;
+	say(l1 < l2 ? -1 : 1);
       }
     }
     case OSVt_IV16:
-      retval = OSvIV16(this) - OSvIV16(that);
-      goto RET;
+      say(OSvIV16(this) - OSvIV16(that));
     default:
       croak("OSSV: type '%s' not comparible", type_2pv(t1));
       return 0;
@@ -690,7 +757,7 @@ int OSSV::compare(OSSV *that)
     if (t1 != OSVt_PV && t2 != OSVt_PV) {
       double v1,v2;
       switch (t1) {
-      case OSVt_UNDEF: retval = -1; goto RET;
+      case OSVt_UNDEF: say(-1);
       case OSVt_IV32:  v1 = OSvIV32(this); break;
       case OSVt_NV:    v1 = OSvNV(this); break;
       case OSVt_IV16:  v1 = OSvIV16(this); break;
@@ -698,7 +765,7 @@ int OSSV::compare(OSSV *that)
 	croak("OSSV: %s not numerically comparible", type_2pv(t1)); return 0;
       }
       switch (t2) {
-      case OSVt_UNDEF: retval = 1; goto RET;
+      case OSVt_UNDEF: say(1);
       case OSVt_IV32:  v2 = OSvIV32(that); break;
       case OSVt_NV:    v2 = OSvNV(that); break;
       case OSVt_IV16:  v2 = OSvIV16(that); break;
@@ -707,13 +774,13 @@ int OSSV::compare(OSSV *that)
       }
       assert(v1 != v2); //type mixup should be impossible
       if (v1 < v2) {
-	retval = -1; goto RET;
+	say(-1);
       } else {
-	retval =  1; goto RET;
+	say(1);
       }
     } else {
-      if (t1 == OSVt_UNDEF) { retval = -1; goto RET; }
-      else if (t2 == OSVt_UNDEF) { retval = 1; goto RET; }
+      if (t1 == OSVt_UNDEF) say(-1);
+      else if (t2 == OSVt_UNDEF) say(1);
       else {
         // This sucks.  We have to stringify the non-string
         // OSSV and then do a string comparison.  Slow, but correct.
@@ -736,14 +803,14 @@ int OSSV::compare(OSSV *that)
           l2 = strlen(buf);
         }
         // copied from above
-        if (!l1) { retval = l2 ? -1 : 0; goto RET; }
-        if (!l2) { retval = 1; goto RET; }
+        if (!l1) say(l2 ? -1 : 0);
+        if (!l2) say(1);
         retval = memcmp((void*)pv1, (void*)pv2, l1 < l2 ? l1 : l2);
-        if (retval) { retval = retval < 0 ? -1 : 1; goto RET; }
+        if (retval) say(retval < 0 ? -1 : 1);
         if (l1 == l2) {
-          retval = 0; goto RET;
+          say(0);
         } else {
-          retval = l1 < l2 ? -1 : 1; goto RET;
+          say(l1 < l2 ? -1 : 1);
 	}
       }
     }
@@ -758,6 +825,7 @@ int OSSV::compare(OSSV *that)
   });
   return retval;
 }
+#undef say
 
 /* CCov: off */
 
@@ -896,7 +964,7 @@ OSSVPV::~OSSVPV()
 // C++ API for perl 'bless' (elaborate version)
 void OSSVPV::bless(SV *stashname)
 {
-  DEBUG_bless(warn("0x%x->bless('%s')", this, SvPV(stashname, na)));
+  DEBUG_bless(warn("0x%x->bless('%s')", this, SvPV(stashname, PL_na)));
   SV *me = osp_thr::ospv_2sv(this, 1);
   dSP;
   // We must avoid the user-level bless if possible since the our
@@ -971,9 +1039,7 @@ HV *OSSVPV::load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo)
   SV *olderr = sv_mortalcopy(ERRSV);
   assert(ldr);
   dSP;
-#ifdef PUSHSTACK
   PUSHSTACK;
-#endif
   ENTER;
   SAVETMPS;
   PUSHMARK(SP);
@@ -990,21 +1056,19 @@ HV *OSSVPV::load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo)
   if (SvTRUE(ERRSV) || count != 1) {
     /* need to print ERRSV again? */
     croak("&$ObjStore::CLASSLOAD('%s', '%s') failure\t%s",
-	  SvPV(sv1, na), SvPV(sv2, na), SvPV(ERRSV,na));
+	  SvPV(sv1, PL_na), SvPV(sv2, PL_na), SvPV(ERRSV, PL_na));
   }
   sv_setsv(ERRSV, olderr);
   if (!SvPOK(toclass)) {
     croak("&$ObjStore::CLASSLOAD('%s', '%s') returned non-string", 
-	  SvPV(sv1, na), SvPV(sv2, na));
+	  SvPV(sv1, PL_na), SvPV(sv2, PL_na));
   }
   HV *stash = gv_stashsv(toclass, 1);
   SvREFCNT_inc(stash);
   hv_store(osp_thr::CLASSLOAD, CLASS, CLEN, (SV*)stash, 0);
   //  warn("classload '%s' => 0x%x", CLASS, stash);
-#ifdef POPSTACK
-  POPSTACK;
-#endif
   PUTBACK;
+  POPSTACK;
   FREETMPS;
   LEAVE;
   //  OSPvINUSE_off(this);
@@ -1012,29 +1076,9 @@ HV *OSSVPV::load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo)
 }
 
 static const os_unsigned_int32 REFCNT32 = 4294967285UL;    // 2**32 - 10
-static const os_unsigned_int16 REFCNT16 = 65526;           // 2**16 - 10
 
-/*
-void OSSVPV::ROCNT_inc()
-{
-  if (OSPvROCNT(this) < REFCNT16) {
-    ++OSPvROCNT(this);
-  } else {
-    OSPvROCNT(this) = ~0;  //permanent!
-  }
-}
-
-void OSSVPV::ROCNT_dec()
-{
-  if (OSPvROCNT(this) < REFCNT16) {
-    if (OSPvROCNT(this) <= 1) {
-      assert(OSPvROCNT(this) == 1);
-      ROSHARE_set(0);
-    }
-    --OSPvROCNT(this);
-  }
-}
-*/
+U32 OSSVPV::get_refcnt()
+{ return _refs; }
 
 void OSSVPV::REF_inc() {
   DEBUG_refcnt(warn("OSSVPV(0x%x)->REF_inc() from %d", this, _refs));
@@ -1089,30 +1133,11 @@ int OSSVPV::get_perl_type()
 dynacast_fn OSSVPV::get_dynacast_meth()
 { return osp_thr::default_dynacast; }
 
-int OSSVPV::can_update(void *vptr)
-{
-  if (os_segment::of(this) == os_segment::of(0)) {
-    // might be updating the transient index in read mode
-    dTXN;
-    assert(txn);
-    return txn->can_update(vptr);
-  } else {
-    // can only be in update mode
-    return 1;
-  }
-}
-
 void OSSVPV::_debug1(void *)
 {}
 
 static void save_cxxdelete(void *blk)
 { delete blk; }
-
-char *dump_voidstar(void *vp)
-{
-  os_reference myref(vp);
-  return myref.dump();
-}
 
 /* CCov: fatal NOTFOUND */
 void OSSVPV::NOTFOUND(char *meth)
@@ -1166,13 +1191,18 @@ void ospv_bridge::init(OSSVPV *_pv)
   BrDEBUG_set(this, 0);
 
   STRLEN junk;
-  DEBUG_bridge(this,warn("ospv_bridge 0x%x->new(%s=0x%x)",
-		    this, pv->os_class(&junk), pv));
+  DEBUG_bridge(this,warn("ospv_bridge 0x%x->new(%s=0x%x transient=%d)",
+			 this, pv->os_class(&junk), pv,
+			 os_segment::of(pv) == os_segment::of(0)));
   if (os_segment::of(pv) == os_segment::of(0)) {
+    assert(!txsv);
     pv->REF_inc();
     holding = 1;
     manual_hold = 1;
     return;
+  }
+  else {
+    cache_txsv();
   }
 
 #ifdef OSP_SAFE_BRIDGE
@@ -1214,14 +1244,17 @@ void ospv_bridge::unref()
 
   // avoid single thread race condition
   OSSVPV *copy = pv; pv=0;
-  DEBUG_bridge(this, warn("ospv_bridge 0x%x->unref(pv=0x%x)", this, copy));
+  DEBUG_bridge(this, warn("ospv_bridge 0x%x->unref(pv=0x%x)",
+			  this, copy));
   if (!holding) return;
 
   // going out of scope might happen after the next transaction has started
-  if (!txsv || !((osp_txn*) SvIV(txsv))->can_update(copy)) return;
+  if (!txsv || 
+      !((osp_txn*) typemap_any::decode(txsv))->can_update(copy)) return;
 
   copy->REF_dec();
-  DEBUG_bridge(this, warn("ospv_bridge 0x%x->REF_dec(pv=0x%x)", this, copy));
+  DEBUG_bridge(this, warn("ospv_bridge 0x%x->REF_dec(pv=0x%x) RC=%d",
+			  this, copy, copy->get_refcnt()));
 }
 
 void ospv_bridge::freelist()
@@ -1326,6 +1359,14 @@ void osp_keypack1::set_undef()
     keys[xx].set_undef();
 }
 
+int osp_keypack1::operator==(osp_keypack1 &kp)
+{
+  if (kp.cnt != cnt) return 0;
+  for (int xx=0; xx < cnt; xx++)
+    if (keys[xx].compare(&kp.keys[xx])) return 0;
+  return 1;
+}
+
 osp_pathexam::osp_pathexam(int _desc)
 { init(_desc); }
 
@@ -1345,16 +1386,19 @@ void osp_pathexam::load_path(OSSVPV *paths)
 {
   pathcnt = paths->FETCHSIZE();
   if (pathcnt < 1)
-    croak("path is empty");
-  if (pathcnt > OSP_PATHEXAM_MAXKEYS)
-    croak("path has too many keys (%d max)", OSP_PATHEXAM_MAXKEYS);
-
-  for (int xa=0; xa < pathcnt; xa++) {
-    OSSVPV *pth;
-    pth = paths->avx(xa)->safe_rv();
-    if (pth->FETCHSIZE() < 1)
-      croak("empty path component");
-    pcache[xa] = pth;
+    croak("Path is empty");
+  else if (pathcnt > OSP_PATHEXAM_MAXKEYS)
+    croak("Path has %d keys (%d max)", pathcnt, OSP_PATHEXAM_MAXKEYS);
+  else {
+    assert(pathcnt <= OSP_PATHEXAM_MAXKEYS);
+    for (int xa=0; xa < pathcnt; xa++) {
+      OSSVPV *pth;
+      pth = paths->avx(xa)->safe_rv();
+      if (pth->FETCHSIZE() < 1)
+	croak("Empty path component");
+      assert(xa >= 0 && xa < OSP_PATHEXAM_MAXKEYS);
+      pcache[xa] = pth;
+    }
   }
 }
 
@@ -1490,7 +1534,7 @@ char *osp_pathexam::kv_string()
     }
     if (p1 < maxcnt-1) sv_catpv(kv, ", ");
   }
-  return SvPV(kv, na);
+  return SvPV(kv, PL_na);
 }
 
 void osp_pathexam::push_keys()
@@ -1648,7 +1692,6 @@ mysv_lock(SV *sv)
 	DEBUG_L(PerlIO_printf(PerlIO_stderr(), "0x%lx: pp_lock lock 0x%lx\n",
 			      (unsigned long)thr, (unsigned long)sv);)
 	MUTEX_UNLOCK(MgMUTEXP(mg));
-	SvREFCNT_inc(sv);	/* keep alive until magic_mutexfree */
 	save_destructor(unlock_condpair, sv);
     }
 #endif

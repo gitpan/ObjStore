@@ -52,6 +52,7 @@ static os_fetch_policy str_2fetch(char *str)
   if (strEQ(str, "page")) return os_fetch_page;
   if (strEQ(str, "stream")) return os_fetch_stream;
   croak("str_2fetch: '%s' unrecognized", str);
+  return (os_fetch_policy) 0;
 }
 
 static objectstore_lock_option str_2lock_option(char *str)
@@ -60,6 +61,7 @@ static objectstore_lock_option str_2lock_option(char *str)
   if (strEQ(str, "read")) return objectstore::lock_segment_read;
   if (strEQ(str, "write")) return objectstore::lock_segment_write;
   croak("str_2lock_option: '%s' unrecognized", str);
+  return (objectstore_lock_option) 0;
 }
 
 XS(XS_ObjStore_translate)
@@ -103,7 +105,7 @@ osperl_schema_loader::load_DLL(const char *what, os_boolean error_if_not_found)
   perl_require_pv(file);
   if (SvTRUE(ERRSV))
 	croak("Attempt to load schema '%s' (via %s) failed: %s",
-		what, file, SvPV(ERRSV,na));
+		what, file, SvPV(ERRSV, PL_na));
   return file;
 }
 
@@ -113,13 +115,6 @@ osperl_schema_loader::equal_DLL_identifiers_same_prefix(const char* id1,
 { return strcmp(id1,id2)==0; }
 
 //----------------------------- ObjStore
-
-MODULE = ObjStore	PACKAGE = ObjStore::ThreadInfo
-
-void
-osp_thr::DESTROY()
-	CODE:
-	delete THIS;
 
 MODULE = ObjStore	PACKAGE = ObjStore
 
@@ -135,6 +130,7 @@ BOOT:
   osp_thr::boot();
   osp_thr::use("ObjStore", OSPERL_API_VERSION);
   OSSV::verify_correct_compare();
+  typemap_any::MyStash = gv_stashpv("ObjStore", 1);
 //
 #ifdef _OS_CPP_EXCEPTIONS
   // Must switch perl to use ANSI C++ exceptions!
@@ -162,7 +158,7 @@ _mark_method(sub)
 	    if (SvTYPE(sub) != SVt_PVCV)
 		sub = Nullsv;
 	} else {
-	    char *name = SvPV(sub, na);
+	    char *name = SvPV(sub, PL_na);
 	    sub = (SV*)perl_get_cv(name, FALSE);
 	}
 	if (!sub)
@@ -205,7 +201,7 @@ SV *
 set_stargate(code)
 	SV *code
 	CODE:
-	ST(0) = osp_thr::stargate? sv_mortalcopy(osp_thr::stargate):&sv_undef;
+	ST(0) = osp_thr::stargate? sv_mortalcopy(osp_thr::stargate):&PL_sv_undef;
 	if (!osp_thr::stargate) { osp_thr::stargate = newSVsv(code); }
 	else { sv_setsv(osp_thr::stargate, code); }
 
@@ -260,6 +256,12 @@ network_servers_available()
 	RETVAL
 
 void
+typemap_any_destroy(obj)
+	SV *obj
+	CODE:
+	typemap_any::decode(obj,1);
+
+void
 get_page_size()
 	PPCODE:
 	XSRETURN_IV(objectstore::get_page_size());
@@ -294,10 +296,7 @@ get_all_servers()
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		SV *ref = sv_newmortal();
-		sv_setref_pv(ref, CLASS, svrs[xx]);
-		SvREADONLY_on(SvRV(ref));
-		PUSHs(ref);
+	  PUSHs(sv_2mortal(osp_thr::any_2sv(svrs[xx], CLASS)));
 	}
 
 #-----------------------------# Schema
@@ -377,18 +376,16 @@ os_notification::receive(...)
 	if (items > 1) timeout = SvNV(ST(1)) * 1000;
 	os_notification *note;
 	if (os_notification::receive(note, timeout)) {
-	  SV *ret =sv_setref_pv(sv_newmortal(),"ObjStore::Notification", note);
-	  SvREADONLY_on(SvRV(ret));
-	  XPUSHs(ret);
+	  XPUSHs(sv_2mortal(osp_thr::any_2sv(note, "ObjStore::Notification")));
 	} else {
-	  XPUSHs(&sv_undef);
+	  XPUSHs(&PL_sv_undef);
 	}
 
 void
 os_notification::_get_database()
 	PPCODE:
-	XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Database",
-	  THIS->get_database()));
+	XPUSHs(sv_2mortal(osp_thr::any_2sv(THIS->get_database(),
+		 "ObjStore::Database")));
 
 void
 os_notification::focus()
@@ -408,7 +405,10 @@ os_notification::why()
 	XPUSHs(sv_2mortal(newSVpv(str, 0)));
 
 void
-os_notification::DESTROY()
+DESTROY(obj)
+	SV *obj
+	CODE:
+	delete (os_notification *) typemap_any::decode(obj,1);
 
 MODULE = ObjStore	PACKAGE = ObjStore::UNIVERSAL
 
@@ -419,14 +419,14 @@ OSSVPV::notify(why, ...)
 	CODE:
 	int now=0;
 	if (items == 3) {
-	  if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), na), "now")) now=1;
-	  else if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), na), "commit")) now=0;
-	  else croak("%p->notify('%s', $when)", THIS, SvPV(why, na));
+	  if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), PL_na), "now")) now=1;
+	  else if (SvPOK(ST(2)) && strEQ(SvPV(ST(2), PL_na), "commit")) now=0;
+	  else croak("%p->notify('%s', $when)", THIS, SvPV(why, PL_na));
 	} else {
 	  warn("%p->notify($string): assuming $when eq 'commit', please specify",THIS);
 	}
 	os_notification note;
-	note.assign(THIS, 0, SvPV(why, na)); //number slot is reserved
+	note.assign(THIS, 0, SvPV(why, PL_na)); //number slot is reserved
 	if (now) os_notification::notify_immediate(&note, 1);
 	else     os_notification::notify_on_commit(&note, 1);
 
@@ -450,7 +450,7 @@ new(...)
 	  scope = cur->get_scope();
 	}
 	for (int arg=1; arg < items; arg++) {
-	  char *spec = SvPV(ST(arg),na);
+	  char *spec = SvPV(ST(arg), PL_na);
 	  if (strEQ(spec, "read")) tt = os_transaction::read_only;
 	  else if (strEQ(spec, "update")) tt = os_transaction::update;
 	  else if (strEQ(spec, "abort_only") ||
@@ -462,13 +462,13 @@ new(...)
 	new osp_txn(tt, scope);
 	SV **tsv = av_fetch(osp_thr::TXStack, AvFILL(osp_thr::TXStack), 0);
 	assert(tsv);
-	XPUSHs(sv_2mortal(newRV_inc(SvRV(*tsv))));
+	XPUSHs(sv_2mortal(SvREFCNT_inc(*tsv)));
 
 void
-osp_txn::DESTROY()
+DESTROY(obj)
+	SV *obj
 	CODE:
-	DEBUG_txn(warn("delete txn(%p)", THIS));
-	delete THIS;
+	delete (osp_txn *) typemap_any::decode(obj,1);
 
 void
 osp_txn::top_level()
@@ -493,7 +493,7 @@ osp_txn::name(...)
 	PPCODE:
 	if (!THIS->os) XSRETURN_UNDEF;
 	if (items == 2) {
-	  THIS->os->set_name(SvPV(ST(1),na));
+	  THIS->os->set_name(SvPV(ST(1), PL_na));
 	} else {
 	  char *str = THIS->os->get_name();
 	  XPUSHs(newSVpv(str, 0));
@@ -615,13 +615,13 @@ os_server::get_databases()
 	os_int32 num = THIS->get_n_databases();
 	assert(num > 0);  //?
 	os_database_p *dbs = new os_database_p[num];
+	SAVEDESTRUCTOR(save_cxxvdelete, dbs);
 	THIS->get_databases(num, dbs, num);
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		PUSHs(sv_setref_pv(sv_newmortal(), CLASS, dbs[xx] ));
+	  PUSHs(sv_2mortal(osp_thr::any_2sv(dbs[xx], CLASS)));
 	}
-	delete [] dbs;
 
 #-----------------------------# Database
 
@@ -718,7 +718,7 @@ os_database::is_writable()
 	PPCODE:
 	// not ODI spec; but more useful
 	if (THIS->is_open_read_only()) XSRETURN_NO;
-	dTXN;
+	osp_txn *txn = osp_txn::current();
 	if (txn && txn->tt == os_transaction::read_only) XSRETURN_NO;
 	XSRETURN_YES;
 
@@ -772,28 +772,24 @@ os_database::get_all_segments()
 	os_int32 num = THIS->get_n_segments();
 	assert(num > 0); //?ok
 	os_segment_p *segs = new os_segment_p[num];
+	SAVEDESTRUCTOR(save_cxxvdelete, segs);
 	THIS->get_all_segments(num, segs, num);
 	EXTEND(sp, num);
 	int xx;
 	for (xx=0; xx < num; xx++) {
-		SV *ref = sv_newmortal();
-		sv_setref_pv(ref, CLASS, segs[xx]);
-		SvREADONLY_on(SvRV(ref));
-		PUSHs(ref);
+	  PUSHs(sv_2mortal(osp_thr::any_2sv(segs[xx], CLASS)));
 	}
-	delete [] segs;
 
 void
 os_database::_PRIVATE_ROOT()
 	PPCODE:
-	dTXN;
+	osp_txn *txn = osp_txn::current();
 	os_database_root *rt = THIS->find_root(private_root_name);
 	if (!rt && txn && txn->can_update(THIS)) {
 	  rt = THIS->create_root(private_root_name);
 	  rt->set_value(0, OSSV::get_os_typespec());
 	}
-	if (rt) XPUSHs(sv_setref_pv(sv_newmortal(), "ObjStore::Root", rt));
-	else    XPUSHs(&sv_undef);
+	XPUSHs(sv_2mortal(osp_thr::any_2sv(rt, "ObjStore::Root")));
 
 void
 os_database::get_all_roots()
@@ -807,7 +803,7 @@ os_database::get_all_roots()
 	  assert(roots[xx]);
 	  char *nm = roots[xx]->get_name();
 	  int priv = strEQ(nm, private_root_name);
-	  if (!priv) XPUSHs(sv_setref_pv(sv_newmortal(), CLASS, roots[xx] ));
+	  if (!priv) XPUSHs(sv_2mortal(osp_thr::any_2sv(roots[xx], CLASS)));
 	}
 	delete [] roots;
 
@@ -1033,6 +1029,11 @@ OSSVPV::DELETED(...)
 		THIS, THIS->os_class(&len), THIS->rep_class(&len));
 	}
 
+void
+OSSVPV::_debug1()
+	CODE:
+	THIS->_debug1(ST(0));
+
 bool
 _is_persistent(sv)
 	SV *sv;
@@ -1144,6 +1145,8 @@ OSSVPV::_blessto_slot(...)
 	PROTOTYPE: ;$
 	PPCODE:
 	PUTBACK;
+	// only persistent objects get a persistent blessing
+	// so this code does not leak memory
 	if (items == 2) {
 	  ospv_bridge *br = osp_thr::sv_2bridge(ST(1), 1);
 	  OSSVPV *nval = (OSSVPV*) br->ospv();
@@ -1345,7 +1348,7 @@ OSPV_Generic::PUSH(...)
 	    copy[xx] = sv_mortalcopy(ST(xx+1));
 	  }
 	  THIS->PUSH(copy, size);
-	  delete copy;
+	  delete [] copy;
 	}
 	SPAGAIN;
 	XPUSHs(sv_2mortal(newSViv(size)));
@@ -1361,7 +1364,7 @@ OSPV_Generic::UNSHIFT(...)
 	    copy[xx] = sv_mortalcopy(ST(xx+1));
 	  }
 	  THIS->UNSHIFT(copy, size);
-	  delete copy;
+	  delete [] copy;
 	}
 	SPAGAIN;
 	XPUSHs(sv_2mortal(newSViv(size)));
@@ -1393,7 +1396,7 @@ OSPV_Generic::SPLICE(...)
 	//warn("SPLICE(off=%d,len=%d,@%d)", offset, length, toadd);
 	THIS->SPLICE(offset, length, copy, toadd);
 	if (toadd) {
-	  delete copy;
+	  delete [] copy;
 	}
 	return;
 
@@ -1576,9 +1579,7 @@ OSPV_Cursor2::seek(...)
 	PUTBACK;
 	osp_pathexam *exam;
 	if (SvROK(ST(1))) {
-	  if (!sv_isobject(ST(1)))
-	    croak("seek(ObjStore::PathExam");
-	  exam = (osp_pathexam*) SvIV(SvRV(ST(1)));
+	  exam = (osp_pathexam*) typemap_any::decode(ST(1));
 	} else {
 	  dOSP;
 	  osp->exam.init();
@@ -1599,11 +1600,6 @@ OSPV_Cursor2::keys()
 	THIS->keys();
 	return;
 
-void
-OSPV_Cursor2::_debug1()
-	CODE:
-	THIS->_debug1(0);
-
 
 MODULE = ObjStore	PACKAGE = ObjStore::Database
 
@@ -1613,41 +1609,4 @@ os_database::_allow_external_pointers(yes)
 	CODE:
 	if (yes) warn("allow_external_pointers is extremely dangerous");
 	THIS->allow_external_pointers(yes);
-
-#-----------------------------# Segment Cursor
-
-MODULE = ObjStore	PACKAGE = ObjStore::Segment
-
-os_object_cursor *
-os_segment::new_cursor()
-	CODE:
-	char *CLASS = "ObjStore::Segment::Cursor";
-	warn("%s is for debugging only", CLASS);
-	RETVAL = new os_object_cursor(THIS);
-	OUTPUT:
-	RETVAL
-
-MODULE = ObjStore	PACKAGE = ObjStore::Segment::Cursor
-
-void
-os_object_cursor::current(sz)
-	int sz;
-	PPCODE:
-	void *ptr;
-	const os_type *ty;
-	os_int32 count;
-	if (!THIS->current(ptr, ty, count)) XSRETURN_UNDEF;
-	XPUSHs(sv_2mortal(newSVpv((char*)ptr, count * sz)));
-
-void
-os_object_cursor::first()
-
-void
-os_object_cursor::next()
-
-int
-os_object_cursor::more()
-
-void
-os_object_cursor::DESTROY()
 

@@ -6,7 +6,7 @@
 SV *hkey::to_sv()
 {
   // ignore zero termination for easy coersion to numbers
-  if (!this || !this->pv || this->len < 2) return &sv_undef;
+  if (!this || !this->pv || this->len < 2) return &PL_sv_undef;
   return sv_2mortal(newSVpv(this->pv, this->len-1));
 }
 

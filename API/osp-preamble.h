@@ -9,6 +9,8 @@
 #ifndef _preamble_H_
 #define _preamble_H_
 
+#define MIN_PERL_DEFINE 1
+
 extern "C" {
 
 #ifndef __GNUG__
@@ -59,6 +61,7 @@ your compiler to shut-up, and send me a patch. :-) */
 #define DEBUG_schema(a)	  if (osp_thr::fetch()->debug & 0x20000) a
 #define DEBUG_pathexam(a) if (osp_thr::fetch()->debug & 0x40000) a
 #define DEBUG_compare(a)  if (osp_thr::fetch()->debug & 0x80000) a
+#define DEBUG_dynacast(a) if (osp_thr::fetch()->debug & 0x100000) a
 #else
 #define assert(what)
 #define DEBUG_refcnt(a)
@@ -80,6 +83,7 @@ your compiler to shut-up, and send me a patch. :-) */
 #define DEBUG_schema(a)
 #define DEBUG_pathexam(a)
 #define DEBUG_compare(a)
+#define DEBUG_dynacast(a)
 #endif
 
 #endif

@@ -35,7 +35,7 @@ sub dispatch_notifications {
 	while (my $note = ObjStore::Notification->receive(0) and $max--) {
 	    my $why = $note->why();
 	    my $f = $note->focus();
-	    my @args = split /$;/, $why;
+	    my @args = split /$;/, $why, -1;
 	    my $call = shift @args;
 	    warn "$f->$call(".join(', ',@args).")\n"
 		if $osperlserver::Debug{n};

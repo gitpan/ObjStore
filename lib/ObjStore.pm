@@ -17,7 +17,7 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                         # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.48';
+$VERSION = '1.50';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -58,6 +58,12 @@ require DynaLoader;
 
 'ObjStore'->bootstrap($VERSION);
 
+for (qw(ObjStore::Server ObjStore::Database ObjStore::Root
+	ObjStore::Schema ObjStore::Segment ObjStore::PathExam)) {
+    no strict 'refs';
+    *{$_.'::DESTROY'} = \&typemap_any_destroy;
+}
+
 $EXCEPTION = sub {
     my $m = shift;
 #    local $Carp::CarpLevel = $Carp::CarpLevel + 1;  # too ambitious
@@ -70,7 +76,7 @@ $EXCEPTION = sub {
 		my @a;
 		while (@a = caller $i) {
 		    my ($pack,$file,$line,$sub) = @a;
-		    $buf .= "FRAME($i): in $sub at $file line $line\n";
+		    $buf .= "FRAME[$i]: $sub at $file line $line\n";
 		    ++$i;
 		}
 		$buf.= "]\n";
@@ -105,12 +111,16 @@ $ObjStore::Config::SCHEMA_DBDIR = $ENV{OSPERL_SCHEMA_DBDIR} if
 
 END {
 #    debug(qw(bridge txn));
+    warn "ObjStore: beginning global destruction\n"
+	if $ObjStore::REGRESS;
     if ($INITIALIZED) {
 	lock %ObjStore::Transaction::;
 	my @copy = reverse @ObjStore::Transaction::Stack;
 	for (@copy) { $_->abort }
 	ObjStore::shutdown();
     }
+    warn "ObjStore: completed global destruction\n"
+	if $ObjStore::REGRESS;
 }
 
 sub initialize {
@@ -175,22 +185,35 @@ sub begin {
     if (!defined wantarray) { () } else { wantarray ? @result : $result[0]; }
 }
 
+use vars qw(%STARGATE);
+%STARGATE = (
+	     HASH => sub {
+		 my ($class, $sv, $seg) = @_;
+		 my $pt = $class eq 'HASH' ? 'ObjStore::HV' : $class;
+		 $pt->new($seg, $sv);
+	     },
+	     ARRAY => sub {
+		 my ($class, $sv, $seg) = @_;
+		 my $pt = $class eq 'ARRAY' ? 'ObjStore::AV' : $class;
+		 $pt->new($seg, $sv);
+	     },
+	     REF => sub {
+		 my ($class, $sv, $seg) = @_;
+		 $sv = $$sv;
+		 $sv->new_ref($seg, 'unsafe');
+	     }
+	    );
+
 sub DEFAULT_STARGATE {
     my ($seg, $sv) = @_;
     my $type = reftype $sv;
     my $class = ref $sv;
-    if ($type eq 'REF') {
-	my $sv = $$sv;
-	$sv->new_ref($seg, 'unsafe');
-    } elsif ($type eq 'HASH') {
-	my $pt = $class eq 'HASH' ? 'ObjStore::HV' : $class;
-	$pt->new($seg, $sv);
-    } elsif ($type eq 'ARRAY') {
-	my $pt = $class eq 'ARRAY' ? 'ObjStore::AV' : $class;
-	$pt->new($seg, $sv);
-    } else {
-	croak("ObjStore::DEFAULT_STARGATE: Don't know how to translate $sv");
-    }
+    my $code = $STARGATE{$class} || $STARGATE{$type};
+
+    croak("ObjStore::DEFAULT_STARGATE: Don't know how to translate $sv")
+	if !$code;
+
+    $code->($class, $sv, $seg);
 };
 set_stargate(\&DEFAULT_STARGATE);
 
@@ -346,6 +369,7 @@ sub debug {  # autoload
 	/^schema/   and $mask |= 0x20000, next;
 	/^pathexam/ and $mask |= 0x40000, next;
 	/^compare/  and $mask |= 0x80000, next;
+	/^dynacast/ and $mask |= 0x100000, next;
 	/^PANIC/  and $mask = 0xfffff, next;
 	die "Snawgrev $_ tsanik brizwah dork'ni";
     }

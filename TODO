@@ -10,12 +10,14 @@ following in the body of your message:
 
 + IDEAS +
 
+$hash->{seg} = $db->create_segment('foo'); #blows up (get_number missing!)
+
 sort tests into appropriate directories?
 
 MAKEMAKEROPT
 
-split ObjStore::Serve stuff into its own tarball
-  improve organization?
+split ObjStore::Serve stuff into its own tarball?
+  + improve organization
   + better advertising
   - annoying to install
 
@@ -23,46 +25,6 @@ disable autoload per class via some API
   depreciate _fake:: junk
 
 die with a ref!
-
-struct OSPV2 : os_virtual_behavior {
-  int can_update(void *vptr);
-  void NOTFOUND(char *meth);
-  void fwd2rep(char *methname, SV **top, int items);
-  HV *load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo);
-
-  virtual ~OSPV2();
-  virtual void REF_inc();
-  virtual void REF_dec();
-  virtual int is_blessed();
-  virtual void bless(SV *);
-  virtual HV *get_stash();
-  virtual int get_perl_type();
-  virtual void make_constant();
-  virtual void _debug1(void *); //whatever you want
-
-  // must be NULL terminated
-  virtual char *os_class(STRLEN *len);
-  virtual char *rep_class(STRLEN *len);
-
-  // C++ cast hacks
-  virtual int is_OSPV_Ref2();
-  virtual int is_OSPV_Generic();
-
-  //--------- should be under OSPV_Container but casting is tiresome -||
-  virtual void POSH_CD(SV *to);
-  virtual int FETCHSIZE();
-
-  // osp_pathexam support (containers only!)
-  virtual OSSVPV *traverse1(osp_pathexam &exam);
-  virtual OSSV *traverse2(osp_pathexam &exam);
-
-  // OSPV_Generic: internal index configuration, etc
-  virtual OSSV *avx(int xx);
-  virtual OSSV *hvx(char *key);
-  //--------- should be under OSPV_Container but casting is tiresome -||
-};
-
-KEEP INHERITANCE AS FLAT AS POSSIBLE
 
 test case for freeze bug using databases on multiple hosts
 

@@ -4,7 +4,7 @@ use strict;
 package osperlserver;
 use ObjStore::NoInit ':ADV';
 use vars qw($VERSION @DB $DAEMON $Loop $LoopMeth %Debug $Shutdown $AutoReloader);
-$VERSION = '1.01';
+$VERSION = '1.02';
 $DAEMON = 1;
 $LoopMeth = 'defaultLoop';
 my $default_server = 'ObjStore::ServerDB';
@@ -76,8 +76,11 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 open(STDOUT, ">&STDERR") or die "can't redirect STDOUT: $!";
 if ($DAEMON) {
     # all forking must happen before ObjStore::initialize!
-    require Proc::Daemon;
-    Proc::Daemon::init();
+    require POSIX;
+    chdir '/'               or die "Can't chdir to /: $!";
+    defined(my $pid = fork) or die "Can't fork: $!";
+    exit if $pid;
+    &POSIX::setsid()        or die "Can't start a new session: $!";
 }
 $SIG{HUP} = $DAEMON ? 'IGNORE' : sub { warn "SIGHUP" };
 
@@ -99,12 +102,11 @@ for (@DB) {
     }
 }
 
-ObjStore::fatal_exceptions(0);
 $ObjStore::CLIENT_NAME = 
     "osperl[".join(',',map { $_->[0] =~ m,/([^/]+)$, ? $1:$_->[0] } @DB)."]";
 
 ObjStore::initialize();
-require ObjStore::Server;
+require ObjStore::ServerInfo;
 for (@DB) {
     no strict 'refs';
     my $class = $_->[1];
@@ -121,7 +123,7 @@ for (@DB) {
 
     begin 'update', sub {
 	# hostile takeover
-	$DB->hash->{'ObjStore::Server'} = ObjStore::Server->new($DB);
+	$DB->hash->{'ObjStore::ServerInfo'} = ObjStore::ServerInfo->new($DB);
     };
     die if $@;
 
@@ -169,7 +171,8 @@ for (@DB) {
 if ($AutoReloader) {
     require Module::Reload;
     $Module::Reload::Debug = $Module::Reload::Debug = 1;
-    Event->timer(interval => 1, callback => sub { Module::Reload->check });
+    Event->timer(desc => 'osperlserver reload',
+		 interval => 1, callback => sub { Module::Reload->check });
 }
 if ($Shutdown) {
     require Date::Manip;
@@ -178,11 +181,12 @@ if ($Shutdown) {
     warn "osperlserver: do not understand -shutdown '$Shutdown' (ignored)\n"
 	if !$at;
     # assumes that Event is in control... XXX
-    Event->timer(interval => 60, callback => sub {
+    Event->timer(desc => "osperlserver shutdown",
+		 interval => 60, callback => sub {
 		     my $d = DateCalc('now',$at);
 		     if ($d !~ m/^\+/) {
 			 warn "shutdown at ".UnixDate($at,"%u")."\n";
-			 kill 'TERM', $$;  #dangerous? XXX
+			 kill 'TERM', $$;
 		     }
 		 });
 }

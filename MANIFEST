@@ -4,7 +4,7 @@ API/Makefile.PL
 API/XSthr.h
 API/core.h
 API/osp-preamble.h
-API/osperl-14.sch
+API/osperl-15.sch
 API/osperl.c
 API/osperl.h
 API/txn.c
@@ -17,6 +17,7 @@ Main/Makefile.PL
 Main/ObjStore.xs
 Main/typemap
 Makefile.PL
+QtPosh
 README
 README.haloween
 REP/FatTree/FatTree.h
@@ -79,8 +80,8 @@ lib/ObjStore/Posh/Remote.pm
 lib/ObjStore/REP.pm
 lib/ObjStore/Serve.pm
 lib/ObjStore/Serve/Notify.pm
-lib/ObjStore/Server.pm
 lib/ObjStore/ServerDB.pm
+lib/ObjStore/ServerInfo.pm
 lib/ObjStore/Set.pm
 lib/ObjStore/SetEmulation.pm
 lib/ObjStore/Sex.pm

@@ -277,6 +277,16 @@ probably best not to think about it.
 
 =back
 
+=head1 RELATED RESEARCH
+
+ ftp://ftp.cs.utexas.edu/pub/garbage/texas/README
+
+ http://cs-tr.cs.cornell.edu:80/Dienst/UI/1.0/Display/ncstrl.utexas_cs/CS-TR-98-07
+
+ http://www.usenix.org/publications/library/proceedings/usenix98/full_papers/saito/saito_html/saito.html
+
+ http://theory.lcs.mit.edu/~cilk/
+
 =head1 BUGS
 
 =over 4

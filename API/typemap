@@ -8,13 +8,14 @@
 
 TYPEMAP
 
-os_server *		O_ROOBJECT
-os_database *		O_OBJECT
-os_database_root *	O_OBJECT
-os_DLL_schema_info *	O_ROOBJECT
-os_segment *		O_ROOBJECT
-os_notification *	O_OBJECT
-os_object_cursor *	O_OBJECT
+osp_bridge *		T_PTRREF
+os_server *		O_OBJSTORE
+os_database *		O_OBJSTORE
+os_database_root *	O_OBJSTORE
+os_DLL_schema_info *	O_OBJSTORE
+os_segment *		O_OBJSTORE
+os_notification *	O_OBJSTORE
+osp_txn *		O_OBJSTORE
 OSSVPV *		O_OSSVPV
 OSPV_Container *	O_OSSVPV
 OSPV_Generic *		O_OSSVPV
@@ -22,26 +23,12 @@ OSPV_Ref2 *		O_OSSVPV
 OSPV_Cursor2 *		O_OSSVPV
 OSPV_Ref *		O_OSSVPV
 OSPV_Cursor *		O_OSSVPV
-osp_thr *		O_OBJECT
-osp_txn *		O_OBJECT
-osp_bridge *		T_PTRREF
 
 ######################################################################
 INPUT
 
-O_OBJECT
-	if( sv_isobject($arg) && (SvTYPE(SvRV($arg)) == SVt_PVMG) )
-		$var = ($type)SvIV((SV*)SvRV( $arg ));
-	else{
-		croak( \"${Package}::$func_name() -- $var is not a blessed SV reference\" );
-	}
-
-O_ROOBJECT
-	if( sv_isobject($arg) && (SvTYPE(SvRV($arg)) == SVt_PVMG) )
-		$var = ($type)SvIV((SV*)SvRV( $arg ));
-	else{
-		croak( \"${Package}::$func_name() -- $var is not a blessed SV reference\" );
-	}
+O_OBJSTORE
+	$var = ($type) typemap_any::decode($arg);
 
 O_OSSVPV
 	ospv_bridge * ${var}_bridge = osp_thr::sv_2bridge($arg, 1);
@@ -50,14 +37,8 @@ O_OSSVPV
 ######################################################################
 OUTPUT
 
-# The Perl object is blessed into 'CLASS', which should be a
-# char* having the name of the package for the blessing.
-O_OBJECT
-	sv_setref_pv( $arg, CLASS, (void*)$var );
-
-O_ROOBJECT
-	sv_setref_pv( $arg, CLASS, (void*)$var );
-	if (SvROK($arg)) SvREADONLY_on(SvRV($arg));
+O_OBJSTORE
+	$arg = osp_thr::any_2sv($var, CLASS);
 
 O_OSSVPV
 	croak("not implemented");

@@ -90,7 +90,7 @@ void OSPV_fattree_av::STORE(SV *where, SV *value)
   dGCURSOR(&ary);
   tc_moveto(&gl->tc, xx);
   while (xx >= TvFILL(&ary)) {
-    avtc_insert(&gl->tc, &sv_undef);
+    avtc_insert(&gl->tc, &PL_sv_undef);
     tc_moveto(&gl->tc, xx);
   }
   avtc_store(&gl->tc, value);
@@ -175,7 +175,7 @@ void OSPV_fattree_av::SPLICE(int offset, int length, SV **base, int count)
       EXTEND(SP, length);
       for (xx=0; xx < length; xx++) PUSHs(sv[xx]);
       PUTBACK;
-      delete sv;
+      delete [] sv;
     } else if (GIMME_V == G_SCALAR) {
       tc_moveto(&gl->tc, offset);
       OSSV *tmp;
@@ -267,7 +267,7 @@ void OSPV_fatindex2::CLEAR()
 int OSPV_fatindex2::add(OSSVPV *target)
 {
   if (!conf_slot)
-    croak("%s->add(%p): index not configured", os_class(&na), target);
+    croak("%s->add(%p): index not configured", os_class(&PL_na), target);
   int unique = conf_slot->avx(1)->istrue();
 
   dOSP;
@@ -284,7 +284,7 @@ int OSPV_fatindex2::add(OSSVPV *target)
       if (obj == target) {
 	return 0; //already added
       } else {
-	croak("%s->add(): attempt to insert two distinct records (0x%p & 0x%p) matching '%s' into a unique index", os_class(&na), target, obj, exam->kv_string());
+	croak("%s->add(): attempt to insert two distinct records (0x%p & 0x%p) matching '%s' into a unique index", os_class(&PL_na), target, obj, exam->kv_string());
       }
     } else {
       dex2tc_fetch(&gl->tc, &obj);
@@ -321,12 +321,12 @@ int OSPV_fatindex2::remove(OSSVPV *target)
   exam->load_path(conf_slot->avx(2)->safe_rv());
   if (!exam->load_target('u', target))
     croak("%s->remove: %s could not be a member (%s)",
-	  os_class(&na), target->os_class(&na), exam->kv_string());
+	  os_class(&PL_na), target->os_class(&PL_na), exam->kv_string());
 
   dGCURSOR(&tv);
   int match = dex2tc_seek(&gl->tc, unique, *exam);
   if (!match)
-    croak("%s->remove: (%s) not found", os_class(&na), exam->kv_string());
+    croak("%s->remove: (%s) not found", os_class(&PL_na), exam->kv_string());
   if (unique) {
     OSSVPV *obj;
     dex2tc_fetch(&gl->tc, &obj);
@@ -337,11 +337,13 @@ int OSPV_fatindex2::remove(OSSVPV *target)
     while (dex2tc_fetch(&gl->tc, &obj)) {
       if (obj == target) break;
       if (!tc_step(&gl->tc, 1))
-	croak("%s->remove: (%s) not found", os_class(&na), exam->kv_string());
+	croak("%s->remove: (%s) not found",
+	      os_class(&PL_na), exam->kv_string());
       int cmp;
       cmp = exam->compare(obj, 0);
       if (cmp != 0)
-	croak("%s->remove: (%s) not found", os_class(&na), exam->kv_string());
+	croak("%s->remove: (%s) not found",
+	      os_class(&PL_na), exam->kv_string());
     }
   }
   DEBUG_index(warn("%p->remove(%p)", this, target));
@@ -413,14 +415,14 @@ OSSVPV *OSPV_fatindex2::new_cursor(os_segment *seg)
 OSPV_fatindex2_cs::OSPV_fatindex2_cs(OSPV_fatindex2 *_at)
 {
   init_tc(&tc);
-  if (can_update(_at)) _at->REF_inc();
+  if (osp_thr::can_update(this, _at)) _at->REF_inc();
   tc_refocus(&tc, &_at->tv);
   myfocus = _at;
 }
 
 OSPV_fatindex2_cs::~OSPV_fatindex2_cs()
 {
-  if (can_update(myfocus)) myfocus->REF_dec();
+  if (osp_thr::can_update(this, myfocus)) myfocus->REF_dec();
   free_tc(&tc);
 }
 

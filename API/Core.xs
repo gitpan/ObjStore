@@ -133,7 +133,7 @@ OSPV_Cursor::moveto(side)
 	SV *side
 	CODE:
 	if (SvPOKp(side)) {
-	  char *str = SvPV(side, na);
+	  char *str = SvPV(side, PL_na);
 	  if (strEQ(str, "end")) THIS->seek_pole(1);
 	  else warn("%p->moveto(%s): undefined", THIS, str);
 	} else if (SvIOK(side)) {

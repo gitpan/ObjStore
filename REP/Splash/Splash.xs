@@ -75,7 +75,7 @@ int OSPV_splashheap::add(OSSVPV *pv)
 void OSPV_splashheap::SHIFT()
 {
   OSSVPV *conf = conf_slot;
-  if (!conf) croak("%s->SHIFT: heap unconfigured", os_class(&na));
+  if (!conf) croak("%s->SHIFT: heap unconfigured", os_class(&PL_na));
   if (av.count() == 0) return;
   SV *ret = osp_thr::ospv_2sv(av[0]);
   if (av.count() > 1) {
@@ -183,7 +183,7 @@ OSSV *OSPV_avarray::fancy_traverse(char *keyish)
       OSSV *ki = layout->hvx(keyish);
       if (!ki || ki->natural() != OSVt_IV16)
 	croak("%s->traverse('%s'): key indexed to bizarre array slot", 
-	      os_class(&na), keyish);
+	      os_class(&PL_na), keyish);
       return avx(OSvIV16(ki));
     }
   }
@@ -229,7 +229,7 @@ void OSPV_avarray::POP()
 
 void OSPV_avarray::SHIFT()
 {	
-  SV *ret = &sv_undef;
+  SV *ret = &PL_sv_undef;
   if (av.count()) {
     dTHR;
     if (GIMME_V != G_VOID) {
@@ -270,7 +270,7 @@ void OSPV_avarray::SPLICE(int offset, int length, SV **base, int count)
       EXTEND(SP, length);
       for (xx=0; xx < length; xx++) PUSHs(sv[xx]);
       PUTBACK;
-      delete sv;
+      delete [] sv;
     } else if (GIMME_V == G_SCALAR) {
       SV *ret = osp_thr::ossv_2sv(&av[offset]);
       dSP;
@@ -372,7 +372,7 @@ int OSPV_hvarray2::index_of(char *key)
 
 void OSPV_hvarray2::FETCH(SV *key)
 {
-  int xx = index_of(SvPV(key,na));
+  int xx = index_of(SvPV(key, PL_na));
   if (xx < 0) return;
   SV *ret = osp_thr::ossv_2sv(&hv[xx].hv);
   dSP;
@@ -399,7 +399,7 @@ void OSPV_hvarray2::make_constant()
 
 void OSPV_hvarray2::STORE(SV *sv, SV *value)
 {
-  char *key = SvPV(sv,na);
+  char *key = SvPV(sv, PL_na);
   int xx = -1;
   int open = -1;
   for (int za=0; za < hv.count(); za++) {
@@ -430,7 +430,7 @@ void OSPV_hvarray2::STORE(SV *sv, SV *value)
 
 void OSPV_hvarray2::DELETE(SV *key)
 {
-  int xx = index_of(SvPV(key,na));
+  int xx = index_of(SvPV(key, PL_na));
   if (xx != -1) hv[xx].set_undef();
 }
 
@@ -446,7 +446,7 @@ void OSPV_hvarray2::CLEAR()
 }
 
 int OSPV_hvarray2::EXISTS(SV *key)
-{ return index_of(SvPV(key,na)) != -1; }
+{ return index_of(SvPV(key, PL_na)) != -1; }
 
 int OSPV_hvarray2::first(int start)
 {

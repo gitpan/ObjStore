@@ -23,7 +23,61 @@ also be extended with arbitrary C++ objects (!).
 See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 
+=head1 IS THIS PERL ONLY?
+
+On Mon, 21 Sep 1998 tp@mccall.com wrote:
+> I was sort of hoping I'd be able to use perl to write quick-and-dirty data
+> manipulation scripts to mess around with my databases that are used by my
+> C++ applications. I don't know if I'd ever need that, but it sounded like
+> a useful thing to have in the toolbox, so to speak.
+
+My experience with ObjectStore is that it is very low-level.  This is
+an advantage for applications that require the highest level of
+performance.  However, there is nothing that I do with databases that
+needs such extreme degrees of optimization.
+
+Rather, I value ease of use and ease of change slightly above raw
+performance.  When I designed the perl interface, I was always trying
+to optimize for these priorities.  For example, I decided to start
+with a generic schema.  This gained some big advantages:  All perl
+databases are compatible.  All perl databases will never I<require>
+schema evolution.  All perl databases can be edited with a standard
+perl shell.
+
+Even so, ObjectStore's recent support of DLL schemas allows the
+seemless integration of application specific C++ objects.  For
+example, a code generator is available (L<ObjStore-REP-HashRecord>)
+that creates optimized records (ordered, typed list of fields like a C
+structure).  Recently, I also got PDL properly integrated
+(L<ObjStore-Lib-PDL>).  PDL is a perl extension for matrix
+mathematics.
+
+I believe the uncommon ability to integrate with everything at the
+lowest level (C) while still remaining maximally generic is unique
+among database architectures.
+
+
 =head1 R!CENT CHANGES
+
+
+** 11-05-98 RELEASE 1.50
+
+- Fixed order of PUTBACK/POPSTACK.
+
+
+** 11-04-98 RELEASE 1.49
+
+- Stargate reengineering for ObjStore::Lib::PDL.
+
+- MIN_PERL_DEFINE clean up for 5.005_53.
+
+- Various API improvements.  Safer safe_rv().  osp_pathexam fixes.
+
+- Safer typemap code.  Added debugging mode for dynacasts. Resolved
+serious name conflict by renaming ObjStore::Server to
+ObjStore::ServerInfo (Gack!!).
+
+- Various tweaks & fixes.
 
 
 ** 10-13-98 RELEASE 1.48
@@ -37,26 +91,6 @@ is also planned to be included by default in 5.005_5x.
 - Integrated osp_keypack1 into the API.
 
 - Reduced maximum number of keys from eight to four.
-
-
-** 09-26-98 RELEASE 1.47
-
-- WARNING: the fatal_exceptions option is now always OFF.
-
-- Binary API changes are now detected at run-time.  This is more
-consistant with the rest of the perl world.
-
-- Fixed coredump when seeking to an incomplete key.
-
-- Add ObjStore::UNIVERSAL::DELETED method.  Use this flag to announce
-that an object is queued for unconditional destruction.
-
-- ObjStore::Mortician wasn't restarting properly.  Fixed.
-
-- Internal adjustments necessary for ObjStore::Lib::PDL.
-
-- Culled more statistics from ObjStore::Serve.  Switched to safe signal
-handling.
 
 
 see ./INSTALL for hints on installation

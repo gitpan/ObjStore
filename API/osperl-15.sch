@@ -10,6 +10,7 @@ OS_SCHEMA_INFO_NAME(ObjStore_dll_schema_info)
 // OSSV is painful to evolve; Everything else is ez!
 OS_MARK_SCHEMA_TYPE(OSSV);
 OS_MARK_SCHEMA_TYPE(OSPVptr);
+OS_MARK_SCHEMA_TYPE(OSPVweakptr);
 
 // scalars
 OS_MARK_SCHEMA_TYPE(OSPV_iv);

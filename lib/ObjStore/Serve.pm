@@ -70,23 +70,46 @@ sub get_all_versions {
     $V;
 }
 
+use Time::Local;
+use vars qw($TodaySeconds);
+sub cache_todayseconds {
+    $TodaySeconds = int timelocal(0,0,0,(localtime)[3,4,5]);
+}
+cache_todayseconds();
+
+sub format_time {
+    my $t;
+    $t = Event::time() - $TodaySeconds;
+    if ($t > 3600 * 24) {
+	cache_todayseconds();
+	$t = Event::time() - $TodaySeconds;
+    }
+    my $h = int($t/3600);
+    $t -= $h * 3600;
+    my $m = int($t/60);
+    $t -= $m * 60;
+    my $s = int $t;
+    $t -= $s;
+    my $f = sprintf "%.3f", $t;
+    sprintf "%02d:%02d:%02d%s", $h, $m, $s, substr($f,1);
+}
+
 sub restart {
     my ($o) = @_;
 
+    my $epat = qr/\[\d\d:\d\d:\d\d\.\d\d\d \d+\]/;
     $SIG{__WARN__} =
 	sub { 
-	    my $me = "$ObjStore::Server::EXE($$)";
-	    if ($_[0] !~ m/\Q$me\E/) {
-		warn '['.localtime()."] $me: $_[0]"
+	    if ($_[0] !~ /$epat/) {
+		warn '['.format_time()." $$]: $_[0]"
 	    } else {
 		warn $_[0];
 	    }
 	};
     $SIG{__DIE__} =
 	sub {
-	    my $me = "$ObjStore::Server::EXE($$)";
-	    if ($_[0] !~ m/\Q$me\E/) {
-		die '['.localtime()."] $me: $_[0]"
+	    if ($_[0] !~ /$epat/) {
+		die '['.format_time()." $$]: $_[0]"
 	    } else {
 		die $_[0];
 	    }
@@ -136,7 +159,7 @@ my $LoopState;
 
 sub before_checkpoint {
     my ($t) = @_;
-    confess $LoopState if $LoopState ne 'start';
+    die $LoopState if $LoopState ne 'start';
     $LoopState = 'before';
 
     $TXOpen=0;
@@ -146,7 +169,7 @@ sub before_checkpoint {
 	    my $now = time;
 
 	    # make sure we're still in charge
-	    ObjStore::Server->touch($now);
+	    ObjStore::ServerInfo->touch($now);  #why method call? XXX
 
 	    # update various stats
 	    my $o = $SERVE->focus;
@@ -167,7 +190,7 @@ sub before_checkpoint {
 	    };
 	    $$r{mtime} = $now;
 	    
-	    $LoopTime = $$o{looptm} ||= 2;
+	    $LoopTime = $$o{looptm} ||= $LoopTime;
 #	    %METERS = ();
 	    $t->post_transaction(); #1
 	};
@@ -177,13 +200,13 @@ sub before_checkpoint {
 }
 
 sub after_checkpoint {
-    confess $LoopState if $LoopState ne 'before';
+    die $LoopState if $LoopState ne 'before';
     $LoopState = 'after';
 }
 
 sub start_transaction {
     $LoopState ||= 'after';
-    confess $LoopState if $LoopState ne 'after';
+    die $LoopState if $LoopState ne 'after';
     $LoopState = 'start';
 
     $TXOpen = 1;
@@ -234,16 +257,25 @@ sub checkpoint {
     dotodo();
 }
 
-################################################# default
 use vars qw($Chkpt);
 
+sub safe_checkpoint {
+    eval { checkpoint() };
+    if ($@) {
+	warn;
+	$Chkpt->cancel;
+	Event::unloop_all();
+    }
+}
+
+################################################# default
 sub defaultLoop {
     require ObjStore::Serve::Notify;
     ObjStore::Serve::Notify::init_autonotify();
     if (!$Init) { &init_signals; ++$Init; }
     checkpoint(1);
     $Chkpt = Event->timer(desc => "ObjStore::Serve checkpoint", nice => -1,
-			  interval => \$LoopTime, callback => \&checkpoint);
+			  interval => \$LoopTime, callback => \&safe_checkpoint);
     Event->add_hooks(asynccheck => sub {
 			 $Chkpt->now() if ObjStore::Transaction::is_aborted($TXN)
 		     });

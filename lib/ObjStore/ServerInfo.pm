@@ -1,5 +1,5 @@
 use strict;
-package ObjStore::Server;
+package ObjStore::ServerInfo;
 use Carp;
 use ObjStore;
 use base 'ObjStore::HV';
@@ -16,9 +16,6 @@ $ObjStore::TRANSACTION_PRIORITY = 0x2000;
 # Auto-retry of deadlocks can cause havoc.  You must take
 # responsibility to address this yourself.
 #ObjStore::set_max_retries(0);
-
-# Big program style.
-ObjStore::fatal_exceptions(0);
 
 sub new {
     my $o = shift->SUPER::new(@_);
@@ -49,7 +46,7 @@ sub touch {
 
 =head1 NAME
 
-    ObjStore::Server - associate a Unix process with a database
+    ObjStore::ServerInfo - associate a Unix process with a database
 
 =head1 SYNOPSIS
 

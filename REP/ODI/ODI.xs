@@ -46,7 +46,7 @@ OSSV *OSPV_hvdict::hvx(char *key)
 
 void OSPV_hvdict::FETCH(SV *key)
 {
-  OSSV *val = hv.pick(SvPV(key,na));
+  OSSV *val = hv.pick(SvPV(key, PL_na));
   if (!val) return;
   SV *ret = osp_thr::ossv_2sv(val);
   dSP;
@@ -91,7 +91,7 @@ void OSPV_hvdict::STORE(SV *sv, SV *nval)
 
 void OSPV_hvdict::DELETE(SV *key)
 {
-  hkey tmpkey(SvPV(key,na));
+  hkey tmpkey(SvPV(key, PL_na));
   OSSV *val = hv.pick(&tmpkey);
   if (!val) return;
   hv.remove_value(&tmpkey);
@@ -114,8 +114,8 @@ void OSPV_hvdict::CLEAR()
 
 int OSPV_hvdict::EXISTS(SV *key)
 {
-  int out = hv.pick(SvPV(key,na)) != 0;
-  DEBUG_hash(warn("OSPV_hvdict::EXISTS %s => %d", SvPV(key,na), out));
+  int out = hv.pick(SvPV(key, PL_na)) != 0;
+  DEBUG_hash(warn("OSPV_hvdict::EXISTS %s => %d", SvPV(key, PL_na), out));
   return out;
 }
 

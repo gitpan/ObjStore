@@ -28,7 +28,7 @@ extern void osp_croak(const char* pat, ...);
 #undef U16
 #define U16 os_unsigned_int16
 
-#define OSPERL_API_VERSION 6
+#define OSPERL_API_VERSION 8
 
 // OSSV has only 16 bits to store type information.  Yikes!
 
@@ -102,15 +102,17 @@ struct OSSV {
   OSSV *operator=(const OSSV &);
   int operator==(OSSVPV *pv);
   //what
+  static void verify_correct_compare();
   int morph(int nty);
-  int natural() const;
+  int natural() const { return OSvTYPE(this); }
   int folded_typeof() const;
   int is_set();
   int istrue();
   int compare(OSSV*);
-  static void verify_correct_compare();
   char *type_2pv();
   static char *type_2pv(int);
+  I32 as_iv();
+  double as_nv();
   OSSVPV *as_rv();
   OSSVPV *safe_rv();
   //refcnt
@@ -162,25 +164,33 @@ struct OSPV_nv {
 #define OSPvDELETED(pv)		(OSPvFLAGS(pv) & OSPV_DELETED)
 #define OSPvDELETED_on(pv)	(OSPvFLAGS(pv) |= OSPV_DELETED)
 
-typedef void *(*dynacast_fn)(void *obj, HV *stash);
+typedef void *(*dynacast_fn)(void *obj, HV *stash, int failok);
 
 struct OSSVPV : os_virtual_behavior {
+  // NONE OF THESE FIELDS SHOULD BE REQUIRED
+  // THIS CLASS SHOULD ONLY REQUIRE VIRTUAL METHODS
+  // THE FIELDS BELOW ARE COSTING US >10MB/DAY OF WASTED MEMORY IN ONE APP
+  // :-(
   os_unsigned_int32 _refs;
   // _weak_refs unused (1.42) - schema evolution hell!  Drat!
   os_unsigned_int16 _weak_refs;
   os_int16 pad_1;		//rename to 'flags'
   char *classname;		//should be OSPVptr, alas...
-  OSSVPV();
-  virtual ~OSSVPV();
-  void REF_inc();
-  void REF_dec();
-  int _is_blessed();
-  int can_update(void *vptr);
+  // DRAT!!
+
+  //  int can_update(void *vptr);
   void NOTFOUND(char *meth);
   void fwd2rep(char *methname, SV **top, int items);
-  void bless(SV *);
   HV *get_stash();
   HV *load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo);
+
+  OSSVPV();
+  virtual ~OSSVPV();
+  virtual void bless(SV *);
+  virtual void REF_inc();
+  virtual void REF_dec();
+  virtual U32 get_refcnt();
+  virtual int _is_blessed();
 
   virtual int get_perl_type();
   virtual dynacast_fn get_dynacast_meth();
@@ -213,25 +223,55 @@ struct OSSVPV : os_virtual_behavior {
 // It's too bad this isn't used everywhere to hold OSSVPV*.
 // I only thought of it recently, after the schema was frozen.
 
-class OSPVptr {
+class OSPVptr {  // should be the base-class :-( XXX
 private:
   OSSVPV *rv;
+  void _inc(OSSVPV *pv) { pv->REF_inc(); }
+  void _dec(OSSVPV *pv) { pv->REF_dec(); }
 public:
   static os_typespec *get_os_typespec();
   OSPVptr() :rv(0) {}
-  OSPVptr(OSSVPV *setup) : rv(setup) { rv->REF_inc(); }
+  OSPVptr(OSSVPV *setup) : rv(setup) { _inc(rv); }
   ~OSPVptr() { set_undef(); }
-  void set_undef() { if (rv) { rv->REF_dec(); rv=0; } }
+  void set_undef() { if (rv) { _dec(rv); rv=0; } }
   void operator=(OSSVPV *npv)
-    { OSSVPV *old = rv; rv=npv; if (rv) rv->REF_inc(); if (old) old->REF_dec(); }
+    { OSSVPV *old = rv; rv=npv; if (rv) _inc(rv); if (old) _dec(old); }
   operator OSSVPV*() { return rv; }
   OSSVPV *resolve() { return rv; }
   void steal(OSPVptr &nval) { set_undef(); rv = nval.rv; nval.rv=0; }
 
   // DANGER // DANGER // DANGER //
-  void FORCEUNDEF() { /*REF_dec*/ rv=0; }
-  OSSVPV *detach() { OSSVPV *ret = rv; /*REF_dec*/ rv=0; return ret; }
-  void attach(OSSVPV *nval) { set_undef(); rv = nval; /*REF_inc*/ }
+  void FORCEUNDEF() { /*_dec*/ rv=0; }
+  OSSVPV *detach() { OSSVPV *ret = rv; /*_dec*/ rv=0; return ret; }
+  void attach(OSSVPV *nval) { set_undef(); rv = nval; /*_inc*/ }
+};
+
+// This isn't exactly right.  If both are either persistent or
+// transient, then the refcnt should be used.  Otherwise not. XXX
+
+class OSPVweakptr {
+private:
+  OSSVPV *rv;
+  void _inc(OSSVPV *pv) 
+    { if (os_segment::of(this) != os_segment::of(0)) pv->REF_inc(); }
+  void _dec(OSSVPV *pv)
+    { if (os_segment::of(this) != os_segment::of(0)) pv->REF_dec(); }
+public:
+  static os_typespec *get_os_typespec();
+  OSPVweakptr() :rv(0) {}
+  OSPVweakptr(OSSVPV *setup) : rv(setup) { _inc(rv); }
+  ~OSPVweakptr() { set_undef(); }
+  void set_undef() { if (rv) { _dec(rv); rv=0; } }
+  void operator=(OSSVPV *npv)
+    { OSSVPV *old = rv; rv=npv; if (rv) _inc(rv); if (old) _dec(old); }
+  operator OSSVPV*() { return rv; }
+  OSSVPV *resolve() { return rv; }
+  void steal(OSPVweakptr &nval) { set_undef(); rv = nval.rv; nval.rv=0; }
+
+  // DANGER // DANGER // DANGER //
+  void FORCEUNDEF() { /*_dec*/ rv=0; }
+  OSSVPV *detach() { OSSVPV *ret = rv; /*_dec*/ rv=0; return ret; }
+  void attach(OSSVPV *nval) { set_undef(); rv = nval; /*_inc*/ }
 };
 
 struct OSPV_Ref2 : OSSVPV {
@@ -338,6 +378,8 @@ struct osp_keypack1 {
 
   osp_keypack1();
   void set_undef();
+  int operator==(osp_keypack1&);
+  inline int operator!=(osp_keypack1 &kp) { return !operator==(kp); }
 };
 
 #ifdef OSPERL_PRIVATE
@@ -447,7 +489,6 @@ STMT_START {						\
 #endif
 
 class osp_pathexam {
-protected:
   int descending;
   int pathcnt;
   OSSVPV *pcache[OSP_PATHEXAM_MAXKEYS];
@@ -462,8 +503,7 @@ protected:
   OSSV *keys[OSP_PATHEXAM_MAXKEYS];
   char *conflict;
   OSSVPV *target;
-  
-protected:
+
   OSSV *path_2key(int zpath, OSSVPV *obj, char mode = 'x');
 
 public:
@@ -555,10 +595,15 @@ struct osp_thr {
   osp_pathexam exam;
 
   //glue methods
-  static void *default_dynacast(void *obj, HV *stash);
+  static int can_update(void *v1, void *v2) {
+    os_segment *tseg = os_segment::of(0); //can store as global? XXX
+    return (!(os_segment::of(v1) == tseg) ^ (os_segment::of(v2) == tseg));
+  };
+  static void *default_dynacast(void *obj, HV *stash, int failok);
   static os_segment *sv_2segment(SV *);
   static ospv_bridge *sv_2bridge(SV *, int force, os_segment *near=0);
   // sv_2ospv XXX
+  static SV *any_2sv(void *any, char *CLASS);
   static SV *ossv_2sv(OSSV *ossv, int hold=0);
   static SV *ospv_2sv(OSSVPV *, int hold=0);
   static SV *wrap(OSSVPV *ospv, SV *br);
@@ -570,6 +615,7 @@ struct osp_thr {
 };
 
 struct osp_txn {
+  static osp_txn *current();
   osp_txn(os_transaction::transaction_type_enum,
 	  os_transaction::transaction_scope_enum);
   int is_aborted();
@@ -591,15 +637,19 @@ struct osp_txn {
   osp_bridge_ring link;
 };
 
+struct typemap_any {
+  static HV *MyStash;
+  dynacast_fn dynacast;
+  void *ptr;
+
+  static void *my_dynacast(void *obj, HV *stash, int failok);
+  static void *decode(SV *, int nuke=0);
+
+  typemap_any(void *vp) { set(vp); dynacast = my_dynacast; }
+  void set(void *vp) { assert(vp); ptr = vp; }
+};
+
 #define dOSP osp_thr *osp = osp_thr::fetch()
-#define dTXN							\
-mysv_lock(osp_thr::TXGV);					\
-osp_txn *txn = 0;						\
-if (av_len(osp_thr::TXStack) >= 0) {				\
-  SV *_txsv = SvRV(*av_fetch(osp_thr::TXStack,			\
-			    av_len(osp_thr::TXStack), 0));	\
-  txn = (osp_txn*) SvIV(_txsv);					\
-}
 
 /*
   Safety, then Speed;  There are lots of interlocking refcnts:
@@ -638,6 +688,7 @@ struct osp_bridge {
 
   osp_bridge();
   void init(dynacast_fn dcfn);
+  void cache_txsv();
   osp_txn *get_transaction();
   void leave_perl();
   void enter_txn(osp_txn *txn);

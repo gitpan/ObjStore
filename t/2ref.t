@@ -32,8 +32,7 @@ sub NOREFS {
 package main;
 use vars qw($saver);
 
-ObjStore::fatal_exceptions(0);
-#ObjStore::debug qw(bridge);
+#ObjStore::debug qw(bridge txn);
 #use Devel::Peek;
 
 &open_db;

@@ -25,6 +25,9 @@ Tested Configurations:
 me three trials.  If it will not match, there is probably a serious
 refcnt problem.  Also see 'ossize -c'.
 
+- If something strange happens, mail the output & the output of
+ossvrstat to the mailing list.
+
 -------------------------------------------------------------------------
 
 If you succeed on a system that is not listed in above, please send

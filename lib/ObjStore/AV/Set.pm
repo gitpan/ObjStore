@@ -1,20 +1,12 @@
 use strict;
 
-# Maybe store stats in the first slot?  Store version for now!
-
 package ObjStore::AV::Set;
 use base 'ObjStore::AV';
 use vars qw($VERSION);
 use Carp;
 use ObjStore;
 
-$VERSION = '0.01';
-
-sub new {
-    my $o = shift->SUPER::new(@_);
-    $o->[0] = 1;
-    $o;
-}
+$VERSION = '0.02';
 
 sub add {
     my ($o, $e) = @_;
@@ -22,22 +14,21 @@ sub add {
     $e;
 }
 
-# rename to size? XXX
+# intentionally different from FETCHSIZE
 sub count {
     my ($o) = @_;
     my $c=0;
-    my $sz = $o->SUPER::FETCHSIZE();
-    for (my $x=1; $x < $sz; $x++) {
+    my $sz = $o->FETCHSIZE();
+    for (my $x=0; $x < $sz; $x++) {
 	++$c if defined $o->[$x];
     }
     $c;
 }
 
-# Never returns zero!
 sub exists {
     my ($o, $e) = @_;
     my $x;
-    for (my $z=1; $z < $o->FETCHSIZE(); $z++) {
+    for (my $z=0; $z < $o->FETCHSIZE(); $z++) {
 	my $e2 = $o->[$z];
 	do { $x = $z; last } if $e2 == $e;
     }
@@ -55,7 +46,7 @@ sub remove {
 sub map {
     my ($o, $sub) = @_;
     my @r;
-    for (my $x=1; $x < $o->FETCHSIZE(); $x++) { 
+    for (my $x=0; $x < $o->FETCHSIZE(); $x++) { 
 	my $at = $o->[$x];
 	next if !defined $at;
 	push(@r, $sub->($at));
@@ -67,7 +58,7 @@ sub compress {
     # compress table - use with add/remove
     my ($ar) = @_;
     my $data = $ar->FETCHSIZE() - 1;
-    my $hole = 1;
+    my $hole = 0;
     while ($hole < $ar->FETCHSIZE()) {
 	next if defined $ar->[$hole];
 	while ($data > $hole) {
@@ -87,9 +78,11 @@ __END__;
 
 =head1 NAME
 
-  ObjStore::AV::Set - Simple set of objects using arrays
+  ObjStore::AV::Set - simple set of objects using arrays
 
 =head1 SYNOPSIS
+
+Like a linear-search index.
 
 =head1 DESCRIPTION
 

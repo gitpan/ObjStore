@@ -1,5 +1,5 @@
 # set -*-perl-*-
-use Test;
+use Test 0.10;
 BEGIN { plan tests => 5; }
 
 use strict;
@@ -21,9 +21,9 @@ begin 'update', sub {
 
     my @b;
     $s->map(sub { push(@b, shift) });
-    ok(@b == 3);
+    ok(scalar(@b), 3);
 
-    ok($s->exists($b[0]));
+    ok(defined $s->exists($b[0]),1);
     $s->remove($b[1]);
 #    peek $s;
 

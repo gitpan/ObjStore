@@ -17,6 +17,7 @@ require Exporter;
 # handle simple queries; constraints?
 # also do sprintf style formats - anything in 2D
 # you might want to do all the calculated fields in a single coderef
+# GUI interface like Excel...
 sub print_csv {
     my $top = shift;
 
@@ -183,6 +184,7 @@ sub parse_csv {
     while (defined(my $l = <$fh>)) {
 	++ $st->{line};
 	chomp($l);
+	$l =~ s/^ $split//x;  # strip leading junk
 	my @l = split(m/$split/, $l);  #should handle quoted sep chars XXX
 	# strip quotes
 	for my $e (@l) {

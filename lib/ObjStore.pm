@@ -13,18 +13,9 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $DEFAULT_OPEN_MODE $EXCEPTION %CLASSLOAD $CLASSLOAD
 	    $RUN_TIME $TRANSACTION_PRIORITY $OS_CACHE_DIR
 	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof
-	    $NEWERROR);
+	    );
 
-$VERSION = '1.29';
-
-BEGIN {
-    $NEWERROR = 0; #failed experiment :-)
-    if ($NEWERROR) {
-	require Error;
-	'Error'->import('0.1202');
-	'Error'->import(':try');
-    }
-};
+$VERSION = '1.30';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
@@ -58,7 +49,6 @@ require DynaLoader;
 		   &_PRIVATE_ROOT);
 
     @EXPORT      = (qw(&bless &begin),
-		    $NEWERROR? qw(&with &finally &except &otherwise) : (),
 		    # depreciated
 		    qw(&try_read &try_abort_only &try_update));
     @EXPORT_FAIL = ('PANIC');
@@ -72,7 +62,14 @@ $EXCEPTION = sub {
     $reason = ObjStore::Transaction::SEGV_reason() if $reason eq 'SEGV';
     $reason ||= 'SEGV';
     local $Carp::CarpLevel += 1;
-    confess "ObjectStore: $reason\t";
+    my $m = "ObjectStore: $reason\t";
+    warn $m if $ObjStore::REGRESS;
+
+    # Due to bugs in perl, confess can cause a SEGV if the signal
+    # happens at the wrong time.  Threads will probably enable a
+    # work-around or a fix.  Even a simple die doesn't always work.
+#    confess $m;
+    die $m;
 };
 
 $SIG{SEGV} = \&$EXCEPTION
@@ -128,7 +125,8 @@ $MAX_RETRIES = 10;
 sub get_max_retries { $MAX_RETRIES; }
 sub set_max_retries { $MAX_RETRIES = $_[0]; }
 
-sub begin1 {
+use vars qw(@TxnStack);
+sub begin {
     my ($tt, $code);
     my $ctt;
     {
@@ -152,6 +150,7 @@ sub begin1 {
 	@result=();
 	undef $@;
 	my $txn = ObjStore::Transaction::new($tt);
+	push @TxnStack, $txn;
 	my $ok=0;
 	$ok = eval {
 	    if ($wantarray) {
@@ -164,109 +163,18 @@ sub begin1 {
 	    $txn->post_transaction(); #1
 	    1;
 	};
-	warn $@ if ($@ && $ObjStore::REGRESS);
 	($ok and $tt !~ m'^abort') ? $txn->commit() : $txn->abort();
 	$txn->post_transaction(); #2
 	++ $retries;
 	$do_retry = ($txn->deadlocked && $txn->top_level &&
 		     $retries < get_max_retries());
+	if (pop @TxnStack != $txn) { confess "transaction mismatch" }
 	$txn->destroy;
 	die if ($@ and $FATAL_EXCEPTIONS and !$do_retry);
 
     } while ($do_retry);
     if (!defined wantarray) { () } else { wantarray ? @result : $result[0]; }
 }
-
-if ($NEWERROR) {
-    package ObjStore::Error;
-    use vars qw(@ISA $VERSION);
-    @ISA = qw(Error::Simple);
-    $VERSION = '1.00';
-    
-    sub new {
-	# This should be considered a private API that might change without notice.
-	my ($class,$text,$istop,$retries) = @_;
-	my $e = $class->SUPER::new($text);
-	$e->{istop} = $istop;
-	$e->{retries} = $retries;
-	$e;
-    }
-}
-
-package ObjStore;
-
-sub begin2 {
-    my $wantarray = wantarray;
-    my @result;
-    my ($tt, $cur_tt);
-    my $txn = ObjStore::Transaction::get_current();
-    $cur_tt = $txn->get_type if $txn;
-    $tt = !ref $_[0] ? shift : ($cur_tt or 'read');
-    croak "begin([type], code)" if ref $_[0] ne 'CODE';
-    my $try = shift;
-    my $clauses = @_ ? shift : {};
-    my $ok;
-    my $err;
-    my $retries = 0;
-
-    if (get_max_retries()) {
-	$clauses->{catch} ||= [];
-	push(@{$clauses->{catch}}, 'ObjStore::Error', sub {
-		 my ($e,$more) = @_;
-		 if ($e->{top} and $e->{retries} < get_max_retries() and
-		     $e->{text} =~ /deadlock/) {
-		     $e->{retry} = 1;
-		 } else {
-		     $$more = 1;
-		 }
-	     });
-    }
-
-    do {
-	local $Error::THROWN = undef;
-	unshift @Error::STACK, $clauses;
-	@result=();
-	undef $@;
-	$txn = ObjStore::Transaction::new($tt);
-	$ok=0;
-	$ok = eval {
-	    if ($wantarray) 		{ @result = $try->(); }
-	    elsif (defined $wantarray)	{ $result[0] = $try->(); }
-	    else			{ $try->(); }
-	    $txn->post_transaction(); #1
-	    1;
-	};
-	$err = defined($Error::THROWN) ? $Error::THROWN : $@
-	    unless $ok;
-	warn $err if ($err && $ObjStore::REGRESS);
-	($ok and $tt !~ m'^abort') ? $txn->commit() : $txn->abort();
-	$txn->post_transaction(); #2
-	$txn->destroy;
-	++ $retries;
-
-	shift @Error::STACK;
-
-	if (!$ok) {
-	    $err = new ObjStore::Error($err, $txn->top_level, $retries)
-		unless ref $err;
-	    $err = Error::subs::run_clauses($clauses,$err,$wantarray,@result);
-	    
-	    $clauses->{'finally'}->()
-		if defined $clauses->{'finally'};
-	    
-	    Error::throw($err)
-		if defined $err && !$err->{retry};
-	}
-	
-    } while ($err);
-
-    $clauses->{'finally'}->()
-	if defined $clauses->{'finally'};
-
-    if (!defined wantarray) { () } else { wantarray ? @result : $result[0]; }
-}
-
-*begin = $NEWERROR ? \&begin2 : \&begin1;
 
 # For speed, you may assume that ONLY TRANSIENT DATA will be
 # transferred through the stargate.
@@ -636,8 +544,11 @@ sub isa_versions {
 sub _engineer_blessing {
     my ($br, $bs, $o, $toclass) = @_;
     if (! $bs) {
-	confess "ObjStore::BRAHMA must be notified of run-time manipulation of VERSION strings by changing \$ObjStore::RUN_TIME to be != \$CLASS_DOGTAG{$toclass}" 
-	    if ($CLASS_DOGTAG{$toclass} or 0) == $ObjStore::RUN_TIME; #majify? XXX
+	# This warning doesn't detect the right thing when there are
+	# multiple databases, since each database needs its own copy
+	# of bless-info.
+#	warn "ObjStore::BRAHMA must be notified of run-time manipulation of VERSION strings by changing \$ObjStore::RUN_TIME to be != \$CLASS_DOGTAG{$toclass}" 
+#	    if ($CLASS_DOGTAG{$toclass} or 0) == $ObjStore::RUN_TIME; #majify? XXX
 
 	$bs = $br->{$toclass} =
 	    [1, $toclass, $ObjStore::RUN_TIME,
@@ -1010,6 +921,7 @@ sub newTiedHV { carp 'depreciated'; new ObjStore::HV(@_); }
 sub newSack { carp 'depreciated'; new ObjStore::Set(@_); }
 
 package ObjStore::Notification;
+use vars qw($DEBUG_RECEIVE);
 
 # Should work exactly like ObjStore::lookup
 sub get_database {
@@ -1020,6 +932,24 @@ sub get_database {
 	die if $@;
     }
     $db;
+}
+
+sub Receive {
+    #debugging? XXX
+    my ($class) = @_;
+    while (my $note = ObjStore::Notification->receive(0)) {
+	my $why = $note->why();
+	warn "Receive: $why\n" if $DEBUG_RECEIVE;
+	# open the database first?  probably too slow
+	my $f = $note->focus();
+	if ($why =~ s/^([a-zA-Z]\w*)\s*//) {
+	    # method call, but with care...
+	    my $m = $f->can($1);
+	    warn "$class->Receive: don't know how to $f->$1\n", next
+		if !$m;  #maybe bounce to a fallback/nomethod method? XXX
+	    $m->($f,$why);
+	}
+    }
 }
 
 package ObjStore::UNIVERSAL;
@@ -1069,6 +999,10 @@ sub new_ref {
     elsif ($safe eq 'unsafe' or $safe eq 'hard') { $type=1; }
     else { croak("$o->new_ref($safe,...): unknown type"); }
     $o->_new_ref($type, $seg->segment_of);
+}
+
+sub help {
+    '';     # reserved for posh & various
 }
 
 sub evolve {
@@ -1255,7 +1189,7 @@ sub _Pop {
 package ObjStore::HV;
 use Carp;
 use vars qw($VERSION @ISA %REP);
-$VERSION = '1.00';
+$VERSION = '1.01';
 @ISA=qw(ObjStore::Container);
 
 # will build at compile time... XXX
@@ -1284,6 +1218,18 @@ sub new {
 sub TIEHASH {
     my ($class, $object) = @_;
     $object;
+}
+
+sub nextKey {
+    my ($o, $key) = @_;
+    return $key if !exists $o->{$key};
+    my $x=2;
+    $x = $1 if $key =~ s/\b\s\( (\d+) \)$//x;
+    while (1) {
+	my $try = "$key ($x)";
+	return $try if !exists $o->{$try};
+	++$x;
+    }
 }
 
 sub _iscorrupt {
@@ -1335,6 +1281,20 @@ sub new {
 	$x = ObjStore::REP::FatTree::Index::new($class, $loc);
     }
     $x;
+}
+
+# only for indices keyed by a single string
+sub nextKey {
+    my ($o,$key) = @_;
+    my $c = $o->new_cursor();
+    return $key if !$c->seek($key);
+    my $x=2;
+    $x = $1 if $key =~ s/\b\s\( (\d+) \)$//x;
+    while (1) {
+	my $try = "$key ($x)";
+	return $try if !$c->seek($try);
+	++$x;
+    }
 }
 
 sub map {

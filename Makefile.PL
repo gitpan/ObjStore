@@ -88,13 +88,13 @@ ccov_registry$(OBJ_EXT): .ccov-timestamp
 WriteMakefile
     (
      NAME         => 'ObjStore',
-     PREREQ_PM	  => { 'Tree::Fat' => 1.01, Test => 0.08,
+     PREREQ_PM	  => { 'Tree::Fat' => 1.02, Test => 0.08,
 		       @PREREQ },
      VERSION_FROM => 'lib/ObjStore.pm',
      OPTIMIZE     => '-O2',
      EXE_FILES  => [qw/ospeek posh osp_hack/],
      'LIBS'     => ["-L$ENV{OS_ROOTDIR}/lib -loscol -los -losths"],
-     'DEFINE'   => "-DOSP_DEBUG -DDEBUGGING -DSCHEMADIR=$sdir",
+     'DEFINE'   => "-DOSP_DEBUG -DSCHEMADIR=$sdir",
      INC      => "-I. -I$OS_ROOTDIR/include",
      'OBJECT'	=> join(' ',reverse
 			"osperl-$schema_version-osschema.o", @CCOV,

@@ -1,3 +1,22 @@
+** 02-07-98 RELEASE 1.28
+
+- Relaxed overly strict index behavior.  Fixed performance of add &
+remove for non-unique indices.  Fixed a serious bug when seeking
+unique indices.  Path traverse silently ignores records when there is
+a missing key or undef'd slot.  Fixed index comparison for mixed
+numeric values.  Added more tests.
+
+- Tweaked ObjStore::AVHV evolution code.
+
+- posh accepts [more] command line args.  Command-line perl code is no
+longer partially committed (this was an artifact of the incomplete
+integration between eval and transactions).
+
+- Improved CSV module.
+
+- Try to create the cache directory on startup.  (See $OS_CACHE_DIR)
+
+
 ** 01-24-98 RELEASE 1.26
 
 - Preliminary support for exceptions on Digital Unix AXP (and other

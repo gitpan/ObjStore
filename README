@@ -9,7 +9,7 @@ The new C<SQL> and the sunset of relational databases.
 =head1 DESCRIPTION
 
 ObjectStore is the market leader in object-oriented databases
-http://www.odi.com (NASDAQ: ODIS).  They use a Cache-Forward
+http://www.odi.com (NASDAQ: ODIS).  They use a unique Cache-Forward
 Architecture to make persistent data available in literally the most
 efficient manner possible.
 
@@ -31,9 +31,12 @@ And databases are comprised of...
 
 If you want to find out, you need:
 
-- ObjectStore OODBMS - see http://www.odi.com
-- Perl 5.004_04 (or perl 5.005, once available)
-- Tree::Fat & Test extensions
+- ObjectStore OODBMS (see http://www.odi.com; evaluations are available!)
+
+- Perl 5.004_04 (or perl 5.005, once released)
+
+- Tree::Fat & Test perl extensions
+
 - ExtUtils::ExCxx (only needed on Digital UNIX, HP (5.x), OS/2 (3.x),
   or MS Windows NT/95; send email)
 
@@ -45,10 +48,35 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 ##################
 
 
-** 02-21-98 RELEASE 1.29
+** 03-06-98 RELEASE 1.30
+
+- Instant, effortless event dispatching for network distributed perl
+objects using dynamic transactions.  (See ObjStore::Process :-)
+
+- Minor changes to ObjStore::Table3 to support multiple index types
+and the notion of a primary index.  Simplified the implementation of
+ObjStore::AV::Set.  Now can be used as an index in an
+ObjStore::Table3.  ObjStore::AV::Set changes are not backward
+compatible.
+
+- Persistent bless logic unnecessarily complains when blessing in
+multiple databases.  Temporarily disabled the imperfect assertion.
+
+- Added subscribe & unsubscribe to Databases & Segments.
+
+- Added 'nextKey' method to ObjStore::HV & ObjStore::Index.  Reserved
+the 'help' method of all persistent objects.
+
+- Tweaks to ObjStore::CSV.
+
+- Defect found and fixed in Tree::Fat.
+
+- Always adding -DDEBUGGING to CFLAGS is wrong.  Fixed.
 
 - posh now persists command history from prior sessions (5.004_58+).
-Fixed a minor bug in ObjStore::Path::Ref.
+
+
+** 02-21-98 RELEASE 1.29
 
 - Complete, nesting, tied array support (5.004_58+).
 
@@ -61,25 +89,7 @@ possibly other places.  Instances of this bug occurred rarely.
 - Fixed an uninitialized pointer that was causing exceptions to turn
 into BUS errors.  Added more regression tests.
 
-
-** 02-07-98 RELEASE 1.28
-
-- Relaxed overly strict index behavior.  Fixed performance of add &
-remove for non-unique indices.  Fixed a serious bug when seeking
-unique indices.  Path traverse silently ignores records when there is
-a missing key or undef'd slot.  Fixed index comparison for mixed
-numeric values.  Added more tests.
-
-- Tweaked ObjStore::AVHV evolution code.  Indexed records temporarily
-cannot be evolved due to const.  This will be fixed shortly.
-
-- posh accepts [more] command line args.  Command-line perl code is no
-longer partially committed (this was an artifact of the incomplete
-integration between eval and transactions).
-
-- Improved CSV module.
-
-- Try to create the cache directory on startup.  (See $OS_CACHE_DIR)
+- Fixed a minor bug in ObjStore::Path::Ref.
 
 
 see ./INSTALL for hints on installation

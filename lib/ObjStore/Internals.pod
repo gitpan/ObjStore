@@ -251,13 +251,18 @@ In the above code, the update in a read transaction will cause an
 exception that crashes perl.  This is due to the excellent but
 imperfect integration of C<ObjectStore> exceptions and perl
 exceptions.  I understand how to fix it, just haven't had time.  In
-general, you should global replace C<eval>s with C<begin>s.
+general, you should global replace C<eval> to C<begin>.
 
 =item * LEAKS TRANSIENT C<XPVRV>s
 
 The problem is thoroughly understood.  Work-arounds or a real fix have
 been discussed on the perl-porters mailing list.  Well designed
 mechanisms are being developed to solve this problem correctly.
+
+=item * C<ObjStore::AVHV> EVOLUTION
+
+Indexed records temporarily cannot be evolved due to const-ness.  This
+will be fixed soon.
 
 =item * C<os_protected_reference>
 

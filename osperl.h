@@ -52,7 +52,15 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 #undef U16
 #define U16 os_unsigned_int16
 
+#undef assert
 #ifdef OSP_DEBUG
+
+#define assert(what)                                              \
+        if (!(what)) {                                                  \
+            croak("Assertion failed: file \"%s\", line %d",             \
+                __FILE__, __LINE__);                                    \
+        }
+
 #define DEBUG_refcnt(a)   if (osp_thr::fetch()->debug & 1)  a
 #define DEBUG_assign(a)   if (osp_thr::fetch()->debug & 2)  a
 #define DEBUG_bridge(a)   if (osp_thr::fetch()->debug & 4)  a
@@ -69,6 +77,7 @@ your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 #define DEBUG_thread(a)	  if (osp_thr::fetch()->debug & 8192) a
 #define DEBUG_index(a)	  if (osp_thr::fetch()->debug & 16384) a
 #else
+#define assert(what)
 #define DEBUG_refcnt(a)
 #define DEBUG_assign(a)
 #define DEBUG_bridge(a)
@@ -220,7 +229,7 @@ struct OSSVPV : os_virtual_behavior {
   int _is_blessed();
   int can_update(void *vptr);
   void NOTFOUND(char *meth);
-  HV *stash();
+  HV *stash(int create);
   char *blessed_to(STRLEN *len);
   void fwd2rep(char *methname, SV **top, int items);
   virtual void bless(SV *);

@@ -14,21 +14,21 @@ The perl compiler requires: "As a prerequisite, such extensions must
 not need to do anything in their BOOT: section which needs to be done
 at runtime rather than compile time."
 
+ObjStore::AV->tail-f 
+
 permutation magic for AVHV
   ObjStore::Index::_(un)protect
 
 translate('transient', $persistent)
 
-Table3
-  notion of a primary index?
-
 configure unique index duplicate row behavior?
 
 typemap
-  do strings without copying?
+  do large strings without copying?
   SV set magic?
   CLEAR seems broken with tied hashes:
     verify and submit bug reports (or fix the code!)
+  there are still some mysterious problems
 
 transactions
   begin 'update', $string;
@@ -37,11 +37,12 @@ transactions
   dynamic transactions?
 
 posh
-  qtposh ?
+  'cd - ': go back to prior directory
   autodetect @INC modifications and print help message
   factor more!
-  persist command history!
   style - raw, vanilla, Tk::Text, etc...?
+
+move ObjStore::subscribe back into ObjStore::Notification?
 
 switch representations dynamically
   cursor syncronization: check os_typespec
@@ -51,6 +52,9 @@ switch representations dynamically
 
 
 + VAGUE POSSIBILITIES +
+
+asyncronous signals can cause perl to SEGV
+  (known bug)
 
 optimize splash suite
   hash performance sucks

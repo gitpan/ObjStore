@@ -3,15 +3,50 @@ use strict;
 package ObjStore::Table3;
 use Carp;
 use ObjStore ':ADV';
+require ObjStore::AV::Set;
 use base 'ObjStore::HV';
 use vars qw($VERSION);
-$VERSION = '1.00';
+$VERSION = '1.01';
 
 sub new {
     my ($class, $where) = @_;
     croak "$class\->new(where)" if @_ != 2;
     my $o = $class->SUPER::new($where);
     $o;
+}
+
+sub add_index {
+    my ($o, $name, $index) = @_;
+    croak "keys starting with underscore are reserved"
+	if $name =~ m/^_/;
+    if (ref $index eq 'CODE') {
+	return $o->{$name} if $o->{$name};
+	$index = $index->();
+    }
+    croak "'$index' doesn't look like a real index" if !blessed $index;
+
+    my $any = $o->anyx;
+    if ($any) {
+	# index must work like an array ref
+	for (my $x=0; $x < $any->FETCHSIZE(); $x++) {
+	    $index->add($any->[$x]);
+	}
+    }
+    $o->{ $name } = $index;
+
+    $$o{_primary} ||= $index;
+    $$o{_allindices} ||= [];
+    $$o{_allindices}->PUSH($name);
+}
+
+sub remove_index {
+    my ($o, $name) = @_;
+    die "$o->remove_index($name): is not an index"
+	if !exists $o->{ $name };
+    delete $o->{ $name };
+    @{$$o{_allindices}} = grep($_ ne $name, @{$$o{_allindices}});
+    $$o{_primary} ||= $$o{_allindices}->[0]
+	if @{$$o{_allindices}};
 }
 
 sub index { $_[0]->{$_[1]}; }
@@ -30,13 +65,9 @@ sub fetch {
 }
 
 sub anyx {
-    my ($t) = @_;
-    $t = $t->table;
-    for my $i (values %$t) {
-	next unless ref $i && $i->isa('ObjStore::Index');
-	return $i if $i->FETCHSIZE;
-    }
-    undef;
+    my ($o) = @_;
+    return if !$$o{_primary};
+    $o->index($$o{_primary});
 }
 
 sub rows {
@@ -52,44 +83,11 @@ sub map {
     $x->map($sub);
 }
 
-sub add_index {
-    my ($o, $name, $index) = @_;
-    if (ref $index eq 'CODE') {
-	return $o->{$name} if $o->{$name};
-	$index = $index->();
-    }
-    croak "'$index' doesn't look like an ObjStore::Index" if
-	!blessed $index || !$index->isa('ObjStore::Index');
-    my $any = $o->anyx;
-    if ($any) {
-	my $c = $any->new_cursor;
-	$c->moveto(-1);
-	while (my $v = $c->each(1)) {
-	    $index->add($v);
-	}
-    }
-    $o->{ $name } = $index;
-}
-
-sub remove_index {
-    my ($o, $name) = @_;
-    die "$o->remove_index($name): is not an index"
-	if !exists $o->{ $name } || !$o->{$name}->isa('ObjStore::Index');
-    delete $o->{ $name };
-}
-
 sub map_indices {
     my ($o, $c) = @_;
-    for my $i (values %$o) {
-	next unless ref $i && $i->isa('ObjStore::Index');
-	$c->($i);
+    for my $i (@{$$o{_allindices}}) {
+	$c->( $$o{$i} );
     }
-}
-
-sub CLEAR {
-    my ($t) = @_;
-    for my $k (keys %$t) { delete $t->{$k} if $t->{$k}->isa('ObjStore::Index'); }
-    $t;
 }
 
 sub add {
@@ -117,9 +115,12 @@ push(@ISA, 'ObjStore::Table3');
 $VERSION = '1.00';
 
 sub new {
+    warn "ObjStore::Table3::Database is depreciated; just use ObjStore::HV::Database";
     my $class = shift;
     my $db = $class->SUPER::new(@_);
-    $db->table; #force root setup
+    begin 'update', sub {
+	$db->table; #force root setup
+    };
     $db;
 }
 

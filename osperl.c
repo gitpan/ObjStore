@@ -34,7 +34,11 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
 
   assert(ref);
   if (!SvROK(ref)) {
-    if (force) croak("sv_2bridge: expecting a reference");
+    if (force) {
+      if (!SvOK(ref))
+	croak("sv_2bridge: Use of uninitialized value");
+      croak("sv_2bridge: expecting a reference, got a scalar");
+    }
     return 0;
   }
   SV *nval = SvRV(ref);
@@ -89,8 +93,7 @@ static SV *ospv_2bridge(OSSVPV *pv)
 SV *osp_thr::wrap(OSSVPV *ospv, SV *br)
 {
   dOSP ;
-  HV *stash = ospv->stash();
-  assert(stash);
+  HV *stash = ospv->stash(1);
 
   switch (ospv->get_perl_type()) {
   case SVt_PVMG:{
@@ -285,6 +288,9 @@ OSSV *OSSV::operator=(SV *nval)
   } else if (! SvOK(nval)) {
     set_undef();
   } else {
+#ifdef DEBUGGING
+    sv_dump(nval);
+#endif
     croak("OSSV=(SV*): unknown type");
   }
   return this;
@@ -679,16 +685,16 @@ void OSSVPV::bless(SV *stash)
 int OSSVPV::_is_blessed()
 { return classname != 0; }
 
-HV *OSSVPV::stash()
+HV *OSSVPV::stash(int create)
 {
   STRLEN bslen;
   char *bs = blessed_to(&bslen);
-  return gv_stashpvn(bs, bslen, 0);
+  return gv_stashpvn(bs, bslen, create);
 }
 
 char *OSSVPV::blessed_to(STRLEN *CLEN)
 {
-  // MUST BE FASTER
+  // MUST BE FASTER!!
   dOSP;
   char *CLASS=0;
 
@@ -790,9 +796,9 @@ void OSSVPV::REF_dec() {
   }
   if (_refs == 1 && classname != 0 && !OSPvINUSE(this)) {
     dOSP;
-    // cache last lookup to avoid gv_fetchmethod XXX
+    // cache last lookup to avoid gv_fetchmethod? XXX
     SV *meth=0;
-    HV *pkg = stash();
+    HV *pkg = stash(0);
     if (pkg)
       meth = (SV*) gv_fetchmethod(pkg, "NOREFS");
     if (meth) {
@@ -889,7 +895,11 @@ ospv_bridge::ospv_bridge(OSSVPV *_pv)
 }
 
 ospv_bridge::~ospv_bridge()
-{ assert(ready()); }
+{
+  //  assert(ready());
+  if (!ready()) 
+    croak("persistent data being used outside of it's transaction");
+}
 OSSVPV *ospv_bridge::ospv()
 { assert(pv); return pv; }
 int ospv_bridge::ready()
@@ -914,6 +924,7 @@ void ospv_bridge::unref()
   dOSP ; dTXN ;
   DEBUG_bridge(warn("ospv_bridge 0x%x->unref(pv=0x%x) updt=%d",
 		    this, copy, txn->can_update(copy)));
+  assert(copy);
   if (txn->can_update(copy)) {
     copy->REF_dec();
   }

@@ -39,6 +39,7 @@ lib/ObjStore/Internals.pod
 lib/ObjStore/Path/Cursor.pm
 lib/ObjStore/Path/Ref.pm
 lib/ObjStore/Peeker.pm
+lib/ObjStore/Process.pm
 lib/ObjStore/REP/FatTree.pm
 lib/ObjStore/REP/ODI.pm
 lib/ObjStore/REP/Splash.pm
@@ -46,6 +47,7 @@ lib/ObjStore/SetEmulation.pm
 lib/ObjStore/Table.pm
 lib/ObjStore/Table2.pm
 lib/ObjStore/Table3.pm
+lib/ObjStore/Table3/Database.pm
 lib/ObjStore/Tutorial.pm
 lib/ObjStore/Tutorial.pod
 notes/10_threads_questions

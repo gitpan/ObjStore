@@ -625,6 +625,16 @@ os_database::set_lock_whole_segment(policy)
 	CODE:
 	THIS->set_lock_whole_segment(str_2lock_option(policy));
 
+void
+os_database::subscribe()
+	CODE:
+	os_notification::subscribe(THIS);
+
+void
+os_database::unsubscribe()
+	CODE:
+	os_notification::unsubscribe(THIS);
+
 os_segment *
 os_database::get_default_segment()
 	CODE:
@@ -813,6 +823,16 @@ os_segment::unused_space()
 
 int
 os_segment::get_number()
+
+void
+os_segment::subscribe()
+	CODE:
+	os_notification::subscribe(THIS);
+
+void
+os_segment::unsubscribe()
+	CODE:
+	os_notification::unsubscribe(THIS);
 
 void
 os_segment::set_comment(info)

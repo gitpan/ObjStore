@@ -9,7 +9,7 @@ The new C<SQL> and the sunset of relational databases.
 =head1 DESCRIPTION
 
 C<ObjectStore> is the market leader in object-oriented databases
-http://www.odi.com (NASDAQ: ODIS).  They use a I<Cache-Forward
+http://www.odi.com (NASDAQ: ODIS).  They use a unique I<Cache-Forward
 Architecture> to make persistent data available in literally the most
 efficient manner possible.
 
@@ -37,15 +37,15 @@ encapsulation.  (See below!)>
 
 =item *
 
-C<ObjectStore> OODBMS - see http://www.odi.com
+C<ObjectStore> OODBMS (see http://www.odi.com; evaluations are available!)
 
 =item *
 
-Perl 5.004_04 (or perl 5.005, once available)
+Perl 5.004_04 (or perl 5.005, once released)
 
 =item *
 
-L<Tree::Fat> & L<Test> extensions
+L<Tree::Fat> & L<Test> perl extensions
 
 =item *
 
@@ -441,6 +441,12 @@ See C<ObjStore::HV::Database>, C<ObjStore::Table3::Database>
 This is the recommended API for roots.  If the given root is not
 found, creates a new one.  Returns the root's current value.
 
+In general, you should try to avoid using more than one root.  Roots
+have an unnatural API for perl: normal hashes can nest but roots
+cannot.  It is good practice to use a generic
+C<ObjStore::HV::Database> (with perhaps an overridden C<new> method)
+and add all your stuff under that.
+
 =item * $s = $db->get_segment($segment_number);
 
 Note that this method (correctly) never returns an error.  The only
@@ -592,6 +598,8 @@ Policy can be one of C<as_used>, C<read>, or C<write>.
 
 =head2 C<::Notification>
 
+Instant, effortless event dispatching for network distributed objects.
+
 =over 4
 
 =item * ObjStore::subscribe(...);
@@ -605,6 +613,8 @@ Policy can be one of C<as_used>, C<read>, or C<write>.
 =item * $fd = _get_fd();
 
 =item * $n = receive([$timeout]);
+
+=item * Receive();
 
 =item * $db = $n->get_database;
 
@@ -648,10 +658,14 @@ blessing).  (C<UNIVERSAL::can> remains un-modified.)
 
 Returns the version of the $baseclass (at the moment of blessing).
 
+=item * C<$o->subscribe()>
+
+=item * C<$o->unsubscribe()>
+
 =item * C<$o->notify($why, ['now'])>
 
 Sends a notification to subscribers.  Without the 'now' parameter,
-notification will take place after commit.
+notification will take place immediately after commit.
 
 =item * C<$errs = $o-E<gt>iscorrupt($verbosity_level)>
 
@@ -678,7 +692,7 @@ See the section on C<posh>.
 
 To make everything seem apparently consistent, C<ObjStore::Database>
 (while not really being a storable object) is lavishly special-cased
-to support most of the above features.
+to support most (maybe all!) of the above features.
 
 =head1 THE ADVANCED CHAPTER
 
@@ -697,14 +711,19 @@ database should be less than twice the size of it's un-compressed ASCII
 dump; i.e., less than 2 times expansion.  (See the section on
 representation.)
 
-=item * SEGMENTS
-
-Is your data partitioned into as many segments as possible?
-
 =item * DO AS MUCH AS POSSIBLE PER TRANSACTION
 
 Transactions, especially update transactions, involve a good deal of
 setup/cleanup.  The more you do per transaction the better.
+
+=item * IS MUTABLE DATA MOSTLY SEPARATED FROM READ-ONLY DATA?
+
+Part of update transaction commit time is proportional to the number
+of pages with writes, not the amount of data written.
+
+=item * SEGMENTS
+
+Is your data partitioned into as many segments as reasonable?
 
 =item * AVOID THE NETWORK
 
@@ -713,7 +732,7 @@ Run your program on the same machine as the C<ObjectStore> server.
 =item * DO STUFF IN PARALLEL
 
 If you have an MP machine, you can do reads/updates in parallel (even
-without perl threads).
+without kernel threads).
 
 =item * WHERE IS THE REAL BOTTLENECK?
 
@@ -952,23 +971,23 @@ seemlessly, obviously, and effortlessly.  Really, the only difference
 between lisp and perl is ease of use.  No detail will be overlooked,
 I<all> must conform to effortless styistic perfection.
 
-=item * APIs
+=item * MORE APIs
 
 Support for any other interesting C<ObjectStore> APIs.
 
 =item * MORE BUILT-IN DATA TYPES
 
-File objects compatible with C<IO::Handle>.  Support for bit vectors
-and matrices (PDL) ?
+Support for bit vectors (Bit::Vector) and matrices (PDL)?
 
 =back
 
 =head2 How Does CORBA Fit In?
 
 C<CORBA> standardizes remote method invokaction.  C<ObjectStore>
-greatly reduces the need for remote method invokaction.  The two
-technologies address different problems, but here is a rough
-comparison:
+greatly reduces the need for remote method invokaction and also
+provides a simple but effective RPC mechanism (see
+C<ObjStore::Notification>).  The two technologies address different
+problems, but here is a rough comparison:
 
                       CORBA                     ObjectStore
  -------------------- ------------------------- -------------------------
@@ -1142,7 +1161,7 @@ highly recommend it!
 =head1 SEE ALSO
 
 C<ObjStore::Tutorial>, C<ObjStore::Table3>, examples in the t/
-directory, C<ObjStore::Internals>, and C<The SQL Reference Manual>
-(I<just kidding> :-)
+directory, C<ObjStore::Internals>, C<Event>, C<PerlQt>, and C<The SQL
+Reference Manual> (I<just kidding> :-)
 
 =cut

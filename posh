@@ -8,8 +8,6 @@ use vars qw($open_mode $start_dir $shell_escape);
 $open_mode = 'update';
 $shell_escape = 1;
 
-# POSH_HELP
-
 for (my $arg=0; $arg < @ARGV; $arg++) {
     my $o = $ARGV[$arg];
     if ($o =~ m/^-mvcc$/) {
@@ -407,6 +405,10 @@ sub debug {
     'ObjStore::Peeker'->debug(1);
 }
 
+sub history {
+    # should print out the last N commands...
+}
+
 sub pwd {
     if (!$view->{db}) {
 	print("$view->{'cwd'}\n");
@@ -454,13 +456,32 @@ sub readline {
 
 sub addhistory {}
 
+package Posh::History;
+use ObjStore;
+use base 'ObjStore::AV';
+use vars qw($VERSION);
+$VERSION='0.01';
+
+sub addhistory {
+    my $o = shift;
+    return if $] <= 5.00458;
+
+    for my $input (@_) {
+	for (my $x=0; $x < @$o; $x++) {
+	    $$o[$x] = undef if $$o[$x] && $$o[$x] eq $input;
+	}
+	push @$o, $input;
+    }
+    unshift @$o while @$o > 100;
+}
+
 package Posh;
 use strict;
 use Carp;
 use IO::Handle;
 use ObjStore ':ADV';
 use ObjStore::AppInstance;
-use vars qw($term @ORINC);
+use vars qw($term @ORINC @HistoryBuf);
 
 @ORINC = @INC;
 
@@ -470,7 +491,7 @@ sub new {
 #    my $o = $class->SUPER::new('posh', pvars => [qw(ttype view)]);
 
     $o->{user} ||= scalar(getpwuid($>));
-    $o->{app} = new ObjStore::AppInstance('posh', $o->{user});
+    $o->{app} = ObjStore::AppInstance->new('posh', $o->{user});
 
     ObjStore::set_max_retries(0);
     ObjStore::set_transaction_priority(0x100); #don't conflict with real jobs
@@ -544,16 +565,15 @@ sub run {
 		      if $ttype ne 'read';
 
 		  if (!$@ and !ref $input and $input =~ /\S/) {
-		      if ($] >= 5.00458 and $ttype eq 'update') {
-			  for (my $x=0; $x < @{$top->{history}}; $x++) {
-			      $$top{history}[$x] = undef
-				  if ($$top{history}[$x] and
-				      $$top{history}[$x] eq $input);
-			  }
-			  push(@{$top->{history}}, $input);
-			  unshift(@{$top->{history}}) 
-			      if @{$top->{history}} > 100;
+		      push @HistoryBuf, $input;
+		      if ($ttype eq 'update') {
+			  $top->{history} = Posh::History->new($top)
+			      if (!$top->{history} ||
+				  !$top->{history}->isa('Posh::History'));
+			  $top->{history}->addhistory(@HistoryBuf);
+			  @HistoryBuf=();
 		      }
+
 		      $term->addhistory($input);
 		  }
 		  if ($ttype eq 'update') {
@@ -562,6 +582,14 @@ sub run {
 		  }
 	});
 	die if $@;
+    }
+    if (@HistoryBuf) {
+	begin 'update', sub {
+	    my $top = $o->{app}->top();
+	    $top->{history}->addhistory(@HistoryBuf)
+		if $top->{history};
+	};
+	# ignore $@
     }
 }
 

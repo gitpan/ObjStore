@@ -10,38 +10,35 @@ following in the body of your message:
 
 + IDEAS +
 
-apply patch from Buczek
+permutation magic for AVHV
 
-testing
-  OSSV::compare
-  redesign t/1index.t
+tied ARRAYS!
 
-ospeek
-  style - raw, vanilla, etc...
-  -depth switch?
+typemap
+  SV set magic?
+  CLEAR & GIMME_V optimizations seem broken with tied hashes:
+    verify and submit bug reports (or fix the code!)
+
+transactions
+  add hooks for eval 'setup' & 'unwind' handler to perl
+  begin('update!',...): force switch to update?
+  dynamic transactions?
 
 posh
-  factor more!
-  autodetect @INC modifications and print help message
-  persist command history!
   tkposh ?
-
-generate 'new' methods at compile time!
-
-CLEAR & GIMME_V optimizations seem broken with tied hashes; verify and
-submit bug reports (or fix the code!)
-
-SV set magic?
+  autodetect @INC modifications and print help message
+  factor more!
+  persist command history!
+  style - raw, vanilla, Tk::Text, etc...?
 
 switch representations dynamically
-  lock representation... hm
+  cursor syncronization: check os_typespec
+  do arrays first
+  lock representation... hm...
+  generate 'new' methods at compile time
 
-just add PDL & Bit::Vector to the schema and see if it works
-
-Restart read transactions without jumping up the stack!
-  begin('update!',...)
-
-factor error messages like diagnostics.pm
+test scripts
+  re-design t/1index.t
 
 
 + VAGUE POSSIBILITIES +
@@ -52,8 +49,6 @@ Table3
 Threads!
   renovate thread specific stuff in ObjStore.xs
 
-use Error
-
 Autoclassloading upon open?  Maybe not, you don't know what to load
 
 pathexam
@@ -61,7 +56,9 @@ pathexam
 
 get_database
   factor
-  os_server::get_databases() ignores bless
+  os_server::get_databases() ignores bless; yikes!
+
+per-database shared hash key strings?
 
 prune debugging stuff
 
@@ -90,6 +87,8 @@ assignment to $SIG{SEGV} should not reset SEGV handler
 
 transaction hooks?
 
+factor error messages like diagnostics.pm?
+
 depreciate os_object_cursor?
 
 ObjStore::File!  Use a FatTree of 4K buffers?
@@ -115,6 +114,10 @@ Evolve the schema to eliminate this harmless annoyance:  The object at 0xdff3019
 + BIGGISH PROJECTS +
 
 Support for multiple application schemas (expected 1Q98)
+  generic scalar object typemap
+  XPVMG abstraction
+  REFCNT
+  Bit::Vector
 
 Needed is a more flexible hash table that can serve to replace
 os_Dictionary and also be used as an ObjStore::Index.  Also, splash

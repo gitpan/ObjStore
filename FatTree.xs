@@ -154,6 +154,8 @@ void OSPV_fatindex2::CLEAR()
     OSSVPV *pv;
     while (dex2tc_fetch(&gl->tc, &pv)) {
       osp_pathexam exam(paths, pv, 'u');
+      assert(!exam.failed);
+      exam.commit();
       pv->REF_dec();
       tc_step(&gl->tc, 1);
     }
@@ -161,24 +163,49 @@ void OSPV_fatindex2::CLEAR()
   dex2tv_clear(&tv);
 }
 
-void OSPV_fatindex2::add(OSSVPV *obj)
+void OSPV_fatindex2::add(OSSVPV *target)
 {
-  if (!conf_slot) croak("Index(%p) is not configured", this);
+  if (!conf_slot) croak("%p->add(%p): index not configured", this, target);
   OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
   dGCURSOR(&tv);
   OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
-  osp_pathexam exam(paths, obj, 's');
+  osp_pathexam exam(paths, target, 's');
+  if (exam.failed) return;
   int unique = conf->avx(1)->istrue();
-  int match = dex2tc_seek(&gl->tc, unique, exam.keycnt, exam.pcache, exam.keys);
-  if (match && unique) {
-    OSSVPV *here;
-    dex2tc_fetch(&gl->tc, &here);
-    if (here == obj) return;
-    exam.abort();
-    croak("%p->add(): attempt to insert duplicate record into a unique index",this);
+  int match = dex2tc_seek(&gl->tc, unique, exam);
+  if (match) {
+    OSSVPV *obj;
+    int ok;
+    if (unique) {
+      obj=0;
+      ok = dex2tc_fetch(&gl->tc, &obj);
+      assert(ok);
+      exam.abort();
+      if (obj == target) {
+	return; //already added
+      } else {
+	croak("%p->add(%p != %p): attempt to insert two duplicate records into unique index",this, target, obj);
+      }
+    } else {
+      ok = dex2tc_fetch(&gl->tc, &obj);
+      assert(ok);
+      if (obj == target) { exam.abort(); return; } //already here
+      while (1) {
+	if (!tc_step(&gl->tc, 1)) break;
+	dex2tc_fetch(&gl->tc, &obj);
+	if (obj == target) { exam.abort(); return; } //found it here
+	int cmp;
+	TV_ESEEK_CMP(cmp, IGNORE, obj);
+	if (cmp != 0) {
+	  tc_step(&gl->tc, -1); //none match; must backup and add it
+	  break;
+	}
+      }
+    }
   }
-  obj->REF_inc();
-  dex2tc_insert(&gl->tc, obj);
+  DEBUG_index(warn("%p->add(%p)", this, target));
+  target->REF_inc();
+  dex2tc_insert(&gl->tc, target);
 }
 
 void OSPV_fatindex2::remove(OSSVPV *target)
@@ -188,19 +215,28 @@ void OSPV_fatindex2::remove(OSSVPV *target)
   OSPV_Generic *conf = (OSPV_Generic *) conf_slot;
   OSPV_Generic *paths = (OSPV_Generic*) conf->avx(2)->get_ospv();
   osp_pathexam exam(paths, target, 'u');
+  if (exam.failed) return;
   int unique = conf->avx(1)->istrue();
-  dex2tc_seek(&gl->tc, unique, exam.keycnt, exam.pcache, exam.keys);
-  OSSVPV *obj;
-  while (dex2tc_fetch(&gl->tc, &obj)) {
-    if (obj == target) {
-      dex2tc_delete(&gl->tc);
-      target->REF_dec();
-      return;
+  int match = dex2tc_seek(&gl->tc, unique, exam);
+  if (!match) return;
+  if (unique) {
+    OSSVPV *obj;
+    dex2tc_fetch(&gl->tc, &obj);
+    if (target != obj) croak("%p->remove: path matches but pointer doesn't", this);
+  } else {
+    OSSVPV *obj;
+    while (dex2tc_fetch(&gl->tc, &obj)) {
+      if (obj == target) break;
+      if (!tc_step(&gl->tc, 1)) return; //not here!
+      int cmp;
+      TV_ESEEK_CMP(cmp, IGNORE, obj);
+      if (cmp != 0) return;  //must not be here already
     }
-    // Might step through a large number of records; no choice.
-    tc_step(&gl->tc, 1);
   }
-  croak("%p->remove(%p): record not found", this, target);
+  DEBUG_index(warn("%p->remove(%p)", this, target));
+  dex2tc_delete(&gl->tc);
+  exam.commit();
+  target->REF_dec();
 }
 
 OSSVPV *OSPV_fatindex2::FETCHx(SV *key)
@@ -274,18 +310,19 @@ int OSPV_fatindex2_cs::seek(SV **top, int items)
 {
   OSPV_Generic *conf = (OSPV_Generic *) myfocus->conf_slot;
   OSPV_Generic *paths = (OSPV_Generic*) (conf)->avx(2)->get_ospv();
-  int keycnt = paths->_count() < items-1 ? paths->_count() : items-1;
-  if (keycnt <= 0) return 0;
+  osp_pathref exam;
+  exam.keycnt = paths->_count() < items-1 ? paths->_count() : items-1;
+  if (exam.keycnt <= 0) return 0;
   OSSV tmpkeys[DEXTV_MAXKEYS];
-  OSSV *keys[DEXTV_MAXKEYS];
-  OSPV_Generic *pcache[DEXTV_MAXKEYS];
-  for (int xa=0; xa < keycnt; xa++) {
+  //  OSSV *keys[DEXTV_MAXKEYS];
+  //  OSPV_Generic *pcache[DEXTV_MAXKEYS];
+  for (int xa=0; xa < exam.keycnt; xa++) {
     tmpkeys[xa] = top[xa+1];
-    keys[xa] = &tmpkeys[xa];
-    pcache[xa] = (OSPV_Generic*) paths->avx(xa)->get_ospv();
+    exam.keys[xa] = &tmpkeys[xa];
+    exam.pcache[xa] = (OSPV_Generic*) paths->avx(xa)->get_ospv();
   }
   int unique = conf->avx(1)->istrue();
-  return dex2tc_seek(&tc, unique, keycnt, pcache, keys);
+  return dex2tc_seek(&tc, unique, exam);
 }
 
 void OSPV_fatindex2_cs::at()
@@ -356,7 +393,7 @@ OSPV_fatindex2::_conf_slot(...)
 	  if (TvFILL(&THIS->tv)) {
 	    croak("Configuration of an active index cannot be changed");
 	  }
-	  ossv_bridge *br = osp->sv_2bridge(ST(1), 1, os_segment::of(THIS));
+	  ospv_bridge *br = osp->sv_2bridge(ST(1), 1, os_segment::of(THIS));
 	  OSSVPV *nconf = br->ospv();
 	  nconf->REF_inc();
 	  if (THIS->conf_slot) THIS->conf_slot->REF_dec();

@@ -16,7 +16,7 @@ extern "C" {
 has no affect on correctness; it is just a debugging tool.
 Re-defining it to nothing avoids warnings from the solaris sunpro
 compiler.  If you see warnings on your system, figure out how to force
-your compiler to shut-the-fuck-up (!), and send me a patch! */
+your compiler to shut-the-fuck-up (!), and send me a patch. :-) */
 
 #endif
 
@@ -88,44 +88,47 @@ your compiler to shut-the-fuck-up (!), and send me a patch! */
 
 typedef void (*XS_t)(CV*);
 
-/* OSSV has only 16 bits to store type information. */
+// OSSV has only 16 bits to store type information.  Yikes!
 
-#define OSVt_ERROR		0	/* should never be zero */
+#define OSVt_ERROR		0	// should never be zero
 #define OSVt_UNDEF		1
 #define OSVt_IV32		2
 #define OSVt_NV			3
-#define OSVt_PV			4	/*char string*/
+#define OSVt_PV			4	// char string
 #define OSVt_RV			5
 #define OSVt_IV16		6
-/*#define OSVt_IV64??		7 */
+//#define OSVt_IV64??		7
 
 #define OSVTYPEMASK		0x07
 #define OSvTYPE(sv)		((sv)->_type & OSVTYPEMASK)
 #define OSvTYPE_set(sv,to) \
 	(sv)->_type = (((sv)->_type & ~OSVTYPEMASK) | (to & OSVTYPEMASK))
 
+// XSHARED is undo-able until the ROCNT reach 2^16 - 10
 #define OSVf_XSHARED		0x80
-#define OSvXSHARED(sv)		((sv)->_type & OSVf_XSHARED)
-#define OSvXSHARED_set(sv,on)			\
+#define OSvFLAG_set(sv,flag,on)			\
 STMT_START {					\
-	if (on) ((sv)->_type |= OSVf_XSHARED);	\
-	else ((sv)->_type &= ~OSVf_XSHARED);	\
+	if (on) ((sv)->_type |= (flag));	\
+	else ((sv)->_type &= ~(flag));		\
 } STMT_END
+#define OSvXSHARED_set(sv,on) OSvFLAG_set(sv,OSVf_XSHARED,on)
 
 #define OSvTRYWRITE(sv)						\
 STMT_START {							\
-  if (OSvXSHARED(sv))						\
-    croak("Attempt to modify READONLY %s", sv->type_2pv(), sv);	\
+  if ((sv)->_type & OSVf_XSHARED)				\
+    croak("ObjStore: attempt to modify READONLY %s='%s'",	\
+	  sv->type_2pv(), sv->stringify());			\
 } STMT_END
 
-struct ossv_bridge;
+struct ospv_bridge;
 struct OSSVPV;
 struct OSPV_Generic;
 
 // 8 bytes
 struct OSSV {
   static os_typespec *get_os_typespec();
-  static char strrep[64];
+  static char strrep1[64];
+  static char strrep2[64];
   void *vptr;
   os_int16 xiv;
   os_int16 _type;
@@ -163,7 +166,7 @@ struct OSSV {
   void s(char *, os_unsigned_int32 len);
   void s(OSSV *);
   void s(OSSVPV *);
-  void s(ossv_bridge *mg);
+  void s(ospv_bridge *mg);
   //get
   char *stringify();
 };
@@ -217,7 +220,7 @@ struct OSSVPV : os_virtual_behavior {
   char *blessed_to(STRLEN *len);
   void fwd2rep(char *methname, SV **top, int items);
   virtual void bless(SV *);
-  virtual ossv_bridge *new_bridge();
+  virtual ospv_bridge *new_bridge();
   virtual char *os_class(STRLEN *len);  //must be NULL terminated too
   virtual char *rep_class(STRLEN *len);
   virtual int get_perl_type();
@@ -310,8 +313,8 @@ struct OSPV_Generic : OSPV_Container {
   virtual OSSV *hvx(char *key);
   virtual void DELETE(char *key);
   virtual int EXISTS(char *key);
-  virtual SV *FIRST(ossv_bridge*);
-  virtual SV *NEXT(ossv_bridge*);
+  virtual SV *FIRST(ospv_bridge*);
+  virtual SV *NEXT(ospv_bridge*);
   // array (preliminary)
   virtual OSSV *avx(int xx);
   virtual int _LENGTH();
@@ -333,27 +336,32 @@ struct OSPV_Generic : OSPV_Container {
 
 #define INDEX_MAXKEYS 8
 
-struct osp_pathexam {
+struct osp_pathref {
   OSPV_Generic *pcache[INDEX_MAXKEYS];
   OSSV *keys[INDEX_MAXKEYS];
   int keycnt;
-  OSSVPV *trail[INDEX_MAXKEYS];
+};
+
+struct osp_pathexam : osp_pathref {
+  OSSVPV *trail[INDEX_MAXKEYS*4]; //XXX
+  int failed;
   int trailcnt;
   char mode;
   osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode);
   void abort();
+  void commit();
 };
 
 #if !OSSG
 #include "txn.h"
 
-struct ossv_bridge : osp_bridge {
+struct ospv_bridge : osp_bridge {
   OSSVPV *pv;
   int is_transient;
   int can_delete;  //is perl done with us?
 
-  ossv_bridge(OSSVPV *_pv);
-  virtual ~ossv_bridge();
+  ospv_bridge(OSSVPV *_pv);
+  virtual ~ospv_bridge();
   virtual void release();
   virtual void invalidate();
   virtual int ready();

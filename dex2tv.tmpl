@@ -30,23 +30,27 @@
 #define DEXTV_MAXKEYS 8
 
 #define TV_ESEEK_FDECL \
-int dex2tc_seek(XPVTC *tc, int unique, int keycnt, OSPV_Generic **pcache, OSSV **keys)
+int dex2tc_seek(XPVTC *tc, int unique, osp_pathref &exam)
 
 #define TV_ESEEK_LDECL \
   int kx;
 
 #define TV_ESEEK_SETUP \
-  DEBUG_index(warn("seek [%d]", keycnt)); \
-  for (kx=0; kx < keycnt; kx++) { \
-    DEBUG_index(warn("key = %s", keys[kx]->stringify())); \
+  DEBUG_index(warn("seek [%d]", exam.keycnt)); \
+  for (kx=0; kx < exam.keycnt; kx++) { \
+    DEBUG_index(warn("key = %s", exam.keys[kx]->stringify())); \
   }
 
 #define TV_ESEEK_CMP(cmp,k,d)						\
-  for (kx=0; kx < keycnt; kx++) {					\
-    OSSV *zk = OSPV_Generic::path_2key((OSSVPV*)d, pcache[kx]);		\
-    cmp = keys[kx]->compare(zk);					\
+STMT_START {								\
+  int _x=0;								\
+  for (; _x < exam.keycnt; _x++) {					\
+    OSSV *zk = OSPV_Generic::path_2key((OSSVPV*)d, exam.pcache[_x]);	\
+    cmp = exam.keys[_x]->compare(zk);					\
     if (cmp) break;							\
-  }
+  }									\
+  if (!cmp) { DEBUG_index(warn("match %p", d)); }			\
+} STMT_END
 
 #include "tv.public"
 

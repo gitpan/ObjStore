@@ -34,7 +34,7 @@ struct osp_thr {
 
   //glue methods
   os_segment *sv_2segment(SV *);
-  ossv_bridge *sv_2bridge(SV *, int force, os_segment *seg=0);
+  ospv_bridge *sv_2bridge(SV *, int force, os_segment *seg=0);
   
   SV *ossv_2sv(OSSV *);
   SV *ospv_2sv(OSSVPV *);
@@ -69,6 +69,8 @@ struct osp_txn {
 
 #define dOSP osp_thr *osp = osp_thr::fetch()
 #define dTXN osp_txn *txn = osp->txn
+
+// rename ALWAYS -> FINALLY
 
 #define OSP_START0				\
 STMT_START {					\

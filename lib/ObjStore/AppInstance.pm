@@ -55,7 +55,7 @@ sub cache {
 
     my @pvars = $o->pvars;
     if (!exists $r->{$o->sid}) {
-	my $s = $o->wdb->create_segment;
+	my $s = $o->wdb->create_segment($o->sid);
 	my $ses = $r->{$o->sid} = new ObjStore::HV($s, scalar(@pvars)+5);
 	$ses->{public} = {
 	    ctime => $o->now,

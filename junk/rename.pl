@@ -1,2 +1,2 @@
 #!/usr/local/bin/perl -wpi.bak
-s/osperl\:\:/osp::/g;
+s/ossv_bridge/ospv_bridge/g;

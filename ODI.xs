@@ -108,20 +108,20 @@ int OSPV_hvdict::EXISTS(char *key)
   return out;
 }
 
-struct hvdict_bridge : ossv_bridge {
+struct hvdict_bridge : ospv_bridge {
   os_cursor *cs;
   hvdict_bridge(OSSVPV *);
   virtual ~hvdict_bridge();
 };
-hvdict_bridge::hvdict_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cs(0)
+hvdict_bridge::hvdict_bridge(OSSVPV *_pv) : ospv_bridge(_pv), cs(0)
 {}
 hvdict_bridge::~hvdict_bridge()
 { if (cs) delete cs; }
 
-ossv_bridge *OSPV_hvdict::new_bridge()
+ospv_bridge *OSPV_hvdict::new_bridge()
 { return new hvdict_bridge(this); }
 
-SV *OSPV_hvdict::FIRST(ossv_bridge *vmg)
+SV *OSPV_hvdict::FIRST(ospv_bridge *vmg)
 {
   hvdict_bridge *mg = (hvdict_bridge *) vmg;
   if (!mg->cs) mg->cs = new os_cursor(hv);
@@ -134,7 +134,7 @@ SV *OSPV_hvdict::FIRST(ossv_bridge *vmg)
   return k1->to_sv();
 }
 
-SV *OSPV_hvdict::NEXT(ossv_bridge *vmg)
+SV *OSPV_hvdict::NEXT(ospv_bridge *vmg)
 {
   hvdict_bridge *mg = (hvdict_bridge *) vmg;
   assert(mg->cs);

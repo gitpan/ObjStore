@@ -55,7 +55,7 @@ struct OSPV_hvarray2 : OSPV_Generic {
   OSPV_hvarray2(int);
   virtual ~OSPV_hvarray2();
   virtual OSSVPV *new_cursor(os_segment *seg);
-  virtual ossv_bridge *new_bridge();
+  virtual ospv_bridge *new_bridge();
   virtual char *os_class(STRLEN *);
   virtual char *rep_class(STRLEN *);
   virtual int get_perl_type();
@@ -67,8 +67,8 @@ struct OSPV_hvarray2 : OSPV_Generic {
   virtual void DELETE(char *key);
   virtual void CLEAR();
   virtual int EXISTS(char *key);
-  virtual SV *FIRST(ossv_bridge*);
-  virtual SV *NEXT(ossv_bridge*);
+  virtual SV *FIRST(ospv_bridge*);
+  virtual SV *NEXT(ospv_bridge*);
   virtual double _percent_filled();
   virtual int _count();
   virtual OSSV *traverse(char *keyish);

@@ -1,16 +1,22 @@
 use strict;
-# This will probably be rewritten.
+
+# This should be an entire module by itself.  It should also be 
+# completely rewritten!
 
 package ObjStore::CSV;
 use Carp;
+use ObjStore ':ADV';
 use IO::File;
 use vars qw(@EXPORT);
 require Exporter;
 *import = \&Exporter::import;
 @EXPORT = qw(print_csv parse_csv);
 
-# think about quoting XXX
+# do something about quoting XXX
 # order-by asc/dec
+# handle simple queries; constraints?
+# also do sprintf style formats - anything in 2D
+# you might want to do all the calculated fields in a single coderef
 sub print_csv {
     my $top = shift;
 
@@ -23,6 +29,8 @@ sub print_csv {
 	      skip => 0,
 	      max => 15500,  #excel friendly?
 	      calc => {},
+	      cols => undef,
+	      adapt_columns => 1,
 	      # column ordering?
     };
 
@@ -45,17 +53,25 @@ sub print_csv {
 
 	    # sort columns here
 	    my @k;
-	    if ($v->isa('ObjStore::AVHV')) {
+	    if (blessed $v and $v->isa('ObjStore::AVHV')) {
 		my $kmap = $v->[0];
 		@k = grep(!/^_/, keys %$kmap);
 	    } else {
 		@k = keys %$v;
 	    }
-	    for my $k (@k, keys %{$st->{calc}}) { $st->{cmap}{$k} = 0 }
+	    for my $k (@k, keys %{$st->{calc}}) { $st->{cmap}{$k} = -1 }
 
-	    $st->{cols} = [sort keys %{$st->{cmap}}];
+	    if (!$st->{cols}) {
+		$st->{cols} = [sort keys %{$st->{cmap}}];
+	    } else {
+		$st->{adapt_columns} = 0;
+	    }
+		    
 	    for (my $z=0; $z < @{$st->{cols}}; $z++) {
 		$st->{cmap}{ $st->{cols}[$z] } = $z;
+	    }
+	    for my $k (keys %{$st->{cmap}}) { 
+		delete $st->{cmap}{$k} if $st->{cmap}{$k} == -1;
 	    }
 
 	    $st->{fh}->print(join($st->{sep},$typehead,
@@ -64,27 +80,30 @@ sub print_csv {
 	if (@_) {	#body row
 	    ++ $st->{row};
 	    my @z;
-	    if ($v->isa('ObjStore::AVHV')) {
+	    if (blessed $v and $v->isa('ObjStore::AVHV')) {
 		my $kmap = $v->[0];
 		while (my ($rk, $rx) = each %$kmap) {
 		    next if $rk =~ m/^_/;
 		    my $rv = $v->[$rx];
-		    if (!exists $st->{cmap}{$rk}) {
+		    if ($st->{adapt_columns} and !exists $st->{cmap}{$rk}) {
 			$st->{cmap}{$rk} = @{$st->{cols}};
 			push(@{$st->{cols}}, $rk);
 		    }
+		    next if !exists $st->{cmap}{$rk};
 		    $z[$st->{cmap}{$rk}] = ref $rv? "$rv" : $rv;
 		}
 	    } else {
 		while (my ($rk, $rv) = each %$v) {
-		    if (!exists $st->{cmap}{$rk}) {
+		    if ($st->{adapt_columns} and !exists $st->{cmap}{$rk}) {
 			$st->{cmap}{$rk} = @{$st->{cols}};
 			push(@{$st->{cols}}, $rk);
 		    }
+		    next if !exists $st->{cmap}{$rk};
 		    $z[$st->{cmap}{$rk}] = ref $rv? "$rv" : $rv;
 		}
 	    }
 	    while (my ($col,$sub) = each %{$st->{calc}}) {
+		next if !exists $st->{cmap}{$col};
 		$z[$st->{cmap}{$col}] = $sub->($v);
 	    }
 	    @z = map { defined $_? $_ : 'undef' } @z;
@@ -99,7 +118,7 @@ sub print_csv {
 
 #	$st->{fh}->print("No records.\n");
 
-    if ($top->isa('ObjStore::HV')) {
+    if (reftype $top eq 'HASH') {
 	$typehead = 'key';
 	while (my($k,$v) = each %$top) {
 	    if ($st->{skip}) { --$st->{skip}; next; }
@@ -108,9 +127,10 @@ sub print_csv {
 	}
 	$dorow->();
 
-    } elsif ($top->isa('ObjStore::AV') or $top->isa('ObjStore::Index')) {
+    } elsif (reftype $top eq 'ARRAY' or $top->isa('ObjStore::Index')) {
 	$typehead = 'index';
-	my $arlen = $top->can("_count")? $top->_count() : scalar(@$top);
+	my $arlen = (blessed $top && $top->can("_count")? 
+		     $top->_count() : scalar(@$top));
 	for (my $x=0; $x < $arlen; $x++) {
 	    if ($st->{skip}) { --$st->{skip}; next; }
 	    my $r = $top->[$x];

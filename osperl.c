@@ -23,10 +23,10 @@ os_segment *osp_thr::sv_2segment(SV *sv)
   croak("sv_2segment only accepts ObjStore::Segment");
 }
 
-ossv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
+ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
 {
   dOSP ;
-// Is tied?  Examine tied object, extract ossv_bridge from '~'
+// Is tied?  Examine tied object, extract ospv_bridge from '~'
 // Is OSSV in a PVMG?
 
   if (SvGMAGICAL(ref))
@@ -40,7 +40,7 @@ ossv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
   SV *nval = SvRV(ref);
   assert(nval);
 
-  ossv_bridge *br = 0;
+  ospv_bridge *br = 0;
   do {
     if (SvMAGICAL(nval) && (SvTYPE(nval) == SVt_PVHV ||
 			    SvTYPE(nval) == SVt_PVAV)) {
@@ -48,11 +48,11 @@ ossv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *seg)
       if (!magic) break;
       SV *mgobj = (SV*) magic->mg_obj;
       if (!SvROK(mgobj)) break;
-      br = (ossv_bridge*) SvIV((SV*)SvRV(mgobj));
+      br = (ospv_bridge*) SvIV((SV*)SvRV(mgobj));
     } else if (SvROK(nval)) {
       nval = SvRV(nval);
       if (SvOBJECT(nval) && SvTYPE(nval) == SVt_PVMG) {
-	br = (ossv_bridge*) SvIV(nval);
+	br = (ospv_bridge*) SvIV(nval);
       }
     }
   } while (0);
@@ -149,12 +149,15 @@ SV *osp_thr::ossv_2sv(OSSV *ossv)
     OR_RETURN_UNDEF(ossv->vptr);
     return sv_2mortal(newSVnv(OSvNV(ossv)));
   case OSVt_PV:
+    // Store single characters if vptr==0 XXX
     OR_RETURN_UNDEF(ossv->vptr);
     // Problems with eliding the copy:
     // 1. What if the persistent copy is deleted?  Read transactions only.
-    // 2. There is significant bookkeeping overhead to invalidate
-    //    at the end of the transaction.  Maybe for long strings?
-    //    Too narrow an optimization.
+    // 2. They can not be packaged as simple SVPV because of the need
+    //    to invalidate them.
+    // 3. There is significant bookkeeping overhead to invalidate
+    //    at the end of the transaction.  Maybe for long strings
+    //    only after the regex engine can support it?
     return sv_2mortal(newSVpv((char*) ossv->vptr, ossv->xiv));
   case OSVt_RV:{
     OR_RETURN_UNDEF(ossv->vptr);
@@ -182,7 +185,7 @@ OSSV *osp_thr::plant_sv(os_segment *seg, SV *nval)
   assert(nval);
   assert(seg);
   if (SvROK(nval)) {
-    ossv_bridge *br = osp->sv_2bridge(nval, 1, seg);
+    ospv_bridge *br = osp->sv_2bridge(nval, 1, seg);
     assert(br);
     OSSVPV *pv = br->ospv();
     assert(pv);
@@ -407,10 +410,10 @@ void OSSV::s(OSSVPV *nval)
   }
 }
 
-void OSSV::s(ossv_bridge *br)
+void OSSV::s(ospv_bridge *br)
 {
   if (br->pv) { s(br->pv); return; }
-  croak("OSSV::s(ossv_bridge*): assertion failed");
+  croak("OSSV::s(ospv_bridge*): assertion failed");
 }
 
 /*
@@ -430,28 +433,28 @@ void OSSV::s(OSSV *nval)
 */
 
 /* CCov: off */
-char OSSV::strrep[64];
+char OSSV::strrep1[64];
 char *OSSV::stringify() // debugging ONLY!
 {
   switch (natural()) {
   case OSVt_UNDEF: return "<UNDEF>";
-  case OSVt_IV32:  sprintf(strrep, "%ld", OSvIV32(this)); break;
-  case OSVt_NV:    sprintf(strrep, "%f", OSvNV(this)); break;
+  case OSVt_IV32:  sprintf(strrep1, "%ld", OSvIV32(this)); break;
+  case OSVt_NV:    sprintf(strrep1, "%f", OSvNV(this)); break;
   case OSVt_PV:{
     STRLEN len;
     char *s1 = OSvPV(this, len);
     if (len > 60) len = 60;
-    memcpy(strrep, s1, len);
-    strrep[len]=0;
+    memcpy(strrep1, s1, len);
+    strrep1[len]=0;
     break;}
-  case OSVt_RV:    sprintf(strrep, "OBJECT(0x%p)", vptr); break;
-  case OSVt_IV16:  sprintf(strrep, "%d", xiv); break;
+  case OSVt_RV:    sprintf(strrep1, "OBJECT(0x%p)", vptr); break;
+  case OSVt_IV16:  sprintf(strrep1, "%d", xiv); break;
   default:
     warn("SV %s has no string representation", type_2pv());
-    strrep[0]=0;
+    strrep1[0]=0;
     break;
   }
-  return strrep;
+  return strrep1;
 }
 /* CCov: on */
 
@@ -513,19 +516,19 @@ int OSSV::compare(OSSV *that)
       double v1,v2;
       switch (t1) {
       case OSVt_UNDEF: return -1;
-      case OSVt_IV32:  v1 = OSvIV32(this);
-      case OSVt_NV:    v1 = OSvNV(this);
-      case OSVt_IV16:  v1 = OSvIV16(this);
-      default: croak("OSSV: type '%s' not comparible", type_2pv(t1));
+      case OSVt_IV32:  v1 = OSvIV32(this); break;
+      case OSVt_NV:    v1 = OSvNV(this); break;
+      case OSVt_IV16:  v1 = OSvIV16(this); break;
+      default: croak("OSSV: %s not numerically comparible", type_2pv(t1));
       }
       switch (t2) {
       case OSVt_UNDEF: return 1;
-      case OSVt_IV32:  v2 = OSvIV32(this);
-      case OSVt_NV:    v2 = OSvNV(this);
-      case OSVt_IV16:  v2 = OSvIV16(this);
-      default: croak("OSSV: type '%s' not comparible", type_2pv(t2));
+      case OSVt_IV32:  v2 = OSvIV32(that); break;
+      case OSVt_NV:    v2 = OSvNV(that); break;
+      case OSVt_IV16:  v2 = OSvIV16(that); break;
+      default: croak("OSSV: %s not numerically comparible", type_2pv(t2));
       }
-      if (v1 == v1) return 0;
+      if (v1 == v2) return 0;
       if (v1 < v2)
 	return -1;
       else 
@@ -541,8 +544,9 @@ int OSSV::compare(OSSV *that)
     }
   }
 }
- 
+
 /* CCov: off */
+char OSSV::strrep2[64];
 char *OSSV::type_2pv(int ty)  //debugging ONLY
 {
   switch (ty) {
@@ -553,8 +557,8 @@ char *OSSV::type_2pv(int ty)  //debugging ONLY
    case OSVt_RV:     return "OBJECT";
    case OSVt_IV16:   return "int16";
    default:
-     sprintf(strrep, "ossv(%d)", ty);
-     return strrep;
+     sprintf(strrep2, "ossv(%d)", ty);
+     return strrep2;
   }
 }
 
@@ -567,12 +571,12 @@ char *OSSV::type_2pv()  //debugging ONLY
    case OSVt_NV:     return "double";
    case OSVt_PV:     return "string";
    case OSVt_RV:
-     sprintf(strrep, "OBJECT(0x%p)", vptr);
-     return strrep;
+     sprintf(strrep2, "OBJECT(0x%p)", vptr);
+     return strrep2;
    case OSVt_IV16:   return "int16";
    default:
-     sprintf(strrep, "ossv(%d)", ty);
-     return strrep;
+     sprintf(strrep2, "ossv(%d)", ty);
+     return strrep2;
   }
 }
 /* CCov: on */
@@ -745,7 +749,7 @@ void OSSVPV::REF_dec() {
       XPUSHs(me);
       PUTBACK;
       perl_call_sv(meth, G_VOID|G_DISCARD);
-      ((ossv_bridge*) SvIV(SvRV(br)))->invalidate(); //must avoid extra ref!
+      ((ospv_bridge*) SvIV(SvRV(br)))->invalidate(); //must avoid extra ref!
       DEBUG_refcnt(warn("%x->exit NOREFS", this));
       OSPvINUSE_off(this);
     }
@@ -788,8 +792,8 @@ char *OSSVPV::rep_class(STRLEN *len)
 { RETURN_BADNAME(len); }
 
 // Usually will override, but here's a simple default.
-ossv_bridge *OSSVPV::new_bridge()
-{ return new ossv_bridge(this); }
+ospv_bridge *OSSVPV::new_bridge()
+{ return new ospv_bridge(this); }
 
 OSSV *OSSVPV::traverse(char *keyish)
 { NOTFOUND("traverse"); return 0; }
@@ -812,9 +816,9 @@ void OSSVPV::fwd2rep(char *methname, SV **top, int items)
   perl_call_sv(meth, GIMME_V);
 }
 
-/*--------------------------------------------- ossv_bridge */
+/*--------------------------------------------- ospv_bridge */
 
-ossv_bridge::ossv_bridge(OSSVPV *_pv)
+ospv_bridge::ospv_bridge(OSSVPV *_pv)
   : pv(_pv)
 {
   is_transient = os_segment::of(pv) == os_segment::of(0);
@@ -823,21 +827,21 @@ ossv_bridge::ossv_bridge(OSSVPV *_pv)
   dOSP; dTXN;
   assert(pv);
   STRLEN junk;
-  DEBUG_bridge(warn("ossv_bridge 0x%x->new(%s=0x%x) is_transient=%d",
+  DEBUG_bridge(warn("ospv_bridge 0x%x->new(%s=0x%x) is_transient=%d",
 		    this, _pv->os_class(&junk), pv, is_transient));
   if (txn->can_update(pv) || is_transient) pv->REF_inc();
 }
 
-ossv_bridge::~ossv_bridge()
+ospv_bridge::~ospv_bridge()
 { assert(ready()); }
-OSSVPV *ossv_bridge::ospv()
+OSSVPV *ospv_bridge::ospv()
 { assert(pv); return pv; }
-int ossv_bridge::ready()
+int ospv_bridge::ready()
 { return can_delete && !pv; }
-void ossv_bridge::release()
+void ospv_bridge::release()
 { unref(); can_delete = 1; }
 
-void ossv_bridge::invalidate()
+void ospv_bridge::invalidate()
 {
   // If transient, has lifetime outside of a transaction.  Let perl
   // decide when to delete it.
@@ -845,14 +849,14 @@ void ossv_bridge::invalidate()
   unref();
 }
 
-void ossv_bridge::unref()
+void ospv_bridge::unref()
 {
   if (!pv) return;
   OSSVPV *copy = pv;  //avoid any potential race condition
   pv=0;
 
   dOSP ; dTXN ;
-  DEBUG_bridge(warn("ossv_bridge 0x%x->unref(pv=0x%x) updt=%d",
+  DEBUG_bridge(warn("ospv_bridge 0x%x->unref(pv=0x%x) updt=%d",
 		    this, copy, txn->can_update(copy)));
   if (txn->can_update(copy)) {
     copy->REF_dec();
@@ -871,8 +875,8 @@ void OSPV_Container::CLEAR() { NOTFOUND("CLEAR"); }
 
 /*--------------------------------------------- GENERIC */
 
-SV *OSPV_Generic::FIRST(ossv_bridge*) { NOTFOUND("FIRST"); return 0; }
-SV *OSPV_Generic::NEXT(ossv_bridge*) { NOTFOUND("NEXT"); return 0; }
+SV *OSPV_Generic::FIRST(ospv_bridge*) { NOTFOUND("FIRST"); return 0; }
+SV *OSPV_Generic::NEXT(ospv_bridge*) { NOTFOUND("NEXT"); return 0; }
 
 // hash
 OSSV *OSPV_Generic::hvx(char *) { NOTFOUND("hvx"); return 0; }
@@ -908,7 +912,10 @@ OSSV *OSPV_Generic::path_2key(OSSVPV *obj, OSPV_Generic *path)
     char *tr = OSvPV(s1, slen);
     assert(tr[slen-1] == 0);  //null terminated!
     OSSV *at = obj->traverse(tr);
-    if (!at || !at->is_set()) croak("Could not traverse field '%s'", tr);
+    if (!at || !at->is_set()) {
+      croak("Could not traverse field '%s'", tr);
+      //return 0;
+    }
     ++pi;
     if (pi == len) {
       return at;
@@ -926,11 +933,21 @@ void osp_pathexam::abort()
   for (int xx=0; xx < trailcnt; xx++) {
     trail[xx]->ROCNT_dec();
   }
+  failed=1;
+}
+
+void osp_pathexam::commit()
+{
+  assert(mode == 'u');
+  for (int xx=0; xx < trailcnt; xx++) {
+    trail[xx]->ROCNT_dec();
+  }
 }
 
 // path_2key for all keys & updates readonly flags
 osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
 {
+  failed=0;
   mode = mode_in;
   assert(mode == 's' || mode == 'u');
 
@@ -960,11 +977,14 @@ osp_pathexam::osp_pathexam(OSPV_Generic *paths, OSSVPV *target, char mode_in)
       assert(tr[slen-1] == 0);  //verify null terminated
 
       if (mode == 's') obj->ROCNT_inc();
-      else             obj->ROCNT_dec();
       trail[trailcnt++] = obj;
 
       OSSV *at = obj->traverse(tr);
-      if (!at || !at->is_set()) croak("Could not traverse field '%s'", tr);
+      if (!at || !at->is_set()) {
+	//croak("Could not traverse field '%s'", tr);
+	abort();
+	return;
+      }
 
       if (mode == 's')
 	OSvXSHARED_set(at, 1);  // will reset when ROCNT_dec to zero

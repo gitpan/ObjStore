@@ -1,21 +1,43 @@
-What do you get when you cross a mission-critical enterprise-class
-database with a camel?
+=head1 NAME
 
+ObjStore - Perl Extension For C<ObjectStore> OODBMS
 
-Name           DSLI  Description                                  Info
------------    ----  -------------------------------------------- -----
-ObjStore       Rm+O  ObjectStore OODBMS Interface                 JPRIT
+=head1 SYNOPSIS
 
-Get it via http://www.perl.com/CPAN/authors/id/JPRIT/ !
+The new C<SQL> and the sunset of relational databases.
 
+=head1 DESCRIPTION
 
-PREREQUISITES:
+ObjectStore is the market leader in object-oriented databases
+http://www.odi.com (NASDAQ: ODIS).  They use a Cache-Forward
+Architecture to make persistent data available in literally the most
+efficient manner possible.
+
+Prior to this joining of forces: ObjectStore was too radical a design
+decision for many applications; and perl5 did not have a simple way of
+storing complex data persistently.
+
+Now there is an easy way to build database applications, especially if
+you are concerned about preserving your ideals of data encapsulation.
+
+=head1 WHAT IS PERSISTENT PERL?
+
+It's just like normal perl, except that you can create data that
+doesn't go away when your program exits.  This more permenant data
+lives in files or raw disk partitions that are divided into databases.
+And databases are comprised of...
+
+=head1 PREREQUISITES
+
+If you want to find out, you need:
 
 - ObjectStore OODBMS - see http://www.odi.com
 - Perl 5.004_04 (or perl 5.005, once available)
 - Tree::Fat & Test extensions
 - ExtUtils::ExCxx (only needed on Digital UNIX, HP (5.x), OS/2 (3.x),
-  or MS Windows NT/95)
+  or MS Windows NT/95; send email)
+
+See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 
 ##################
@@ -23,9 +45,26 @@ PREREQUISITES:
 ##################
 
 
-** 01-27-98 RELEASE 1.27
+** 02-08-98 RELEASE 1.28
 
-- Digital Unix AXP portability tweaks.  No functional changes.
+- Relaxed overly strict index behavior.  Fixed performance of add &
+remove for non-unique indices.  Fixed a serious bug when seeking
+unique indices.  Path traverse silently ignores records when there is
+a missing key or undef'd slot.  Fixed index comparison for mixed
+numeric values.  Added more tests.
+
+- Tweaked ObjStore::AVHV evolution code.  Indexed records temporarily
+cannot be evolved due to const.  This will be fixed shortly.
+
+- posh accepts [more] command line args.  Command-line perl code is no
+longer partially committed (this was an artifact of the incomplete
+integration between eval and transactions).
+
+- Improved CSV module.
+
+- Try to create the cache directory on startup.  (See $OS_CACHE_DIR)
+
+- Next on the list: complete tied array support!
 
 
 ** 01-24-98 RELEASE 1.26
@@ -55,7 +94,7 @@ majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.company.com"
 (If you think you've run into a bug, try running your script with
 "perl -MObjStore=PANIC" and mail the output to the mailing list.)
 
--------------------------------------------------------------------
+-------------------------------------------------------------------------
 Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.
 
 This package is free software and is provided "as is" without express

@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { todo tests=>15 }
+BEGIN { todo tests=>19 }
 
 use strict;
 use ObjStore ':ADV';
@@ -39,6 +39,23 @@ begin 'update', sub {
     my $j = $db->root('John');
     die 'john' if !$j;
 
+    do { # numeric comparisons
+	my $nums = ObjStore::Index->new($j, path => 'num', unique => 0);
+	for (1..5) {
+	    $nums->add({num => $_});
+	    $nums->add({num => .5 * $_});
+	    $nums->add({num => -80000 + $_ * 40000 });
+	}
+	my @nums;
+	$nums->map(sub { push(@nums, shift->{num}) });
+	my @sorted = sort { $a <=> $b } @nums;
+	my $ok=1;
+	for (my $x=0; $x < @nums; $x++) { $ok=0, last if $nums[$x] != $sorted[$x] }
+	ok($ok);
+    };
+
+    #---------------------
+
     my $nx = ObjStore::Index->new($j);
     $nx->configure(path=>"name");
     $nx->configure(path=>"name");
@@ -67,6 +84,12 @@ begin 'update', sub {
     }
     ok($nx->count == 11);
 
+    $nx->map(sub { my $t=shift; $ax->add($t) });  #test non-unique add
+    ok($nx->[0]->_rocnt == 3) or warn $nx->[0]->_rocnt;
+
+    $ax->map(sub { my $t=shift; $nx->add($t) });  #test unique add
+    ok($ax->[0]->_rocnt == 3) or warn $ax->[0]->_rocnt;
+
     # READONLY
     begin sub { $ages[0][0] = 0; };
     ok($@ =~ m'READONLY') or warn $@;
@@ -78,7 +101,7 @@ begin 'update', sub {
 
 #    ok(readonly($nx->[0]{age}));  not yet
 
-    begin sub { $nx->[0]{age}[0] = 3; };
+    eval { $nx->[0]{age}[0] = 3; };
     ok($@ =~ m'READONLY') or warn $@;
 
     # cursors
@@ -101,6 +124,7 @@ begin 'update', sub {
     $ax->remove($ax->[1]); #will seek to [0] first
     $ax->CLEAR();
     ok(!defined $ax->[0]);
+    ok($nx->[0]->_rocnt == 1) or warn $nx->[0]->_rocnt;
 
     $nx->[0]{age}[0] = 3;
 

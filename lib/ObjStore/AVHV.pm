@@ -8,14 +8,16 @@ $VERSION = '0.02';
 
 'ObjStore::Database'->
     _register_private_root_key('layouts', sub { 'ObjStore::HV'->new(shift, 30) });
-push(@ObjStore::Database::OPEN1, \&verify_class_fields);
 
-sub verify_class_fields {
+#push(@ObjStore::Database::OPEN1, \&verify_class_fields); #dubious
+
+sub nuke_class_fields {
     return if $] < 5.00450;
+    warn "nuke_class_fields: debugging...";
     my ($db) = @_;
     my $layouts = $db->_private_root_data('layouts');
     return if !$layouts;
-    map { get_certified_layout($layouts, $_) } keys %$layouts;
+    $layouts->CLEAR();
 }
 
 sub is_compat {
@@ -40,13 +42,26 @@ sub get_certified_layout {
     my $l = $layouts->{$of};
     return if !$l || !$l->{__VERSION__};
 
-    return $l if $l->{__VERSION__} == ($LAYOUT_VERSION{$of} or 0);
+    return $l if $ObjStore::RUN_TIME == ($LAYOUT_VERSION{$of} or 0);
 
     my $tlay = get_transient_layout($of);
     return if !is_compat($l, $tlay);
 
-    $LAYOUT_VERSION{$of} = $l->{__VERSION__};
+    $LAYOUT_VERSION{$of} = $ObjStore::RUN_TIME;
     $l;
+}
+
+sub is_newest_layout {
+    my ($o) = @_;
+
+    my $class = ref $o;
+    return 1 if $ObjStore::RUN_TIME == ($LAYOUT_VERSION{ $class } or 0);
+
+    my $layouts = $o->database_of->_private_root_data('layouts');
+    return 0 if !$layouts;
+    my $l = get_certified_layout($layouts, $class);
+    return 0 if !$l;
+    $l == $o->[0];
 }
 
 sub new { #XS? XXX
@@ -70,7 +85,7 @@ sub new { #XS? XXX
     $l->{__CLASS__} = $of;
     bless $l, $class;
     $l->const;
-    $LAYOUT_VERSION{$of} = $l->{__VERSION__};
+    $LAYOUT_VERSION{$of} = $ObjStore::RUN_TIME;
     $l;
 }
 
@@ -79,6 +94,7 @@ sub is_evolved {1} #const anyway
 package ObjStore::AVHV;
 use Carp;
 use base 'ObjStore::AV';
+use ObjStore;
 use vars qw($VERSION);
 $VERSION = '0.04';
 
@@ -100,8 +116,8 @@ sub new {
 
 sub is_evolved {
     my ($o) = @_;
-    ($o->SUPER::is_evolved() and
-     $o->[0]{__VERSION__} == $ObjStore::AVHV::Fields::LAYOUT_VERSION{ ref($o) });
+    return 0 if !$o->SUPER::is_evolved();
+    ObjStore::AVHV::Fields::is_newest_layout($o);
 }
 
 sub _avhv_relayout {
@@ -177,11 +193,15 @@ sub POSH_PEEK {
 
   package MatchMaker::Person;
   use base 'ObjStore::AVHV';
-  use fields qw/ height hairstyle haircolor shoetype favorites /;
+  use fields qw( height hairstyle haircolor shoetype favorites );
 
 =head1 DESCRIPTION
 
 Support for extremely efficient records.
+
+Even without optimization or benchmarks, the memory savings achieved
+by factoring the hash keys is quite significant and a large
+performance win.
 
 =head1 TODO
 
@@ -191,9 +211,9 @@ Support for extremely efficient records.
 
 =item *
 
-This could be implemented with zero memory overhead if we stored the
-layout in a per-class global.  Will wait for performance numbers and
-overload % before considering such techniques.
+This could be implemented with zero per-record overhead if we stored
+the layout in a per-class global.  This would definitely be slower
+though.
 
 =back
 

@@ -102,6 +102,8 @@ BOOT:
   hv_store(szof, "OSPV_iv", 7, newSViv(sizeof(OSPV_iv)), 0);
   hv_store(szof, "OSPV_nv", 7, newSViv(sizeof(OSPV_nv)), 0);
   hv_store(szof, "OSSVPV", 6, newSViv(sizeof(OSSVPV)), 0);
+  hv_store(szof, "OSPV_Ref2_hard", 14, newSViv(sizeof(OSPV_Ref2_hard)), 0);
+  hv_store(szof, "OSPV_Ref2_protect", 17, newSViv(sizeof(OSPV_Ref2_protect)), 0);
 
 void
 reftype(ref)
@@ -215,7 +217,7 @@ subscribe(...)
 	os_subscription *subs = new os_subscription[items];
 	dOSP;
 	for (int xa=0; xa < items; xa++) {
-	  ossv_bridge *br = osp->sv_2bridge(ST(xa), 1);
+	  ospv_bridge *br = osp->sv_2bridge(ST(xa), 1);
 	  subs[xa].assign(br->ospv());
 	}
 	OSP_START0
@@ -233,7 +235,7 @@ unsubscribe(...)
 	os_subscription *subs = new os_subscription[items];
 	dOSP;
 	for (int xa=0; xa < items; xa++) {
-	  ossv_bridge *br = osp->sv_2bridge(ST(xa), 1);
+	  ospv_bridge *br = osp->sv_2bridge(ST(xa), 1);
 	  subs[xa].assign(br->ospv());
 	}
 	OSP_START0
@@ -743,7 +745,7 @@ os_database_root::set_value(sv)
 	dOSP ;
 	os_segment *WHERE = os_database::of(THIS)->get_default_segment();
 	OSSVPV *pv=0;
-	ossv_bridge *br = osp->sv_2bridge(sv, 1, WHERE);
+	ospv_bridge *br = osp->sv_2bridge(sv, 1, WHERE);
 	pv = br->ospv();
 	// Disallow scalars in roots because it is fairly useless and messy.
 	OSSV *ossv = (OSSV*) THIS->get_value(OSSV::get_os_typespec());
@@ -762,9 +764,13 @@ os_database_root::set_value(sv)
 MODULE = ObjStore	PACKAGE = ObjStore::Database
 
 os_segment *
-os_database::create_segment()
+os_database::_create_segment()
 	PREINIT:
 	char *CLASS = ObjStore_Segment;
+	CODE:
+	RETVAL = THIS->create_segment();
+	OUTPUT:
+	RETVAL
 
 MODULE = ObjStore	PACKAGE = ObjStore::Segment
 
@@ -870,7 +876,7 @@ _is_persistent(sv)
 	SV *sv;
 	CODE:
 	dOSP;
-	ossv_bridge *br = osp->sv_2bridge(sv, 0);
+	ospv_bridge *br = osp->sv_2bridge(sv, 0);
 	RETVAL = br != 0;
 	OUTPUT:
 	RETVAL
@@ -881,7 +887,7 @@ _pstringify(THIS, ...)
 	PROTOTYPE: $;$$
 	PPCODE:
 	dOSP;
-	ossv_bridge *br = osp->sv_2bridge(THIS, 0);
+	ospv_bridge *br = osp->sv_2bridge(THIS, 0);
 	SV *ret;
 	if (!br) {
 	  STRLEN len;
@@ -907,8 +913,8 @@ _peq(a1, a2, ign)
 	SV *ign
 	CODE:
 	dOSP;
-	ossv_bridge *b1 = osp->sv_2bridge(a1, 0);
-	ossv_bridge *b2 = osp->sv_2bridge(a2, 0);
+	ospv_bridge *b1 = osp->sv_2bridge(a1, 0);
+	ospv_bridge *b2 = osp->sv_2bridge(a2, 0);
 	RETVAL = b1 && b2 && b1->ospv() == b2->ospv();
 	OUTPUT:
 	RETVAL
@@ -920,8 +926,8 @@ _pneq(a1, a2, ign)
 	SV *ign
 	CODE:
 	dOSP;
-	ossv_bridge *b1 = osp->sv_2bridge(a1, 0);
-	ossv_bridge *b2 = osp->sv_2bridge(a2, 0);
+	ospv_bridge *b1 = osp->sv_2bridge(a1, 0);
+	ospv_bridge *b2 = osp->sv_2bridge(a2, 0);
 	RETVAL = !b1 || !b2 || b1->ospv() != b2->ospv();
 	OUTPUT:
 	RETVAL
@@ -932,12 +938,17 @@ OSSVPV::_refcnt()
 	XPUSHs(sv_2mortal(newSViv(THIS->_refs)));
 
 void
+OSSVPV::_rocnt()
+	PPCODE:
+	XPUSHs(sv_2mortal(newSViv(OSPvROCNT(THIS))));
+
+void
 OSSVPV::_blessto_slot(...)
 	PROTOTYPE: ;$
 	PPCODE:
 	PUTBACK;
 	if (items == 2) {
-	  ossv_bridge *br = osp->sv_2bridge(ST(1), 1);
+	  ospv_bridge *br = osp->sv_2bridge(ST(1), 1);
 	  OSSVPV *nval = (OSSVPV*) br->ospv();
 	  nval->REF_inc();
 	  if (OSPvBLESS2(THIS) && THIS->classname)
@@ -1001,8 +1012,10 @@ OSSVPV::POSH_CD(keyish)
 	char *keyish
 	PPCODE:
 	PUTBACK;
+	STRLEN len;
 	OSSV *sv = THIS->traverse(keyish);
-	if (!sv) croak("OSSVPV(%p)->traverse(%s) failed", THIS, keyish);
+	if (!sv) croak("OSSVPV(%p=%s)->traverse('%s') failed", 
+			THIS, THIS->os_class(&len), keyish);
 	SV *ret = osp->ossv_2sv(sv);
 	SPAGAIN;
 	XPUSHs(ret);
@@ -1162,7 +1175,7 @@ OSPV_Generic::add(sv)
 	SV *sv;
 	PPCODE:
 	PUTBACK;
-	ossv_bridge *br = osp->sv_2bridge(sv, 1, os_segment::of(THIS));
+	ospv_bridge *br = osp->sv_2bridge(sv, 1, os_segment::of(THIS));
 	THIS->add(br->ospv());
 	SPAGAIN;
 	if (GIMME_V != G_VOID) PUSHs(sv);
@@ -1172,7 +1185,7 @@ OSPV_Generic::remove(sv)
 	SV *sv
 	PPCODE:
 	PUTBACK;
-	ossv_bridge *br = osp->sv_2bridge(sv, 1);
+	ospv_bridge *br = osp->sv_2bridge(sv, 1);
 	THIS->remove(br->ospv());
 	return;
 

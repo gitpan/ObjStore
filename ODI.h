@@ -12,7 +12,7 @@ struct OSPV_hvdict : OSPV_Generic {
   os_Dictionary < hkey, OSSV* > hv;
   OSPV_hvdict(os_unsigned_int32);
   virtual ~OSPV_hvdict();
-  virtual ossv_bridge *new_bridge();
+  virtual ospv_bridge *new_bridge();
   virtual OSSVPV *new_cursor(os_segment *seg);
   virtual char *os_class(STRLEN *);
   virtual char *rep_class(STRLEN *);
@@ -23,8 +23,8 @@ struct OSPV_hvdict : OSPV_Generic {
   virtual void DELETE(char *key);
   virtual void CLEAR();
   virtual int EXISTS(char *key);
-  virtual SV *FIRST(ossv_bridge*);
-  virtual SV *NEXT(ossv_bridge*);
+  virtual SV *FIRST(ospv_bridge*);
+  virtual SV *NEXT(ospv_bridge*);
   virtual int _count();
   virtual OSSV *traverse(char *keyish);
   virtual void XSHARE(int on);

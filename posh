@@ -1,6 +1,68 @@
 #!/nw/dev/usr/bin/perl -w
 # It would be cool if this file could be put inside a /Safe/ object...
 use strict;
+package Posh;
+use Carp;
+use vars qw($open_mode $start_dir $shell_escape);
+
+$open_mode = 'update';
+$shell_escape = 1;
+
+# POSH_HELP
+
+for (my $arg=0; $arg < @ARGV; $arg++) {
+    my $o = $ARGV[$arg];
+    if ($o =~ m/^-mvcc$/) {
+	$open_mode = 'mvcc';
+    } elsif ($o =~ m/^-d (\S*) $/x) {
+	my $dir = $1;
+	$dir = $ARGV[++$arg]
+	    if !$dir;
+	$start_dir = $dir;
+    } elsif ($o =~ m/^ \- (M|m) (\w+) (\=\w+)? $/x ) {
+	my ($way,$m,@im) = ($1,$2,$3?substr($3,1):());
+	eval "require $m";
+	warn, next if $@;
+	if ($way eq 'M') {
+	    $m->import(@im);
+	} else {
+	    $m->unimport(@im);
+	}
+    } elsif ($o =~ m/^-I (\S*) $/x) {
+	my $dir = $1;
+	$dir = $ARGV[++$arg]
+	    if !$dir;
+	if ($dir =~ m{^ \/ }x) {
+	    unshift(@INC, $dir);
+	} else {
+	    require FindBin;
+	    die "posh: confused; can't have both -I and -d"
+		if $start_dir;
+	    die "posh: can't find myself" if ! $FindBin::Bin;
+	    unshift(@INC, "$FindBin::Bin/$dir");
+	}
+    } elsif ($o =~ m/^-noesc (ape)? $/x) {
+	$shell_escape = 0;
+    } elsif ($o =~ m/^-h$/) {
+	print q"
+Usage: posh [switches]
+  -ddirectory      chdir here at startup
+  -Idirectory      specify @INC directory (may be used more than once)
+  -mvcc            open databases in mvcc mode
+  -[mM]module..    executes `use/no module...' just like perl
+  -noescape        disables !shell escape
+  -v               print version number and patchlevel of posh
+
+";
+	exit;
+    } elsif ($o =~ m/^-v$/) {
+	require ObjStore;
+	print("posh $ObjStore::VERSION (Perl $] ".ObjStore::release_name().")\n");
+	exit;
+    } else {
+	warn "unknown option '$o'\n";
+    }
+}
 
 package input;
 use ObjStore ':ADV';
@@ -46,6 +108,12 @@ sub POSH_PEEK {
 sub enter {
     my ($o, $path) = @_;
     $o->init;
+    if ($Posh::start_dir) {
+	$o->{'cwd'} = $Posh::start_dir;
+	# be smarter XXX
+	$o->{db} = undef;
+	$o->{cursor} = new ObjStore::Path::Ref($o);
+    }
     chdir($o->{'cwd'}) or $o->{'cwd'} = cwd;
     if ($o->{db}) {
 	warn "** If a serious error occurs when re-entering '".$path."',\n";
@@ -85,7 +153,7 @@ sub fetch_db {
     my $db;
     $db = ObjStore::lookup($view->{db});
     if (!$db->is_open) {
-	begin sub { $db->open('update'); };
+	begin sub { $db->open($Posh::open_mode); };
 	if ($@) {
 	    die if $@ !~ m'permission_denied';
 	    $db->open('mvcc');
@@ -117,7 +185,7 @@ sub resolve {
     my @at = ('/', $db, $cs->map(sub { shift->focus }));
     if ($path =~ m/^\s*$/) {
 	('/', $db)
-    } elsif ($path =~ m,^[\w\/\.\:]+$,) {
+    } elsif ($path =~ m,^[\w\/\.\:\-]+$,) {
 	my @path = split(m'/+', $path);
 	for my $c (@path) {
 	    next if $c eq '.';
@@ -142,6 +210,7 @@ sub resolve {
 	if ($@) {
 	    print $@;
 	    print "# Type 'help' for help!\n";
+	    ObjStore::Transaction::get_current()->abort();
 	    return;
 	}
 	(@at,(@r>1?\@r:@r));
@@ -171,15 +240,14 @@ sub execute {
 	    }
 	    return;
 
-	} elsif ($input =~ m/^cd\s*(.*)\s*$/s) {  #cd
+	} elsif ($input =~ m/^cd \s* (.*?) \s* $/sx) {  #cd
 	    my $path = $1;
 	    $path = $ENV{HOME} if !$path;
 
 	    if (-d $path) {
 		chdir($path) or warn "chdir $path: $@";
 		$o->{'cwd'} = cwd;
-
-	    } else {
+	    } elsif ($path =~ m/^ [\w\/\.]+ $/x) {
 		my ($dbname, $class, $inc) = split(m/\s+/, $path);
 		my $db;
 		eval { $db = ObjStore::lookup($dbname); };
@@ -193,6 +261,24 @@ sub execute {
 		    $db->get_INC->[0] = $inc if $inc;
 		}
 		$o->{db} = $db->get_pathname;
+	    } else {
+		local($input::db, $input::at, $input::view, $input::cursor);
+		$o->pre_eval;
+		my $r = eval $eval_setup.$path;
+		if ($@) {
+		    print $@;
+		    print "# Type 'help' for help!\n";
+		    return;
+		}
+		if ($r and blessed $r and $r->isa("ObjStore::Database")) {
+		    $o->{db} = $r->get_pathname;
+		} elsif ($r and -d $r) {
+		    chdir($r) or warn "chdir $r: $@";
+		    $o->{'cwd'} = cwd;
+		} else {
+		    $r ||= '(unknown)';
+		    print "# posh: don't know how to cd to '$r'\n";
+		}
 	    }
 
 	    if ($o->{db}) {
@@ -200,7 +286,11 @@ sub execute {
 		my $cs = $o->{cursor};
 		if ($at->can("POSH_ENTER")) {
 		    my $at2 = $at->POSH_ENTER();
-		    if (!blessed $at2 or !$at2->_is_persistent) {
+		    if (!blessed $at2) {
+			warn "$at->POSH_ENTER() returned junk ($at2)\n";
+		    } elsif ($at == $at2) {
+		    } elsif (!$at2->can('_is_persistent') or
+			     !$at2->_is_persistent) {
 			warn "$at->POSH_ENTER() returned junk ($at2)\n";
 		    } else {
 			$cs->_Push($at2->new_ref($cs, 'unsafe'));
@@ -266,8 +356,14 @@ sub execute {
     my @ret = eval $eval_setup.$input;
 
     if ($@) {
-	print $@;
+	if ($Posh::open_mode eq 'mvcc' and
+	    $@ =~ m/Operation not allowed during a read-only transaction/i) {
+	    print "# Attempt to write to a read-only database denied.\n";
+	} else {
+	    print $@;
+	}
 	print "# Type 'help' for help!\n";
+	ObjStore::Transaction::get_current()->abort();
     } else {
 	$Results->reset;
 	for (@ret) { $Results->Peek($_) }
@@ -279,6 +375,8 @@ package input;
 
 sub help {
     print '
+Welcome to posh!
+
 Outside of databases:
    cd <dir>
    cd <db> [class [inc]]  # enters <db> or $class->new("update", 0666)
@@ -381,6 +479,7 @@ sub new {
 	$o->{public}->segment_of->set_comment($o->{user});
 	$o->{state} = 'active';
 	$o->{ttype} ||= 'read';
+	$o->{ttype} = 'read' if $open_mode eq 'mvcc';
 	$o->{public}{user} ||= $o->{user};
 	$o->{pref} ||= {view=>0};
 	$o->{view} ||= [new Posh::View($o->{public})];
@@ -414,7 +513,7 @@ sub run {
 	last if (!defined $input or $input =~ m/^\s*exit\s*$/);
 
 	$input =~ s/^\s*//;
-	if ($input =~ s/^\!//) {
+	if ($input =~ s/^\!// and $shell_escape) {
 	    my $st = system($input);
 	    print "(status=$st)\n" if $st;
 	    next;
@@ -425,6 +524,10 @@ sub run {
 	    $ttype = 'update';
 	} elsif ($input =~ m/^(read|update|abort_only)\s*$/) {
 	    my $mode = $1;
+	    if ($open_mode eq 'mvcc') {
+		print "posh: the database is open in mvcc mode; you can only read\n";
+		next;
+	    }
 	    $ttype = 'update';
 	    $input = sub {
 		$o->{ttype} = $mode;
@@ -456,6 +559,6 @@ if ($@) {
     print "** warning: Module 'Term::ReadLine' could not be loaded.\n";
     $term = new Posh::FakeTerm;
 }
-$SIG{INT} = sub { die "ABORT" };
+$SIG{INT} = sub { die "ABORT\n" };
 ObjStore::fatal_exceptions(0);
 (new Posh())->run;

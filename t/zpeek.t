@@ -55,6 +55,7 @@ sub check {
 	    ok(1);
 	} else {
 	    ok(0);
+	    warn("ANY OTHER TEST FAILURES COULD HAVE CAUSED THIS FAILURE\n");
 	}
     } else {
 	ok(system("mv $new $old")==0);

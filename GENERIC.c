@@ -145,17 +145,17 @@ int OSPV_hvarray::first(int start)
   return -1;
 }
 
-struct hvarray_bridge : ossv_bridge {
+struct hvarray_bridge : ospv_bridge {
   int cursor;
   hvarray_bridge(OSSVPV *);
 };
-hvarray_bridge::hvarray_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cursor(0)
+hvarray_bridge::hvarray_bridge(OSSVPV *_pv) : ospv_bridge(_pv), cursor(0)
 {}
 
-ossv_bridge *OSPV_hvarray::new_bridge()
+ospv_bridge *OSPV_hvarray::new_bridge()
 { return new hvarray_bridge(this); }
 
-SV *OSPV_hvarray::FIRST(ossv_bridge *vmg)
+SV *OSPV_hvarray::FIRST(ospv_bridge *vmg)
 {
   hvarray_bridge *mg = (hvarray_bridge *) vmg;
   SV *out;
@@ -168,7 +168,7 @@ SV *OSPV_hvarray::FIRST(ossv_bridge *vmg)
   return out;
 }
 
-SV *OSPV_hvarray::NEXT(ossv_bridge *vmg)
+SV *OSPV_hvarray::NEXT(ospv_bridge *vmg)
 {
   hvarray_bridge *mg = (hvarray_bridge *) vmg;
   SV *out;
@@ -272,7 +272,7 @@ int OSPV_setarray::set_contains(SV *val)
 {
   dOSP ;
   OSSVPV *pv = 0;
-  ossv_bridge *mg = osp->sv_2bridge(val, 0);
+  ospv_bridge *mg = osp->sv_2bridge(val, 0);
   if (mg) pv = mg->ospv();
   if (!pv) croak("OSPV_setarray::contains(SV *val): must be persistent object");
 
@@ -286,7 +286,7 @@ void OSPV_setarray::set_rm(SV *nval)
 {
   dOSP ;
   OSSVPV *pv = 0;
-  ossv_bridge *mg = osp->sv_2bridge(nval, 0);
+  ospv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) pv = mg->ospv();
   if (!pv) croak("OSPV_setarray::rm(SV *val): must be persistent object");
 
@@ -299,17 +299,17 @@ void OSPV_setarray::set_rm(SV *nval)
   }
 }
 
-struct setarray_bridge : ossv_bridge {
+struct setarray_bridge : ospv_bridge {
   int cursor;
   setarray_bridge(OSSVPV *);
 };
-setarray_bridge::setarray_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cursor(0)
+setarray_bridge::setarray_bridge(OSSVPV *_pv) : ospv_bridge(_pv), cursor(0)
 {}
 
-ossv_bridge *OSPV_setarray::new_bridge()
+ospv_bridge *OSPV_setarray::new_bridge()
 { return new setarray_bridge(this); }
 
-SV *OSPV_setarray::FIRST(ossv_bridge *vmg)
+SV *OSPV_setarray::FIRST(ospv_bridge *vmg)
 {
   setarray_bridge *mg = (setarray_bridge *) vmg;
   assert(mg);
@@ -328,7 +328,7 @@ SV *OSPV_setarray::FIRST(ossv_bridge *vmg)
   }
 }
 
-SV *OSPV_setarray::NEXT(ossv_bridge *vmg)
+SV *OSPV_setarray::NEXT(ospv_bridge *vmg)
 {
   setarray_bridge *mg = (setarray_bridge *) vmg;
   assert(mg);
@@ -401,7 +401,7 @@ char *OSPV_sethash::os_class(STRLEN *len)
 void OSPV_sethash::set_add(SV *nval)
 {
   dOSP ;
-  ossv_bridge *mg = osp->sv_2bridge(nval, 1, os_segment::of(this));
+  ospv_bridge *mg = osp->sv_2bridge(nval, 1, os_segment::of(this));
   OSSVPV *ospv = mg->ospv();
   if (!ospv) croak("OSPV_sethash::add(SV*): cannot add non-object");
   ospv->REF_inc();
@@ -413,7 +413,7 @@ int OSPV_sethash::set_contains(SV *nval)
 {
   dOSP ;
   OSSVPV *ospv=0;
-  ossv_bridge *mg = osp->sv_2bridge(nval, 0);
+  ospv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) ospv = mg->ospv();
   if (!ospv) croak("OSPV_sethash::contains(SV *nval): cannot test non-object");
   return set.contains(ospv);
@@ -423,23 +423,23 @@ void OSPV_sethash::set_rm(SV *nval)
 {
   dOSP ;
   OSSVPV *ospv=0;
-  ossv_bridge *mg = osp->sv_2bridge(nval, 0);
+  ospv_bridge *mg = osp->sv_2bridge(nval, 0);
   if (mg) ospv = mg->ospv();
   if (!ospv) croak("OSPV_sethash::rm(SV *nval): cannot remove non-object");
   if (set.remove(ospv)) ospv->REF_dec();
 }
 
-struct sethash_bridge : ossv_bridge {
+struct sethash_bridge : ospv_bridge {
   os_cursor *cs;
   sethash_bridge(OSSVPV *);
 };
-sethash_bridge::sethash_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cs(0)
+sethash_bridge::sethash_bridge(OSSVPV *_pv) : ospv_bridge(_pv), cs(0)
 {}
 
-ossv_bridge *OSPV_sethash::new_bridge()
+ospv_bridge *OSPV_sethash::new_bridge()
 { return new sethash_bridge(this); }
 
-SV *OSPV_sethash::FIRST(ossv_bridge *vmg)
+SV *OSPV_sethash::FIRST(ospv_bridge *vmg)
 {
   sethash_bridge *mg = (sethash_bridge *) vmg;
   assert(mg);
@@ -448,7 +448,7 @@ SV *OSPV_sethash::FIRST(ossv_bridge *vmg)
   return osp->ospv_2sv( (OSSVPV*) mg->cs->first());
 }
 
-SV *OSPV_sethash::NEXT(ossv_bridge *vmg)
+SV *OSPV_sethash::NEXT(ospv_bridge *vmg)
 {
   sethash_bridge *mg = (sethash_bridge *) vmg;
   assert(mg);

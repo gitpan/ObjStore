@@ -1,9 +1,9 @@
-# Give -*-perl-*- a kiss
+# give -*-perl-*- a kiss
 
 use Test;
 BEGIN {
     if ($] < 5.00450) { todo tests => 0; exit; }
-    else { todo tests => 5; }
+    else { todo tests => 7; }
 }
 
 use lib "./t";
@@ -16,8 +16,14 @@ ObjStore::fatal_exceptions(0);
 package Test::AVHV1;
 use base 'ObjStore::AVHV';
 use fields qw(my name is bob);  #must be AFTER 'use base'
-use vars qw($VERSION);
+use vars qw($VERSION %FIELDS);
 $VERSION = '0.00';
+
+sub transform {
+    my ($o) = @_;
+    $o->fields::import('snork');
+    ++$ObjStore::RUN_TIME;
+}
 
 package Test::AVHV2;
 use base 'ObjStore::AVHV';
@@ -31,6 +37,8 @@ use ObjStore;
 #ObjStore::debug qw(wrap);
 
 begin 'update', sub {
+    ObjStore::AVHV::Fields::nuke_class_fields($db);
+
     my $john = $db->root('John');
     my $o = new Test::AVHV1($db);
     begin sub { $o->[0]{'my'} = 'bad'; };
@@ -49,6 +57,12 @@ begin 'update', sub {
     my $john = $db->root('John');
     my $o = $john->{avhv};
     my $cnt = $o->count;
+
+    $o->transform();
+    ok(! $o->is_evolved);
+    $o->evolve();
+    ok($o->is_evolved);
+
     bless $o, 'Test::AVHV2';
     ok($o->is_evolved);
     $o->evolve;

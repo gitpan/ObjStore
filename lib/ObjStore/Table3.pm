@@ -39,6 +39,12 @@ sub anyx {
     undef;
 }
 
+sub rows {
+    my ($t) = @_;
+    my $i = $t->anyx;
+    $i? $i->count : 0;
+}
+
 sub map {
     my ($t, $sub) = @_;
     my $x = $t->anyx;
@@ -52,6 +58,8 @@ sub add_index {
 	return $o->{$name} if $o->{$name};
 	$index = $index->();
     }
+    croak "'$index' doesn't look like an ObjStore::Index" if
+	!blessed $index || !$index->isa('ObjStore::Index');
     my $any = $o->anyx;
     if ($any) {
 	my $c = $any->new_cursor;

@@ -11,10 +11,26 @@ use strict;
 use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK @EXPORT_FAIL %EXPORT_TAGS
 	    $DEFAULT_OPEN_MODE $EXCEPTION %CLASSLOAD $CLASSLOAD
-	    $RUN_TIME $TRANSACTION_PRIORITY
-	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof);
+	    $RUN_TIME $TRANSACTION_PRIORITY $OS_CACHE_DIR
+	    $FATAL_EXCEPTIONS $MAX_RETRIES $CLASS_AUTO_LOAD %sizeof
+	    $NEWERROR);
 
-$VERSION = '1.27';
+$VERSION = '1.28';
+
+BEGIN {
+    $NEWERROR = 0;
+    if ($NEWERROR) {
+	require Error;
+	'Error'->import('0.1202');
+	'Error'->import(':try');
+    }
+};
+
+$OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
+if (!-d $OS_CACHE_DIR) {
+    mkdir $OS_CACHE_DIR, 0777 
+	or warn "mkdir $OS_CACHE_DIR: $!";
+}
 
 require Exporter;
 require DynaLoader;
@@ -42,6 +58,7 @@ require DynaLoader;
 		   &_PRIVATE_ROOT);
 
     @EXPORT      = (qw(&bless &begin),
+		    $NEWERROR? qw(&with &finally &except &otherwise) : (),
 		    # depreciated
 		    qw(&try_read &try_abort_only &try_update));
     @EXPORT_FAIL = ('PANIC');
@@ -96,9 +113,9 @@ sub set_transaction_priority {
 }
 
 sub PoweredByOS {
-    use Config;
-    warn "PoweredByOS wont work until Makefile.PL is fixed.  Sorry";
-    "$Config{sitelib}/ObjStore/PoweredByOS.gif";
+    require Config;
+    warn "PoweredByOS wont work until Makefile.PL is fixed.  Sorry.\n";
+    "$Config::Config{sitelib}/ObjStore/PoweredByOS.gif"; #give it a shot... XXX
 }
 
 $FATAL_EXCEPTIONS = 1;   #happy default for newbies... (or my co-workers :-)
@@ -111,7 +128,7 @@ $MAX_RETRIES = 10;
 sub get_max_retries { $MAX_RETRIES; }
 sub set_max_retries { $MAX_RETRIES = $_[0]; }
 
-sub begin {
+sub begin1 {
     my ($tt, $code);
     my $ctt;
     {
@@ -129,11 +146,9 @@ sub begin {
 
     my $wantarray = wantarray;
     my @result;
-    my $result;
     my $retries = 0;
     my $do_retry;
     do {
-	$result=undef;
 	@result=();
 	undef $@;
 	my $txn = ObjStore::Transaction::new($tt);
@@ -142,7 +157,7 @@ sub begin {
 	    if ($wantarray) {
 		@result = $code->();
 	    } elsif (defined $wantarray) {
-		$result = $code->();
+		$result[0] = $code->();
 	    } else {
 		$code->();
 	    }
@@ -159,8 +174,99 @@ sub begin {
 	die if ($@ and $FATAL_EXCEPTIONS and !$do_retry);
 
     } while ($do_retry);
-    if (!defined wantarray) { () } else { wantarray ? @result : $result; }
+    if (!defined wantarray) { () } else { wantarray ? @result : $result[0]; }
 }
+
+if ($NEWERROR) {
+    package ObjStore::Error;
+    use vars qw(@ISA $VERSION);
+    @ISA = qw(Error::Simple);
+    $VERSION = '1.00';
+    
+    sub new {
+	# This should be considered a private API that might change without notice.
+	my ($class,$text,$istop,$retries) = @_;
+	my $e = $class->SUPER::new($text);
+	$e->{istop} = $istop;
+	$e->{retries} = $retries;
+	$e;
+    }
+}
+
+package ObjStore;
+
+sub begin2 {
+    my $wantarray = wantarray;
+    my @result;
+    my ($tt, $cur_tt);
+    my $txn = ObjStore::Transaction::get_current();
+    $cur_tt = $txn->get_type if $txn;
+    $tt = !ref $_[0] ? shift : ($cur_tt or 'read');
+    croak "begin([type], code)" if ref $_[0] ne 'CODE';
+    my $try = shift;
+    my $clauses = @_ ? shift : {};
+    my $ok;
+    my $err;
+    my $retries = 0;
+
+    if (get_max_retries()) {
+	$clauses->{catch} ||= [];
+	push(@{$clauses->{catch}}, 'ObjStore::Error', sub {
+		 my ($e,$more) = @_;
+		 if ($e->{top} and $e->{retries} < get_max_retries() and
+		     $e->{text} =~ /deadlock/) {
+		     $e->{retry} = 1;
+		 } else {
+		     $$more = 1;
+		 }
+	     });
+    }
+
+    do {
+	local $Error::THROWN = undef;
+	unshift @Error::STACK, $clauses;
+	@result=();
+	undef $@;
+	$txn = ObjStore::Transaction::new($tt);
+	$ok=0;
+	$ok = eval {
+	    if ($wantarray) 		{ @result = $try->(); }
+	    elsif (defined $wantarray)	{ $result[0] = $try->(); }
+	    else			{ $try->(); }
+	    $txn->post_transaction(); #1
+	    1;
+	};
+	$err = defined($Error::THROWN) ? $Error::THROWN : $@
+	    unless $ok;
+	warn $err if ($err && $ObjStore::REGRESS);
+	($ok and $tt !~ m'^abort') ? $txn->commit() : $txn->abort();
+	$txn->post_transaction(); #2
+	$txn->destroy;
+	++ $retries;
+
+	shift @Error::STACK;
+
+	if (!$ok) {
+	    $err = new ObjStore::Error($err, $txn->top_level, $retries)
+		unless ref $err;
+	    $err = Error::subs::run_clauses($clauses,$err,$wantarray,@result);
+	    
+	    $clauses->{'finally'}->()
+		if defined $clauses->{'finally'};
+	    
+	    Error::throw($err)
+		if defined $err && !$err->{retry};
+	}
+	
+    } while ($err);
+
+    $clauses->{'finally'}->()
+	if defined $clauses->{'finally'};
+
+    if (!defined wantarray) { () } else { wantarray ? @result : $result[0]; }
+}
+
+*begin = $NEWERROR ? \&begin2 : \&begin1;
 
 # For speed, you may assume that ONLY TRANSIENT DATA will be
 # transferred through the stargate.
@@ -316,7 +422,7 @@ sub debug {
 	/^thread/ and $mask |= 8192, next;
 	/^index/  and $mask |= 16384, next;
 	/^PANIC/  and $mask = 0xffff, next;
-	die "Snawgrev $_ tsanik breuzwah dork'ni";
+	die "Snawgrev $_ tsanik brizwah dork'ni";
     }
     if ($mask) {
 	Carp->import('verbose');
@@ -705,6 +811,14 @@ sub BLESS {
     $class->SUPER::BLESS($db);
 }
 
+sub create_segment {
+    my ($o, $name) = @_;
+    carp "$o->create_segment('name')" if @_ != 2;
+    my $s = $o->database_of->_create_segment;
+    $s->set_comment($name) if $name;
+    $s;
+}
+
 sub gc_segments {
     my ($o) = @_;
     for my $s ($o->get_all_segments()) {
@@ -819,8 +933,7 @@ sub _private_root_data {  #XS? XXX
     return if !$rt;
     my $priv = $rt->get_value;
     if (!$priv) {
-	my $s = $db->create_segment;
-	$s->set_comment("_osperl_private");
+	my $s = $db->create_segment("_osperl_private");
 	$priv = 'ObjStore::HV'->new($s, 30);
 	$rt->set_value($priv);
     }
@@ -917,9 +1030,12 @@ use overload ('""' => \&_pstringify,
 	      'bool' => sub {1},
 	      '==' => \&_peq,
 	      '!=' => \&_pneq,
+#	      'nomethod' => sub { croak "overload: ".join(' ',@_); }
 	     );
 
 sub database_of { $_[0]->_database_of->import_blessing; }
+
+*create_segment = \&ObjStore::Database::create_segment;
 
 sub BLESS {
     return $_[0]->SUPER::BLESS($_[1])
@@ -1121,6 +1237,8 @@ sub map {
     @r;
 }
 
+sub FETCHSIZE { $_[0]->_count; }
+
 package ObjStore::HV;
 use Carp;
 use vars qw($VERSION @ISA %REP);
@@ -1235,6 +1353,8 @@ sub POSH_PEEK {
     $o->o("],");
     $o->nl;
 }
+
+sub FETCHSIZE { $_[0]->_count; }
 
 sub _iscorrupt {0}  #write your own!
 

@@ -42,7 +42,7 @@ O_OBJECT
 
 O_OSSVPV
 	dOSP;
-	ossv_bridge * ${var}_bridge = osp->sv_2bridge($arg, 1);
+	ospv_bridge * ${var}_bridge = osp->sv_2bridge($arg, 1);
 	$var = ($type) ${var}_bridge->ospv();
 
 ######################################################################

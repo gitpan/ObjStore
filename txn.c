@@ -7,7 +7,7 @@ void osp_croak(const char* pat, ...)
   dSP;
   SV *msg = NEWSV(0,0);
   va_list args;
-  perl_require_pv("Carp.pm");
+//  perl_require_pv("Carp.pm");
   va_start(args, pat);
   sv_vsetpvfn(msg, pat, strlen(pat), &args, Null(SV**), 0, Null(bool*));
   va_end(args);
@@ -158,7 +158,7 @@ osp_txn::osp_txn(os_transaction::transaction_type_enum _tt,
   os = os_transaction::begin(tt, scope_in);
   bridge_top = 0;
   got_os_exception = 0;
-  deadlocked = 0;
+  deadlocked = 0; //XXX
 
   up = osp->txn;
   osp->txn = this;
@@ -231,7 +231,7 @@ void osp_txn::post_transaction()
     if (ex && ex->ancestor_of(&err_deadlock)) {
       osp_txn *top = this;
       while (top->up) top = top->up;
-      top->deadlocked=1;
+      top->deadlocked=1; //XXX
       DEBUG_txn(warn("deadlock detected"));
     }
   }
@@ -252,7 +252,7 @@ int osp_txn::can_update(void *vptr)
 
 void osp_txn::abort()
 {
-  assert(os);
+  if (!os) return;
   if (!os->is_aborted()) {
     DEBUG_txn(warn("txn(%p)->abort", this));
     os_transaction::abort(os);
@@ -263,7 +263,7 @@ void osp_txn::abort()
 
 void osp_txn::commit()
 {
-  assert(os);
+  if (!os) return;
   if (!os->is_aborted()) {
     DEBUG_txn(warn("txn(%p)->commit", this));
     os_transaction::commit(os);

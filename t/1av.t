@@ -1,6 +1,6 @@
 #-*-perl-*-
 use Test;
-BEGIN { todo tests => 23, failok => [11] }
+BEGIN { todo tests => 21, failok => [10] }
 
 use ObjStore;
 use lib './t';
@@ -25,13 +25,12 @@ sub testify {
     for (1..2) {
 	$a->CLEAR;
 	ok($a->count == 0);
-	for (-1..50) {
+	for (0..50) {
 	    $a->[$_] = [$_];
 	}
-	ok($a->count == 51);
+	ok($a->count == 51) or warn $a->count;
     }
     ok($a->POSH_CD(2)->[0] == 2);
-    ok(!defined $a->[-2]);
 
     $a->_Push(69);
     my $e = $a->_Pop;
@@ -41,7 +40,6 @@ sub testify {
 
     begin sub { $a->[3] = 100 };
     ok($@ =~ m/READONLY/) or warn $@;
-    undef $@;
 
     my @k;
     my $c;

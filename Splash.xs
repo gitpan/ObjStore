@@ -343,17 +343,17 @@ int OSPV_hvarray2::first(int start)
   return -1;
 }
 
-struct hvarray2_bridge : ossv_bridge {
+struct hvarray2_bridge : ospv_bridge {
   int cursor;
   hvarray2_bridge(OSSVPV *);
 };
-hvarray2_bridge::hvarray2_bridge(OSSVPV *_pv) : ossv_bridge(_pv), cursor(0)
+hvarray2_bridge::hvarray2_bridge(OSSVPV *_pv) : ospv_bridge(_pv), cursor(0)
 {}
 
-ossv_bridge *OSPV_hvarray2::new_bridge()
+ospv_bridge *OSPV_hvarray2::new_bridge()
 { return new hvarray2_bridge(this); }
 
-SV *OSPV_hvarray2::FIRST(ossv_bridge *vmg)
+SV *OSPV_hvarray2::FIRST(ospv_bridge *vmg)
 {
   hvarray2_bridge *mg = (hvarray2_bridge *) vmg;
   SV *out;
@@ -366,7 +366,7 @@ SV *OSPV_hvarray2::FIRST(ossv_bridge *vmg)
   return out;
 }
 
-SV *OSPV_hvarray2::NEXT(ossv_bridge *vmg)
+SV *OSPV_hvarray2::NEXT(ospv_bridge *vmg)
 {
   hvarray2_bridge *mg = (hvarray2_bridge *) vmg;
   SV *out;

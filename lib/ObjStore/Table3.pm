@@ -147,6 +147,8 @@ sub add {
     use attrs 'method';
     croak 'ObjStore::Table3->add($)' if @_ != 2;
     my ($t, $o) = @_;
+    $o = ObjStore::translate($t->segment_of, $o)
+	if !ObjStore::UNIVERSAL::_is_persistent($o);
     $t->map_indices(sub { shift->add($o) });
     defined wantarray ? $o : ();
 }

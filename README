@@ -56,6 +56,19 @@ query is unique among database architectures.
 =head1 R!CENT CHANGES
 
 
+** 04-21-99 RELEASE 1.56 [STABLE]
+
+- Fix ObjStore::Table3::add() to return the post-translated instead of
+pre-translated record.
+
+- Various updates for Event 0.38: qtposh, ObjStore::Serve,
+ObjStore::Serve::Notify, ObjStore::Job, ObjStore::Job::Table.
+
+- Fixed ObjAV[] = undef.  Added tests.
+
+- Documentation updates.
+
+
 ** 03-23-99 RELEASE 1.55 [STABLE]
 
 - Switch to new mailing list.
@@ -68,18 +81,6 @@ query is unique among database architectures.
 - Better searching heuristics for MakeMaker.
 
 - Minor documentation updates.
-
-
-** 02-11-99 RELEASE 1.53 [STABLE]
-
-- osperlserver no longer subscribes to notifications by default.  Use
-the -subscribe_all command-line option for the old behavior.
-
-- ObjStore::Serve no longer initiates dynamic transactions
-automatically.  You must invoke begin_dyn() (in the ObjStore::Serve
-package) to be sure a transaction is open.
-
-- Various documentation updates.
 
 
 see ./INSTALL for hints on installation

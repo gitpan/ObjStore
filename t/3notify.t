@@ -6,8 +6,6 @@ use ObjStore ':ADV';
 use lib './t';
 use test;
 
-ObjStore::fatal_exceptions(0);
-
 my $nsys = 'ObjStore::Notification';
 
 &open_db;

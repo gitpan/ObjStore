@@ -1,3 +1,15 @@
+** 02-11-99 RELEASE 1.53 [STABLE]
+
+- osperlserver no longer subscribes to notifications by default.  Use
+the -subscribe_all command-line option for the old behavior.
+
+- ObjStore::Serve no longer initiates dynamic transactions
+automatically.  You must invoke begin_dyn() (in the ObjStore::Serve
+package) to be sure a transaction is open.
+
+- Various documentation updates.
+
+
 ** 01-12-99 RELEASE 1.52
 
 - Split FatTree representation into a separate tarball.

@@ -371,7 +371,12 @@ void OSPV_av2array::STORE(SV *sv, SV *value)
 {
   int xx = osp_thr::sv_2aelem(sv);
   if (xx < 0) croak("STORE(%d)", xx);
-  av[xx] = osp_thr::sv_2bridge(value,1)->ospv();
+  ospv_bridge *brval;
+  if (!SvOK(value))
+      brval = 0;
+  else 
+      brval = osp_thr::sv_2bridge(value, 1, os_segment::of(this));
+  av[xx] = brval? brval->ospv() : 0;
   dTHR;
   if (GIMME_V == G_VOID) return;
   SV *ret = osp_thr::ospv_2sv(av[xx]);

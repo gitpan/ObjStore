@@ -1,7 +1,7 @@
 use strict;
 package ObjStore::Job::Table;
 use ObjStore;
-use Event 0.29;
+use Event 0.32;
 use base 'ObjStore::Table3';
 use ObjStore::Serve qw(txretry);
 use builtin qw(max min);           # available via CPAN
@@ -45,7 +45,7 @@ sub restart {
     my $min_interval = 1;
     Event->idle(e_desc => 'ObjStore::Job::Table',
 		e_min => \$min_interval, e_max => 3,
-		e_cb => sub {
+		e_max_cb_tm => 10, e_cb => sub {
 		    my $left = $jref->focus->work();
 		    $min_interval = $left <= 0 ? 0 : 1;
 		});

@@ -581,6 +581,7 @@ struct osp_thr {
   static SV *TXGV;
   static AV *TXStack;
   static HV *BridgeStash;
+  static int sv_dump_on_error;
 
   //methods
   static void register_schema(char *cl, _Application_schema_info *sch);

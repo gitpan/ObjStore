@@ -7,6 +7,8 @@
 
 /* CCov: off */
 
+int osp_thr::sv_dump_on_error = 1;
+
 #define OR_RETURN_UNDEF(cond) if (!(cond)) return &PL_sv_undef;
 
 /* CCov: fatal OLD_SUPPORT_CODE SERIOUS RETURN_BADNAME */
@@ -70,7 +72,8 @@ os_segment *osp_thr::sv_2segment(SV *sv)
     return (os_segment*) typemap_any::decode(sv);
   if (SvPOK(sv) && strEQ(SvPV(sv, PL_na), "transient"))
     return os_segment::get_transient_segment();
-  Perl_sv_dump(sv);
+  if (osp_thr::sv_dump_on_error)
+      Perl_sv_dump(sv);
   croak("sv_2segment only accepts ObjStore::Segment");
   return 0;
 }
@@ -96,7 +99,8 @@ void *typemap_any::try_decode(SV *sv, dynacast_fn want, int nuke)
       return ret;
     }
   }
-  Perl_sv_dump(orig);
+  if (osp_thr::sv_dump_on_error)
+      Perl_sv_dump(orig);
   croak("ObjStore typemap_any");
   return 0;
 }
@@ -116,7 +120,8 @@ void *typemap_any::decode(SV *sv, int nuke)
       return ret;
     }
   }
-  Perl_sv_dump(orig);
+  if (osp_thr::sv_dump_on_error)
+      Perl_sv_dump(orig);
   croak("ObjStore typemap_any");
   return 0;
 }
@@ -147,8 +152,9 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
 
   if (!SvROK(ref)) {
     if (force) {
-      Perl_sv_dump(ref);
-      croak("sv_2bridge: Expecting persistent data");
+	if (osp_thr::sv_dump_on_error)
+	    Perl_sv_dump(ref);
+	croak("sv_2bridge: Expecting persistent data");
     }
     return 0;
   }
@@ -189,7 +195,8 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
   }
   if (!near) {
     if (!force) return 0;
-    Perl_sv_dump(ref);
+    if (osp_thr::sv_dump_on_error)
+	Perl_sv_dump(ref);
     croak("sv_2bridge: a persistent object is manditory");
   }
   {
@@ -462,7 +469,8 @@ OSSV *OSSV::operator=(SV *nval)
   } else if (! SvOK(nval)) {
     set_undef();
   } else {
-    Perl_sv_dump(nval);
+      if (osp_thr::sv_dump_on_error)
+	  Perl_sv_dump(nval);
     croak("OSSV=(SV*): unknown type");
   }
   return this;

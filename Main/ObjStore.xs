@@ -164,6 +164,12 @@ _mark_method(sub)
 #endif
 
 void
+_sv_dump_on_error(yes)
+	int yes;
+	CODE:
+	osp_thr::sv_dump_on_error = yes;
+
+void
 reftype(ref)
 	SV *ref
 	PPCODE:
@@ -1323,6 +1329,8 @@ OSPV_Generic::STORE(xx, nval)
 	SV *nval;
 	PPCODE:
 	PUTBACK;
+	if (SvGMAGICAL(nval))
+	    mg_get(nval);
 	THIS->STORE(xx, nval);
 	return;
 

@@ -66,7 +66,7 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
 package QtREAPER;
 use Qt;
 use QObject;
-use Event 0.28 qw(unloop);
+use Event 0.32 qw(unloop);
 use vars qw(@ISA $VERSION);
 @ISA = 'QObject';
 $VERSION = '1.02';
@@ -386,4 +386,5 @@ use Qt;
 Editor->new($DB);
 
 require ObjStore::Serve;
+Event->add_hooks(callback => \&ObjStore::Serve::dyn_begin);
 ObjStore::Serve->defaultLoop;

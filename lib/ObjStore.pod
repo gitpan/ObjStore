@@ -4,7 +4,9 @@ ObjStore - Perl Extension For C<ObjectStore> OODBMS
 
 =head1 SYNOPSIS
 
-Enjoy perl?  Sick of SQL?  Ready to trying something new?
+Like perl?  Sick of SQL?  Ready to try something new?  This extension
+implements something like a relational database management system,
+except that s/SQL/Perl/ig.
 
 =head1 DESCRIPTION
 
@@ -30,130 +32,156 @@ Perl5 did not have a simple way of storing complex data persistently
 I<Now there is an easy way to build database applications (especially
 if you are concerned about preserving your ideals of encapsulation).>
 
-=head1 PREREQUISITES
-
-=over 4
-
-=item *
-
-C<ObjectStore> OODBMS (see http://www.odi.com - evaluations are available!)
-
-=item *
-
-Perl 5.005 (5.004_05 might be okay)
-
-=item *
-
-L<Tree::Fat> & L<Test> perl extensions
-
-=item *
-
-L<ExtUtils::ExCxx> (only needed on Digital UNIX, HP (5.x), OS/2 (3.x),
-or MS Windows NT/95; send email)
-
-=back
-
 =head1 WHAT IS THIS GREEN SLIME??
 
 Maybe you're feeling like you're in unfamiliar territory?  You see
 green slime oozing from the ceiling.  Something doesn't smell right
-and the a shiver runs through hair on the back of your neck.  I hope
-you're a quick learner!  Many people haven't made it!
+and a shiver runs through hair on the back of your neck.  I hope
+you're a quick learner!  Many people haven't made it.
 
-Learning something new is hard work.  This may be true, but isn't it
-easier to get ahead than be left behind?  It's a preditory world.
-Which is really easier?
+Learning new stuff is hard work.  While this may be true, isn't it
+easier to get ahead than to be left behind?  It's a competitive,
+preditory world.  Which is really easier?
 
-=head2 Quick Start!
+=head1 QUICK START
 
-  #!/usr/local/bin/perl -w
- 
-  use ObjStore;
+The first step is to make sure that ObjStore is loaded.
+
+  use ObjStore;  #load ObjStore
+
+Persistent perl is just like normal perl, except that you can easily
+create data that doesn't go away when your program exits (or core
+dumps :-).  This more permenant data lives in databases stored in
+files or raw disk partitions.  And databases are comprised of...
+
+=head2 Segments
+
+Segments dynamically resize from very small (less than 64k) to very
+large (~2GB).  Segments can be used to cluster data and can be a unit
+of locking or caching.  You can find the segment for any persistent
+object with the C<segment_of> method.
+
+  $db->segment_of;            # default segment
+  $any_object->segment_of;    # the segment of $any_object
+
+=head2 How to create/open the database?
+
   use ObjStore::Config ('$TMP_DBDIR');
- 
   my $db = ObjStore::open("$TMP_DBDIR/myjunk", 'update', 0666);
- 
+
+This creates or opens the database 'myjunk' in the C<$TMP_DBDIR>
+directory.  (C<$TMP_DBDIR> could be any directory on the server's
+local filesystem.) The database is opened in 'update' mode (also see
+'mvcc').  If the database doesn't exist then it is created with access
+0666.  The file mode 0666 is specified in the same format as is
+understood by chmod.  If C<osserver> is running as root then the file
+mode will protect database exactly same way that it protects files.
+
+=head2 How to add stuff to the database?
+
   begin 'update', sub {
-
-    # $junk can be any arbitrary non-circular structure up to 2GB in size
-    my $junk = { 
-                  pork => [1,2,3],
-                  chicken => [1,2,3],
-                  wheat => [1,2,3],
-                  trials => 0,
-               };
-
-    $db->root("junk", sub { $junk });  #store it, if it's not there already
-    
-    my $pjunk = $db->root("junk");     #fetch it
-    $pjunk->{trials} ++;               #update something
-
-    ObjStore::peek($db);               #dump to stdout
+    $db->root('top', sub{ { tag => "This is the top" } });
   };
+  die if $@;
 
-=head2 Sample Inheritance Tree
+Here we add the root 'top' to the database if it doesn't already
+exist.  'top' is a hash reference that contains one key-value pair
+(tag => "This is the top").  In general, you should not need more than
+one root per database.
 
-  ObjStore::UNIVERSAL
-        ObjStore::Container
-              ObjStore::AV
-                    ObjStore::AV::QSet
-                    ObjStore::AVHV
-                    ObjStore::Path::Ref
-                    ObjStore::REP::FatTree::Index::Conf
-                    ObjStore::REP::ODI::HashIndex::Conf
-                    ObjStore::REP::Splash::Heap::Conf
-              ObjStore::HV
-                    ObjStore::AVHV::Fields
-                    ObjStore::Serve
-                    ObjStore::ServerDB::Top
-                    ObjStore::Table3
-              ObjStore::Index
-        ObjStore::Cursor
-        ObjStore::Ref
+=head2 What are transactions?
 
-Also see L<Devel::Symdump>.
+In order to read or write persistent data, you must be inside a
+transaction.  Transactions can be read-only ('read') or both read and
+write ('update').  Transactions guarentee a consistent view within a
+database but they do not guarentee a consistent view between
+databases.  Locking is accomplished per page or at a higher level of
+granularity.  Deadlocks are resolved by an application determined
+transaction priority.  In perl, transactions work similarly to eval {}.
+
+  begin 'read', sub { ... };   die if $@;    # read transaction
+  begin 'update', sub { ... }; die if $@;    # update transaction
+  begin sub { ... };           die if $@;    # nested transaction
+
+To abort a transaction, simply use 'die'.  The 'die if $@' (above) is
+used to propagate errors to the top-level eval context.  If you forget
+to check C<$@> then your scripts may fail for mysterious reasons
+without reporting any kind of diagnostic.
+
+=head2 How to read stuff from the database?
+
+Reading data is very similar to writing data.
+
+  begin 'read', sub {
+    my $top = $db->root('top');
+    warn $top->{tag};  # This is the top
+  };
+  die if $@;
+
+If you attempt to update persistent data in a read transactions then
+an exception will be thrown.
+
+=head2 Transaction Scope
+
+Persistent objects are scoped to their transaction.  This means that
+objects become unreachable once their transaction commits or aborts.
+For example,
+
+  my $top;
+  begin 'read', sub { $top = $db->root('top') }; die if $@;
+  warn $top->{tag};        # EXCEPTION THROWN
+
+If one needs to keep a reference to an object between transactions
+then this can be accomplished with ObjectStore references.
+
+  my $top;
+  begin 'read', sub {
+    $top = $db->root('top')->new_ref
+  };
+  die if $@;
+  warn $top->focus->{tag};        # EXCEPTION THROWN
+
+  begin 'read', sub {
+    warn $top->focus->{tag};      # OK
+  };
+  die if $@;
+
+=head2 A brief note about reference counting
+
+Data stored in the database is reference counted.  This means that you
+(usually) don't have to worry about explicitly deallocating usused
+memory.  However, be aware that transient reference do not count
+towards a persistent reference count.  For example,
+
+  $phash->{obj} = {};              # create a fresh persistent hash
+  my $obj = delete $phash->{obj};  # remove from the database
+  warn $obj->{attr};               # SEGV (or worse)
+
+If you suspect a refcnt problem but are having difficulty tracking it
+down then you may compile with C<OSP_SAFE_BRIDGE=1> (see
+L<ObjStore::MakeMaker>).  Fortunately however, errors of this nature
+are usually obvious and easy to fix.
 
 =head2 Tools
 
 =over 4
 
-=item * ospeek
-
-Prints out databases in a style similar to Data::Dumper.
-
 =item * posh & qtposh
 
-Like C<sh>/C<csh>, except that you can I<change directory> B<into>
-your database and walk around from the inside.  You can also invoke
-methods on your objects or write custom reports (in perl, of course
-:-).  (Similar to C<isql>/C<wisql>.)
+Like C<sh>/C<csh>, except that you can change directory *into* your
+database and walk around from the inside.  You can also invoke methods
+on your objects or write custom reports (in perl, of course :-).
+(These tools are smilar to C<isql>/C<wisql>.)
 
 =item * osperlserver
 
 Provides a server framework including remote method invokation, job
-scheduling, and server-object collaboration services.  Completely
-generic.
+scheduling, and server-object collaboration services.  An effort has
+been made to keep the code completely generic and customizable.
 
 =back
 
-=head1 WHAT IS PERSISTENT PERL?
-
-It's just like normal perl, except that you can create data that
-doesn't go away when your program exits.  This more permenant data
-lives in files or raw disk partitions that are divided into databases.
-And databases are comprised of...
-
-=head2 Segments
-
-Segments dynamically resize from very small to very big.  You should
-split your data into lots segments when it makes sense.  Segments
-improve locality and can be a unit of locking or caching.
-
-When you create a database object you must specify the segment in
-which it is to be allocated.  All objects use the form
-C<'$class->new($near, ...)'>.  You may pass any persistent object (or
-database or segment) in place of C<$near> and the new object will be
-created appropriately.
+=head1 DATA TYPES
 
 =head2 Hashes
 
@@ -320,17 +348,6 @@ If you need something that is not supported by an existing extension,
 it is likely that the behavior you need can be implemented with new
 representations.  (Virtual sunglasses not included. :-)
 
-=head2 And Access Paths (Oh My!)
-
-If you cross your eyes, you may be able to visualize an array of
-references or cursors as an access path.  Two simple implementations
-are included:
-
-  ObjStore::Path::Ref            # access path composed of refs
-  ObjStore::Path::Cursor         # EXPERIMENTAL
-
-See the source code for details.
-
 =head1 DATABASE DESIGN
 
 The best design is to be flexible!
@@ -339,24 +356,13 @@ The best design is to be flexible!
 
 The best design is to be flexible!
 
-=head2 C<ospeek [-all] [-addr] [-refcnt] [-raw] E<lt>databaseE<gt>>
-
-While there does not exist a central formalized schema for a perl
-database the C<ospeek> utility outputs a sample of data content and
-structure.  C<ospeek> never outputs more than a brief summary no
-matter how much stuff is in your database.
-
-You can get the same output within a perl script using:
-
-  ObjStore::peek($whatever);
-
 =head2 Wait!  No Schema?!  How Can This Scale?  Wont I get lost in a
 morass of disorganization and change-control meetings?
 
 How can a relational database scale?!  B<When you write down a central
 schema you are violating the principle of encapsulation.>  This is
 dumb.  While relational databases might have been a revelation when
-they were conceived, why is it still common practice to create
+they were conceived, why is it still standard practice to create
 artificial dependencies and breaches of abstraction in database
 design?  It is entirely avoidable!
 
@@ -369,11 +375,11 @@ This is the correct trade because data usually out-bulks code.
 Furthermore, since there isn't a artificial split between the
 implementation language and a goofy, unempowered database language,
 schema evolution is reduced to the same problem as source code
-compatibility.  (Database are just a rich API.)
+compatibility.  (A database is just a rich API.)
 
 Now, I'm not saying that data layouts never have to change.  When
-thinking about data the first thing to consider is how to organize to
-improve one's ability to evolve.
+thinking about data the first thing to consider is how to organize
+everything to ease one's ability to evolve.
 
 First of all, it is entirely unnecessary to store all data in a single
 database.  Multiple databases interoperate and can be used
@@ -381,7 +387,7 @@ simultaniously.  For example, you can have a separate database for
 each day or each month.  By starting fresh with a new database it is
 easier to make structural changes while perserving backward
 compatibility.  In constrast to relational databases, the scope of the
-problem can easily be minimized.
+evolution problem can be easily delineated.
 
 Within a database, the way you split up your database generally
 depends on three things:
@@ -416,328 +422,11 @@ absolute minimum to get the job done. :-)
 =head2 RDBMS Emulation
 
 Un-structured perl databases are probably under-constrained for most
-applications.  Fortunately, RDBMS style tables have been adapted,
-adopted, and included with this package.  While they are a little
-different from traditional tables I am confident that with a few doses
-of Prozac, relational developers should feel right at home.  See
+applications.  Fortunately, RDBMS style tables are adapted, adopted,
+and included within this package.  While they are a little different
+from traditional tables, I am confident that with a few doses of
+Prozac relational developers will feel right at home.  See
 L<ObjStore::Table3> and C<ObjStore::Index>.
-
-=head1 API REFERENCE
-
-Fortunately, you will probably not need to use most of the API.  It is
-exhibited here mainly to make it seem like this extension has a
-difficult and steep learning curve (it doesn't).  In general, the API
-mostly mirrors the C<ObjectStore> C<C++> API.  Refer to the
-C<ObjectStore> documentation for exact symantics.
-
-The API for C<::UNIVERSAL> is probably of most interest to ex-C<C++>
-developers.  If you are just getting started, skip to the next
-section.
-
-=head2 C<ObjStore>
-
-=over 4
-
-=item * $db = ObjStore::open($pathname, $read_only, $mode);
-
-Also see L<ObjStore::HV::Database>.
-
-=item * $name = ObjStore::release_name()
-
-=item * $version = ObjStore::os_version()
-
-=item * $yes = ObjStore::network_servers_available();
-
-=item * $num = ObjStore::return_all_pages();
-
-=item * $size = ObjStore::get_page_size();
-
-=item * @Servers = ObjStore::get_all_servers();
-
-=item * $in_abort = ObjStore::abort_in_progress();
-
-=item * $num = ObjStore::get_n_databases();
-
-=back
-
-=head2 C<::Server>
-
-=over 4
-
-=item * $name = $s->get_host_name();
-
-=item * $is_broken = $s->connection_is_broken();
-
-=item * $s->disconnect();
-
-=item * $s->reconnect();
-
-=item * @Databases = $s->get_databases();
-
-=back
-
-=head2 C<::Database>
-
-Also see L<ObjStore::HV::Database>.
-
-=over 4
-
-=item * $open_mode = $db->is_open();
-
-=item * $s = $db->create_segment($comment);
-
-=item * $value = $db->root($root_name => sub{ $new_value });
-
-This is the recommended API for roots.  If the given root is not
-found, creates a new one.  Returns the root's current value.
-
-In general, you should try to avoid using roots.  Roots have an
-unnatural API for perl: hashes can nest but roots cannot.  Roots are
-similar to a necessary but annoying accounting detail.  It is much
-better practice to use L<ObjStore::HV::Database> or
-L<ObjStore::ServerDB>.
-
-=item * $s = $db->get_segment($segment_number);
-
-Be aware that this method (correctly) never returns an error.  The
-only way to know which segments are actually created in a database is
-to iterate through C<get_all_segments>.
-
-=item * @Segments = $db->get_all_segments();
-
-=item * $db->close();
-
-=item * $db->destroy();
-
-=item * $db->get_default_segment_size();
-
-=item * $db->get_sector_size();
-
-=item * $db->size();
-
-=item * $db->size_in_sectors();
-
-=item * $ctime = $db->time_created();
-
-=item * $can_write = $db->is_writable();
-
-=item * $db->set_fetch_policy(policy[, blocksize]);
-
-Policy can be one of C<segment>, C<page>, or C<stream>.
-
-=item * $db->set_lock_whole_segment(policy);
-
-Policy can be one of C<as_used>, C<read>, or C<write>.
-
-=item * @Roots = $db->get_all_roots();
-
-=item * $root = $db->create_root($root_name);
-
-=item * $root = $db->find_root($root_name);
-
-=item * $db->destroy_root($root_name);
-
-Destroys the root with the given name if it exists.
-
-=back
-
-=head2 C<::Root>
-
-=over 4
-
-=item * $root->get_name();
-
-=item * $root->get_value();
-
-=item * $root->set_value($new_value);
-
-=item * $root->destroy();
-
-=back
-
-=head2 C<::Transaction>
-
-C<ObjectStore> transactions and exceptions are seemlessly integrated into
-perl.  C<ObjectStore> exceptions cause a C<die> in perl just as perl
-exceptions can cause a transaction abort.
-
-    begin 'update', sub {
-        $top = $db->root('top');
-        $top->{abc} = 3;
-        die "Oops!  abc should not change!";       # aborts the transaction
-    };
-    die if $@;
-
-There are three types of transactions: C<read>, C<update>, and
-C<abort_only>.  The default is C<read>.  Read transaction are
-blindingly fast.
-
-    begin 'read', sub {
-	my $var = $db->root('top');
-	$var->{abc} = 7;	# write to $var triggers exception
-    };
-    die if $@;
-
-(In a read transaction, you are not allowed to modify persistent data.)
-
-=over 4
-
-=item * $T = ObjStore::Transaction::get_current();
-
-=item * $type = $T->get_type();
-
-=item * $pop = $T->get_parent();
-
-=item * $T->prepare_to_commit();
-
-=item * $yes = $T->is_prepare_to_commit_invoked();
-
-=item * $yes = $T->is_prepare_to_commit_completed();
-
-=item * $ObjStore::TRANSACTION_PRIORITY
-
-=item * ObjStore::set_max_retries($oops);
-
-=item * my $oops = ObjStore::get_max_retries();
-
-=item * my $yes = ObjStore::is_lock_contention();
-
-=item * my $type = ObjStore::get_lock_status($ref);
-
-=item * my $tm = ObjStore::lock_timeout($rw);
-
-C<$rw> should be either 'read' or 'write'.  Return value of 1 == 1
-second.  Undef indicates that there is no timeout.
-
-=item * ObjStore::lock_timeout($rw, $tm);
-
-Set lock timeouts.
-
-=back
-
-Dynamic transactions are also available.  See L<ObjStore::Serve>.
-
-=head2 C<::Segment>
-
-=over 4
-
-=item * $s->set_comment($comment);
-
-=item * $s->destroy();
-
-=item * $size = $s->size();
-
-=item * $yes = $s->is_empty();
-
-=item * $yes = $s->is_deleted();
-
-=item * $num = $s->get_number();
-
-=item * $comment = $s->get_comment();
-
-=item * $s->lock_into_cache();
-
-=item * $s->unlock_from_cache();
-
-=item * $s->set_fetch_policy($policy[, $size]);
-
-Policy can be one of C<segment>, C<page>, or C<stream>.
-
-=item * $s->set_lock_whole_segment($policy);
-
-Policy can be one of C<as_used>, C<read>, or C<write>.
-
-=back
-
-=head2 C<::Notification>
-
-Easy event dispatching for network distributed objects.  See
-L<ObjStore::notify>.
-
-=over 4
-
-=item * ObjStore::subscribe(...);
-
-=item * ObjStore::unsubscribe(...);
-
-=item * set_queue_size($size);
-
-=item * ($size, $pending, $overflow) = queue_status();
-
-=item * $fd = _get_fd();
-
-=item * $n = receive([$timeout]);
-
-=item * Receive();
-
-=item * $db = $n->get_database;
-
-=item * $p = $n->focus;
-
-=item * $why = $n->why;
-
-=back
-
-=head2 C<::UNIVERSAL>
-
-All persistent objects inherit from C<ObjStore::UNIVERSAL>.
-
-=over 4
-
-=item * I<overload>
-
-Stringify, boolean & numeric coersion, equality tests.
-
-=item * C<os_class>
-
-Reports the natural persistent class of the object.  All persistent
-objects must have this class in their C<@ISA> tree.
-
-=item * C<rep_class>
-
-Reports the representation's class.
-
-=item * C<bless>
-
-In addition to the usual meaning of bless, ObjStore C<bless> stores
-the current C<@ISA> tree and the C<VERSION> of every member of the
-C<@ISA> tree.
-
-=item * C<$o->isa($baseclass)>
-
-Whether the $baseclass was part of the C<@ISA> tree at the moment of
-blessing.
-
-=item * C<$o->versionof($baseclass)>
-
-Returns the version of the $baseclass (at the moment of blessing).
-
-=item * C<$o->subscribe()> and C<$o->unsubscribe()>
-
-These might not be available per-object.  Only per-segment or
-per-database. XXX
-
-=item * C<$o->notify($why, $when)>
-
-Sends a notification to subscribers.  When can be either 'now' or
-'commit'.  The $when parameter might be required.  [Also under
-consideration is a means to bunch notifications together for batch
-send. XXX]
-
-=item * Of
-
-C<database_of> and C<segment_of> are available as methods.
-
-=item * C<posh>
-
-C<posh> behavior can be customized by adding special methods that are
-detected by C<posh>.  See the L<posh> section.
-
-=back
-
-To make everything seem apparently consistent, C<ObjStore::Database>
-(while not really being a storable object) is lavishly special-cased
-to support most (maybe all!) of the above features.
 
 =head1 THE ADVANCED CHAPTER
 
@@ -815,8 +504,8 @@ speed.
 =item * EXCEPTIONS & EVAL
 
 Transactions are always executed within an implicit C<eval>.
-Therefore, after a transaction check C<$@> to see if anything went
-wrong:
+Therefore, after a transaction always check C<$@> to see if anything
+went wrong:
 
   begin(sub {
      ...
@@ -844,10 +533,10 @@ transaction is an update or not, you can leave the mode unspecified.
 
 =item * DEADLOCK RETRIES
 
-Built-in automatic deadlock retry is not supported.  Support was
-withdrawn not because it doesn't work but because it doesn't make much
-sense in perl.  Deadlock retry is so easy to implement yourself, you
-should (if you even need it).
+Built-in automatic deadlock retry is not supported.  This feature was
+implemented and then withdrawn not because it doesn't work but because
+it doesn't make sense in perl.  Deadlock retry is *so* easy to
+implement yourself, you should (if you actually need it).
 
 =back
 
@@ -930,7 +619,7 @@ autoloading functions.
 
 =head2 Where Is The Hard Part?
 
-I don't know.  I am humbly working hard trying to find it.
+I don't know.  Humbly I am working to trying to find out.
 
 =head1 DIRECTION
 
@@ -947,10 +636,6 @@ styistic perfection.
 =item * MORE APIs
 
 Support for any other interesting C<ObjectStore> APIs.
-
-=item * MORE BUILT-IN DATA TYPES
-
-Support for bit vectors (Bit::Vector) and matrices (PDL)?
 
 =back
 

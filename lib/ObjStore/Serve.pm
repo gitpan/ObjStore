@@ -3,11 +3,11 @@ use strict;
 package ObjStore::Serve;
 use Carp;
 use Exporter ();
-use Event 0.28 qw(loop unloop_all);
+use Event 0.38 qw(loop unloop_all);
 use ObjStore;
 use base 'ObjStore::HV';
 use vars qw($VERSION @ISA @EXPORT_OK $SERVE $Init $TXOpen);
-$VERSION = '0.05';
+$VERSION = '0.06';
 push @ISA, 'Exporter', 'osperlserver';
 @EXPORT_OK = qw(&txqueue &txretry &seconds_delta &dyn_begin &dyn_commit
 		&init_signals &meter &exitloop $ChkptEv);
@@ -252,18 +252,20 @@ sub defaultLoop {
     if (!$Init) { &init_signals; ++$Init }
     $ChkptEv = Event->timer(e_desc => 'ObjStore::Serve checkpoint',
 			    e_nice => -1, e_hard => 0, e_repeat => 0,
-			    e_interval => \$LoopTime, e_cb => sub {
+			    e_interval => \$LoopTime, e_max_cb_tm => 60,
+			    e_cb => sub {
 				eval { dyn_commit($ChkptEv->{e_repeat}) };
 				if ($@) { warn; unloop_all() }
 			    });
     $Event::DIED = sub {
-	my ($e, $why) = @_;
+	my ($run, $why) = @_;
+	my $desc = $run ? $run->w->{e_desc} : '?';
 	my $how = 'died';
 	if ($TXN and !$TXN->is_aborted) {
 	    $TXN->abort;
 	    $how = 'aborted';
 	}
-	my $m = "Event '$e->{e_desc}' $how: $why";
+	my $m = "Event '$desc' $how: $why";
 	$m .= "\n" if $m !~ m/\n$/;
 	warn $m;
     };

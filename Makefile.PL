@@ -27,7 +27,7 @@ WriteMakefile
 #     OPTIMIZE => '-g',
      LINKTYPE => 'dynamic',  # static not supported!!!
      VERSION_FROM => './lib/ObjStore.pm',
-     EXE_FILES  => [qw/ospeek posh osperlserver qtposh/],
+     EXE_FILES  => [qw/posh osperlserver qtposh/],
     );
 
 sub MY::linkext { 

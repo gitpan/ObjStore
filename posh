@@ -68,8 +68,8 @@ Usage: posh [switches] [database [class]]
 
 # this is probably wrong XXX
 require ObjStore::REP::Splash;
-require ObjStore::REP::FatTree;
 require ObjStore::REP::ODI;
+#require ObjStore::REP::FatTree;
 
 package input;
 use ObjStore ':ADV';

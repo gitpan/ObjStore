@@ -84,7 +84,7 @@ for (my $arg=0; $arg < @ARGV; $arg++) {
     } elsif ($o =~ m/^-h(elp)?$/) {
 	&usage;
     } else {
-	warn "unknown option '$o' (-h for usage)\n";
+	warn "Unknown option '$o' (-h for usage).\n";
     }
 }
 &usage if @DB==0;

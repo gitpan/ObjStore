@@ -100,16 +100,14 @@ sub add_os_args {
 #				   "-L$Config{sitearch}/auto/ObjStore"] };
 	    my $ospdir = "-L$installsitearch/auto/ObjStore";
 	    for (@{$arg{LIBS}}) {
-		$_ .= (" $strip ".join(' ',@$libs)." $ospdir -losperl".
-		       &ObjStore::Config::API_VERSION);
+		$_ .= (" $strip ".join(' ',@$libs)." $ospdir -losperl");
 	    }
 	} else {
 	    $arg{INC} .= " -I$installsitearch/auto/ObjStore";
 	    push @{$arg{TYPEMAPS}}, "$installsitearch/auto/ObjStore/typemap";
 	    for (@{$arg{LIBS}}) {
 		$_ .= (" $strip ".join(' ', @$libs).
-		       " -L$installsitearch/auto/ObjStore -losperl".
-		       &ObjStore::Config::API_VERSION);
+		       " -L$installsitearch/auto/ObjStore -losperl");
 	    }
 	}
     }

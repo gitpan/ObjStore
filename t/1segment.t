@@ -88,3 +88,4 @@ begin 'update', sub {
     $nseg = $h->{nums}->segment_of;
     ok($nseg->get_number(), $seg->get_number());
 };
+die if $@;

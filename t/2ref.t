@@ -1,6 +1,6 @@
 # Test broken -*-perl-*- refs
 use Test;
-BEGIN { plan tests => 21, todo => [20] }
+BEGIN { plan tests => 23, todo => [22] }
 
 use strict;
 use ObjStore;
@@ -13,6 +13,12 @@ use test;
 use vars qw($VERSION @ISA $norefs);
 $VERSION = '0';
 @ISA = 'ObjStore::AV';
+
+sub new {
+    my $o = shift->SUPER::new(@_);
+    $o->[0] = 'ok';
+    $o;
+}
 
 $norefs = 0;
 sub NOREFS {
@@ -69,6 +75,8 @@ begin('update', sub {
     $saver = ObjStore::AV->new($db);
     $saver->[0] = 1;
     new noref_test($db);
+    ok $saver->[1]->_refcnt, 1;
+    ok $saver->[1][0], 'ok';
     undef $saver;
 });
 die if $@;

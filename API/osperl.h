@@ -28,6 +28,8 @@ extern void osp_croak(const char* pat, ...);
 #undef U16
 #define U16 os_unsigned_int16
 
+#define OSPERL_API_VERSION 2
+
 // OSSV has only 16 bits to store type information.  Yikes!
 
 // NOTE: It probably would have been slightly more efficient to make
@@ -138,10 +140,13 @@ struct OSPV_nv {
   double nv;
 };
 
+/* All sub-types are required to provide at least 1 byte worth of flags */
+
 #define OSPV_INUSE	0x0001	/* protect against race conditions */
 #define OSPV_BLESS2	0x0002	/* blessed with 'bless version 2' */
-#define OSPV_REPLOCK	0x0004	/* ?do not change representation dynamically XXX */
-#define OSPV_MODCNT	0x0008	/* ?increment the modcnt for every modification */
+#define OSPV_DELETED	0x0004	/* this object will be deleted soon */
+#define OSPV_REPLOCK	0x0008	/* ?do not change representation dynamically XXX */
+#define OSPV_MODCNT	0x0010	/* ?increment the modcnt for every modification */
 #define OSPV_pFLAGS	0xFF00	/* private flags for sub-classes */
 
 #define OSPvFLAGS(pv)		(pv)->pad_1
@@ -154,9 +159,14 @@ struct OSPV_nv {
 #define OSPvBLESS2_on(pv)	(OSPvFLAGS(pv) |= OSPV_BLESS2)
 #define OSPvBLESS2_off(pv)	(OSPvFLAGS(pv) &= ~OSPV_BLESS2)
 
+#define OSPvDELETED(pv)		(OSPvFLAGS(pv) & OSPV_DELETED)
+#define OSPvDELETED_on(pv)	(OSPvFLAGS(pv) |= OSPV_DELETED)
+
+typedef void *(*dynacast_fn)(void *obj, HV *stash);
+
 struct OSSVPV : os_virtual_behavior {
   os_unsigned_int32 _refs;
-  // _weak_refs unused (1.42)  Maybe use as a modification counter?  Hm...
+  // _weak_refs unused (1.42) - schema evolution hell!  Drat!
   os_unsigned_int16 _weak_refs;
   os_int16 pad_1;		//rename to 'flags'
   char *classname;		//should be OSPVptr, alas...
@@ -173,6 +183,7 @@ struct OSSVPV : os_virtual_behavior {
   HV *load_stash_cache(char *CLASS, STRLEN CLEN, OSPV_Generic *blessinfo);
 
   virtual int get_perl_type();
+  virtual dynacast_fn get_dynacast_meth();
   virtual void make_constant();
   virtual void _debug1(void *); //whatever you want
 
@@ -467,11 +478,42 @@ public:
   OSSV *get_tmpkey() { return &tmpkeys[tmpkey++]; }
 };
 
+struct osp_bridge_ring {
+  const void *self;
+  osp_bridge_ring *next, *prev;
+  osp_bridge_ring(void *_self) :self(_self) { next = prev = this; }
+  ~osp_bridge_ring() { detach(); }
+  int empty() { return next == this; }
+  void *pop() {
+    assert(!self);
+    osp_bridge_ring *rg = next;
+    rg->detach();
+    return (void*) rg->self;
+  }
+  void detach() {
+    if (next != this) {
+      next->prev = prev;
+      prev->next = next;
+      next = prev = this;
+    }
+  }
+  void attach(osp_bridge_ring *r1) {
+    assert(next == this);
+    next = r1->next;
+    prev = r1;
+    next->prev = this;
+    prev->next = this;
+  }
+};
+
 // ODI seemed to want to restrict tix_handlers to lexical scope.
 /*No thanks:*/ struct dytix_handler { tix_handler hand; dytix_handler(); };
 
 // per-thread globals
 struct osp_thr {
+  static int Version;
+  static void version_check(int ver);
+
   osp_thr();
   ~osp_thr();
 
@@ -494,10 +536,11 @@ struct osp_thr {
   long debug;
   dytix_handler *hand;
   char *report;
-  ospv_bridge *ospv_freelist;
+  osp_bridge_ring ospv_freelist;
   osp_pathexam exam;
 
   //glue methods
+  static void *default_dynacast(void *obj, HV *stash);
   static os_segment *sv_2segment(SV *);
   static ospv_bridge *sv_2bridge(SV *, int force, os_segment *near=0);
   static SV *ossv_2sv(OSSV *ossv, int hold=0);
@@ -510,7 +553,10 @@ struct osp_thr {
   void push_ospv(OSSVPV *pv); //depreciated?
 };
 
-struct osp_bridge_link { osp_bridge_link *next, *prev; };
+struct osperl_version_check {
+  osperl_version_check(int ver) { osp_thr::version_check(ver); }
+};
+static osperl_version_check _osperl_version_check(OSPERL_API_VERSION);
 
 struct osp_txn {
   osp_txn(os_transaction::transaction_type_enum,
@@ -531,7 +577,7 @@ struct osp_txn {
   os_transaction::transaction_scope_enum ts;
   os_transaction *os;
   U32 owner;   //for local transactions; not yet XXX
-  osp_bridge_link ring;
+  osp_bridge_ring link;
 };
 
 #define dOSP osp_thr *osp = osp_thr::fetch()
@@ -553,9 +599,15 @@ if (av_len(osp_thr::TXStack) >= 0) {				\
 
   - Each bridge has a refcnt to the persistent object, but only
     during updates (and in writable databases).
+
+  There is a split between osp_bridge & ospv_bridge not because
+  of necessity but mainly to try to form the clearest idea of
+  what is happening.
  */
 
-struct osp_bridge : osp_bridge_link {
+struct osp_bridge {
+  dynacast_fn dynacast;
+  osp_bridge_ring link;
   int refs;
   int detached;
   int manual_hold;
@@ -573,7 +625,8 @@ struct osp_bridge : osp_bridge_link {
 #define DEBUG_bridge(br,a)
 #endif
 
-  void init();
+  osp_bridge();
+  void init(dynacast_fn dcfn);
   osp_txn *get_transaction();
   void leave_perl();
   void enter_txn(osp_txn *txn);
@@ -587,15 +640,14 @@ struct osp_bridge : osp_bridge_link {
 };
 
 struct osp_smart_object {
-  virtual void REF_inc();
-  virtual void REF_dec();
+  virtual void freelist();
   virtual ~osp_smart_object();
 };
 
 // do not use as a super-class!!
 struct ospv_bridge : osp_bridge {
   OSSVPV *pv;
-  osp_smart_object *info;
+  osp_smart_object *info;  // for cursors & such
 
   virtual void init(OSSVPV *_pv);
   virtual void unref();

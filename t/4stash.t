@@ -25,9 +25,11 @@ begin 'update', sub {
     $g->{color} = 'Pink';
     $g->{size} = 10;
 };
+die if $@;
 
 begin sub {
     my $g = $db->stash('MyGSpot');
     ok($g->{color} eq 'Pink');
     ok($g->{size} == 10);
 };
+die if $@;

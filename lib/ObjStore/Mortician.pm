@@ -2,34 +2,37 @@ use strict;
 package ObjStore::Mortician;
 use ObjStore;
 use base 'ObjStore::HV';
-use vars qw($VERSION);
-$VERSION = '0.02';
+use vars qw($VERSION $Next $Debug);
+$VERSION = '0.04';
 
 sub import {
     # allow keepalive customization?
     my $p = caller;
     no strict 'refs';
     *{"$ {p}::NOREFS"} = sub {
+	die "ObjStore::Mortician was not restarted" if !defined $Next;
 	my ($carcass) = @_;
 	# slow but how else?
 	my $o = $carcass->database_of->hash->{'ObjStore::Mortician'};
-	if ("$carcass" eq $$o{'next'}) {
-#	    warn "burning $carcass ".$carcass->_refcnt;
+	if ("$carcass" eq $Next) {
+	    warn "ObjStore::Mortician: burning $Next\n"
+		if $Debug;
+	    $Next = '';  #the same memory can be reused! careful!
 	    return;
 	}
 	die "can't find myself" if !$o;
 	my $q = $$o{hades};
 	# prefer to use cached time... XXX
 	push @$q, time, $carcass;
-#	warn "embalming $carcass ".$carcass->_refcnt;
+	$carcass->DELETED(1);
+	warn "ObjStore::Mortician: embalming $carcass\n"
+	    if $Debug;
     };
 }
 
-sub new { shift->SUPER::new(@_)->evolve; }
-
-sub evolve {
+sub restart {
     my ($o) = @_;
-    $$o{keepalive} ||= 30;  #minimum keepalive time
+    $$o{keepalive} ||= 60;  #minimum keepalive time
     $$o{hades} ||= ObjStore::AV->new($o, 20);
     if (my $j = $$o{job}) {
 	if (!$j->runnable or !$j->is_evolved) {
@@ -38,7 +41,7 @@ sub evolve {
 	}
     }
     $$o{job} ||= ObjStore::Mortician::Job->new($o);
-    $$o{'next'} = '';
+    $Next = '';
     $o;
 }
 
@@ -59,7 +62,7 @@ sub new {
 
 sub do_signal {
     my ($o, $sig) = @_;
-    return if $sig eq 'kill';    # (saving throw... made!)
+    return if $sig eq 'kill';    # (saving throw...made!)
     $o->SUPER::do_signal($sig);
 }
 
@@ -72,7 +75,7 @@ sub do_work {
     while ($slices > 0 and @$q and $now - $$q[0] > $$o{keepalive}) {
 	$slices -= 50;     #more?
 	shift @$q;
-	$$o{'next'} = "$$q[0]";  # slow :-(
+	$ObjStore::Mortician::Next = "$$q[0]";  # slow :-(
 	shift @$q;               # final destruction
     }
     $slices;
@@ -89,6 +92,8 @@ ObjStore::Mortician - Delay Physical Destruction of Persistent Objects
 
     package MySlowlyDeletedClass;
     use ObjStore::Mortician;
+
+    #$ObjStore::Mortician::Debug = 1;   #if debugging
 
 =head1 DESCRIPTION
 

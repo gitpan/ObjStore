@@ -1,4 +1,3 @@
-# DEPRECIATED
 use strict;
 require ObjStore::Table2; #new version
 
@@ -8,6 +7,8 @@ use ObjStore;
 use base 'ObjStore::HV';
 use vars qw($VERSION);
 $VERSION = '0';
+
+Carp::cluck "ObjStore::Table is depreciated";
 
 sub new {
     my ($class, $where, $size) = @_;

@@ -12,7 +12,8 @@ sub new {
     my ($class, $near, $id, $priority) = @_;
     # uses real pointers so must be per-database...
     my $t = $near->database_of->hash->{'ObjStore::Job::Table'};
-    my $o = shift->SUPER::new($t);
+    die "No ObjStore::Job::Table found" if !$t;
+    my $o = shift->SUPER::new($t->segment_of);
     # $id is a string!
     if ($id) { $$o{id} = "$id"; }
     else {     $$o{id} = "$$t{nextid}"; ++$$t{nextid}; }
@@ -125,7 +126,7 @@ Allowed to consume all available pizza slices.
 =item * TIME-SLICED 1-20
 
 Given pizza slices proportional to the priority until either all the
-pizza slices are consumed or all the jobs are asleep (feast induced
+pizza slices are consumed or all the jobs are asleep (feasts induce
 slumber :-).
 
 =item * IDLE > 20
@@ -140,7 +141,7 @@ The whole scheduling operation occurs within a single transaction.
 While this means that any job can kill the entire transaction, this
 seems a better choice than wrapping every job in its own
 mini-transaction.  Since transactions are relatively expensive, it is
-assumed that most of the time all jobs will complete without error.
+hoped that most of the time all jobs will complete without error.
 
 =head1 BUGS
 

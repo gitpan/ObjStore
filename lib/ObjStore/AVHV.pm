@@ -120,6 +120,7 @@ sub new {
 }
 
 sub is_evolved {
+    local $Carp::CarpLevel = $Carp::CarpLevel+1;
     my ($o) = @_;
     return 0 if !$o->SUPER::is_evolved();
     ObjStore::AVHV::Fields::is_newest_layout($o);

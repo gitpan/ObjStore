@@ -1017,6 +1017,21 @@ DESTROY(sv)
 	  br->leave_perl();
 	}
 
+void
+OSSVPV::DELETED(...)
+	PROTOTYPE: $;$
+	PPCODE:
+	STRLEN len;
+	if (items == 1)
+	  XPUSHs(boolSV(OSPvDELETED(THIS)));
+	else if (items == 2) {
+	  if (SvTRUEx(ST(1)))
+	    OSPvDELETED_on(THIS);
+	  else if (OSPvDELETED(THIS))
+	    croak("Cannot undelete OSSVPV=0x%p os_class='%s' rep_class='%s'",
+		THIS, THIS->os_class(&len), THIS->rep_class(&len));
+	}
+
 bool
 _is_persistent(sv)
 	SV *sv;

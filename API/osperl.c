@@ -15,6 +15,12 @@
 #define SERIOUS warn
 #define RETURN_BADNAME(len) *len=3;return "???"
 
+void osp_thr::version_check(int ver)
+{
+  if (ver != OSPERL_API_VERSION)
+    croak("ObjStore API mismatch (%d != %d); please recompile everything that links with -losperl", OSPERL_API_VERSION, ver);
+}
+
 /* CCov: on */
 
 /*--------------------------------------------- schema */
@@ -41,6 +47,12 @@ os_segment *osp_thr::sv_2segment(SV *sv)
     return os_segment::get_transient_segment();
   Perl_sv_dump(sv);
   croak("sv_2segment only accepts ObjStore::Segment");
+  return 0;
+}
+
+void *osp_thr::default_dynacast(void *obj, HV *stash)
+{
+  croak("Don't know how to convert ObjStore object to a '%s'", HvNAME(stash));
   return 0;
 }
 
@@ -81,6 +93,11 @@ ospv_bridge *osp_thr::sv_2bridge(SV *ref, int force, os_segment *near)
       br = (ospv_bridge*) SvIV((SV*)SvRV(mgobj));
     } else if (SvTYPE(nval) == SVt_PVMG) {
       br = (ospv_bridge*) SvIV(nval);
+      if (br->dynacast != osp_thr::default_dynacast) {
+	/* It is unlikely this will ever actually succeed, but
+	   we want to give the opportunity for a helpful error message. */
+	br = (ospv_bridge*) (br->dynacast)(br, BridgeStash);
+      }
     }
   } while (0);
 
@@ -130,9 +147,8 @@ static SV *ospv_2bridge(OSSVPV *pv, int hold=0)
 {
   dOSP;
   ospv_bridge *br;
-  if (osp->ospv_freelist) {
-    br = osp->ospv_freelist;
-    osp->ospv_freelist = (ospv_bridge*) br->next;
+  if (!osp->ospv_freelist.empty()) {
+    br = (ospv_bridge*) osp->ospv_freelist.pop();
   } else {
     br = new ospv_bridge;
   }
@@ -1055,6 +1071,9 @@ void OSSVPV::REF_dec() {
 int OSSVPV::get_perl_type()
 { return SVt_PVMG; }
 
+dynacast_fn OSSVPV::get_dynacast_meth()
+{ return osp_thr::default_dynacast; }
+
 int OSSVPV::can_update(void *vptr)
 {
   if (os_segment::of(this) == os_segment::of(0)) {
@@ -1120,13 +1139,12 @@ int OSSVPV::is_OSPV_Ref2() { return 0; }
 
 /*--------------------------------------------- ospv_bridge */
 
-void osp_smart_object::REF_inc() {}
-void osp_smart_object::REF_dec() { delete this; }
+void osp_smart_object::freelist() { delete this; }
 osp_smart_object::~osp_smart_object() {}
 
 void ospv_bridge::init(OSSVPV *_pv)
 {
-  osp_bridge::init();
+  osp_bridge::init(_pv->get_dynacast_meth());
   // optimize! XXX
   info = 0;
   pv = _pv;
@@ -1177,7 +1195,7 @@ int ospv_bridge::is_weak()
 void ospv_bridge::unref()
 {
   if (!pv) return;
-  if (info) { info->REF_dec(); info=0; }
+  if (info) { info->freelist(); info=0; }
 
   // avoid single thread race condition
   OSSVPV *copy = pv; pv=0;
@@ -1194,8 +1212,7 @@ void ospv_bridge::unref()
 void ospv_bridge::freelist()
 {
   dOSP;
-  next = osp->ospv_freelist;
-  osp->ospv_freelist = this;
+  link.attach(&osp->ospv_freelist);
 }
 
 //---------------------------------------------- OSPV INTERFACES --
@@ -1465,11 +1482,11 @@ int osp_pathexam::compare(OSSVPV *dat, int partial)
   tmpkey = PATHEXAM_MAXKEYS;
   int cmp;
   for (int kx=0; kx < pathcnt; kx++) {
-    OSSV *k1 = keys[kx];
-    if (!k1) {
+    if (kx >= keycnt) {
 	if (partial) return 0;
 	return descending? 1 : -1;
     }
+    OSSV *k1 = keys[kx];
     OSSV *k2 = path_2key(kx, dat);
     if (!k2) return descending? -1 : 1;
     cmp = k1->compare(k2);

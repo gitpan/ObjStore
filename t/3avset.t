@@ -40,3 +40,4 @@ begin 'update', sub {
     ok(!$s->exists($b[1]), 1);
     ok($s->exists($b[2]), 1);
 };
+die if $@;

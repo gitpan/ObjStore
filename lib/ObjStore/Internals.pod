@@ -83,47 +83,6 @@ difference in compactness can be quite noticable.
 
 =back
 
-=head2 Representation
-
-All values take a minimum of 8 bytes (OSSV).  These 8 bytes are used
-to store 16-bits of type information, a pointer, and a general purpose
-16-bit value.
-
-  value stored                   extra allocation (in addition to OSSV)
-  ------------------------------ -------------------------------------
-  undef                          none
-  pointer                        none
-  16-bit signed integers         none
-  32-bit signed integers         4 byte block (OSPV_iv)
-  double                         8 byte block (OSPV_nv)
-  string                         length of string (char*)
-  object (ref or container)      sizeof object (see subclasses of OSSVPV)
-                                 additional references take no extra space
-  bless                          .5-1k bytes per class (zero per object)
-
-  %ObjStore::sizeof XXX
-
-Since 32-bit integers and doubles are fairly common and should be
-stored densely, a pool allocation algorithm is planned.
-
-The ODI FAQ also states: I<In addition, there is an associated entry
-in the info segment for the segment in question for each allocation of
-the object. This is done in the tag table. The overhead is 16 bits
-(i.e., 2 bytes) for each singleton (i.e., non-array) allocation, 32
-bits for each character array allocation for character arrays E<lt>=
-255 characters, and 48 bits for each character array allocation E<gt>
-255 characters, or any array allocation of an object of another type.
-Also, depending on the size of an object (i.e., if you allocate a
-"huge" object - one that is E<gt>64Kb) there is other overhead caused
-by alignment constraints.>
-
-If this seems like a lot of overhead, consider that it is not really
-possible to directly compare these numbers to RDBMS statistics.  At
-least we can say that relational data can be stored with much less
-duplication when moved into C<ObjectStore>.  This is unquestionably
-true when you tailor your own C++ extensions to fit data access
-patterns.
-
 =head2 Bless
 
 If you are a suspicious person (like my mom) you might have suspected
@@ -175,6 +134,92 @@ C<${"${package}::UNLOADED"}> is set to true.  This flag is used to
 signal that the @ISA tree should not be considered authoritative for a
 particular package.
 
+=head2 Representation
+
+All values take a minimum of 8 bytes (OSSV).  These 8 bytes are used
+to store 16-bits of type information, a pointer, and a general purpose
+16-bit value.
+
+  value stored                   extra allocation (in addition to OSSV)
+  ------------------------------ -------------------------------------
+  undef                          none
+  pointer                        none
+  16-bit signed integers         none
+  32-bit signed integers         4 byte block (OSPV_iv)
+  double                         8 byte block (OSPV_nv)
+  string                         length of string (char*)
+  object (ref or container)      sizeof object (see subclasses of OSSVPV)
+                                 additional references take no extra space
+  bless                          .5-1k bytes per class (zero per object)
+
+  %ObjStore::sizeof XXX
+
+Since 32-bit integers and doubles are fairly common and should be
+stored densely, a pool allocation algorithm is planned.
+
+The ODI FAQ also states: I<In addition, there is an associated entry
+in the info segment for the segment in question for each allocation of
+the object. This is done in the tag table. The overhead is 16 bits
+(i.e., 2 bytes) for each singleton (i.e., non-array) allocation, 32
+bits for each character array allocation for character arrays E<lt>=
+255 characters, and 48 bits for each character array allocation E<gt>
+255 characters, or any array allocation of an object of another type.
+Also, depending on the size of an object (i.e., if you allocate a
+"huge" object - one that is E<gt>64Kb) there is other overhead caused
+by alignment constraints.>
+
+If this seems like a lot of overhead, consider that it is not really
+possible to directly compare these numbers to RDBMS statistics.  At
+least we can say that relational data can be stored with much less
+duplication when moved into C<ObjectStore>.  This is unquestionably
+true when you tailor your own C++ extensions to fit data access
+patterns.
+
+=head2 Representation Limitations
+
+=over 4
+
+=item *
+
+Exact width types are preferred.  Specify number of bits per
+integer when possible.  It is still mostly unresolved as to how to
+deal with 64-bit integer types.
+
+=item *
+
+Try to be as binary compatible as possible between different
+platforms.  N-bit width types generally need n-bit alignment.  For
+example, 32-bit integers must usually be stored with 32-bit alignment.
+
+=item *
+
+Unions are not supported.  (Don't even think about it! :-)
+
+=item *
+
+Variable length structures are probably not supported.  For example:
+
+  struct varstr {
+    int refcnt;
+    char string[0];  # sized via malloc
+  };
+
+Instead, you must allocate an array separately:
+
+  struct varstr {
+    int refcnt;
+    char *string;    # string = malloc(sizeof(char) * len)
+  };
+
+=item *
+
+Changing the layout of structures after they are stored in a database
+is generally a nightmare.  Instead it is recommended that a version
+number be appended to the name of the structure (e.g. mystruct1,
+mystruct2, mystruct3) and all support code be kept indefinitely.
+
+=back
+
 =head2 Go Extension Crazy
 
 Add your own C<C++> representation.  New families of objects can
@@ -183,7 +228,34 @@ optimized, persistent bit vectors?  Or matrics?  No problem.
 
 Documentation is slim, but don't let that stop you.  There are many
 examples.  See the included representations and also
-L<ObjStore::REP::HashRecord>.
+L<ObjStore::REP::HashRecord> & L<ObjStore::Lib::PDL>.
+
+=head2 Typemap
+
+The typemap is complicated because of the need to insure that
+persistent data is not accessed outside of its transaction.
+
+  OODB[SCALAR1 SCALAR2]
+         |        |
+       BRIDGE  BRIDGE
+         |        |
+  PERL[SCALAR1 SCALAR2]
+  
+A bridge has two owners: perl and the current transaction.  The bridge
+and the scalar have different lifetimes.  The scalar lives for
+MIN(perl,txn), while the bridge must live for MAX(perl,txn) (or at
+least until perl is done).
+
+Persistent refcnts are only (can only) be updated during update
+transactions.  Fortunately, read-only transactions pose no problem:
+refcnts cannot be updated but object cannot be deleted either.
+
+Bridges are also used to store transient cursors associated with
+collections.  For example, suppose you need to iterate over a hash
+during a read transaction.  The hash is read-only so you create the
+cursor transiently and store it in the bridge.
+
+[XXX also mention dynacast stuff]
 
 =head2 Notes On The Source Code
 
@@ -299,32 +371,24 @@ like to say B<"thank you!"> to all the wonderful teachers with whom
 I've had the opportunity of studying.  My ideas are truly theirs.
 While I predict that this software will be considered a world-class
 inter-disciplinary achievement (!), I do not see it as such.  Rather,
-I see it as a simple mechanical exercise employed to bring me to a
-basic level of clear understanding.  My subsequent hope is that people
-who use this software will also be able to learn from its clarity.
-But what are my real aspirations?
+it was a simple mechanical exercise that I used to gain a basic level
+of clear understanding with the happy side effect of being useful in a
+business context.  My subsequent hope is that people who use this
+software will also be able to learn from its clarity.  But what are my
+real aspirations?
 
-I should keep quiet about that but I can say this much: One of my
-friends had an email signature: "Life would be so much easier if we
-could just look at the source code."  (Imagine, "computational
-metaphysics" :-) In using this module, you might feel a hint of it?
-That's my real interest.  If you share this interest, perhaps you
-might be interested in understanding to greater depth (even beyond the
-bounds of all thought and limitations)?
+I should keep quiet about that but I can say this much: one of my
+friends had an email signature that read, "Life would be so much
+easier if we could just look at the source code."  ("Computational
+metaphysics" :-) If you share this interest then I can tell you with
+some certainty that the answers are not found exclusively in the
+software world.  However, interesting parallels can be drawn and are
+not unhelpful.
 
-What if you stumbled upon just such opportunity?  What if you found
-someone who was absolutely convincing in their knowledge of the
-absolute?  What would you do?
-
-One of the main reasons I bothered to kill myself developing this
-software (and foolishly giving it away for free!) is that I want
-people to know that life can have perfect meaning, if one has the deep
-humility required to find it.  Maybe you don't care?  That is okay.
-You are welcome to use this software even if you are interested
-exclusively in satisfying your own greed (it will work wonders :-).
-However, I have an obligation to state the truth.  You can either be
-part of the problem or part of the solution.  And what is at stake is
-much bigger than you think.
+If you will suspend judgement for a moment, I would like to invite you
+imagine a hypothetical situation: What if you found someone who was
+absolutely convincing in their knowledge of the absolute?  What if you
+had an opportunity to spend time with them?  What would you do?
 
 Designing software requires a basic subtlety of awareness: to be
 successful, you must be able to fluctuate fluidly between the place of
@@ -335,8 +399,16 @@ technique is just a technique.  There is a big difference between
 mastering the technique with respect to software and knowing its
 possibilities and potential in the general case.
 
-"With our thoughts we make the world."  Perhaps it's not common
-knowledge, but some things don't require belief to be true.
-Enlightenment is impersonal.
+One of the main reasons I bothered to kill myself developing this
+software (and foolishly giving it away for free!) is that I want
+people to know that perfection is actually a possibility.  It's
+actually possible for you to be the experiencer of perfection,
+continuously and/or predictably.  It seems like most people I meet are
+only certain that they can experience the lack of perfection or at
+best that they can experience perfection once in a while with a great
+deal of preparation and set up.  Maybe you don't care?  Maybe you
+don't believe it's possible?  That's okay.  You are welcome to use
+this software anyway (it will work wonders :-).  Enlightenment is
+impersonal!
 
 =cut

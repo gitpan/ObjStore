@@ -186,7 +186,7 @@ sub peek_any {
 	$o->peek_any($$val);
     } elsif ($type eq 'SCALAR') {
 	++ $o->{coverage};
-	$o->o($name);
+	$o->o($addr);
     } else {
 	die "Unknown type '$type'";
     }

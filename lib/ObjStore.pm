@@ -17,12 +17,11 @@ use vars
     qw($DEFAULT_OPEN_MODE),                                         # simulated
     qw(%SCHEMA $EXCEPTION %CLASSLOAD $CLASSLOAD $CLASS_AUTO_LOAD);  # private
 
-$VERSION = '1.46';
+$VERSION = '1.47';
 
 $OS_CACHE_DIR = $ENV{OS_CACHE_DIR} || '/tmp/ostore';
 if (!-d $OS_CACHE_DIR) {
-    mkdir $OS_CACHE_DIR, 0777 
-	or warn "mkdir $OS_CACHE_DIR: $!";
+    mkdir $OS_CACHE_DIR, 0777 or warn "mkdir $OS_CACHE_DIR: $!";
 }
 
 require Exporter;
@@ -33,7 +32,7 @@ require DynaLoader;
 		   &get_all_servers &set_default_open_mode &lock_timeout
 		   &get_lock_status &is_lock_contention 
 		  );
-    my @x_tra = (qw(&fatal_exceptions &release_name
+    my @x_tra = (qw(&release_name
 		    &network_servers_available
 		    &get_page_size &return_all_pages 
 		    &abort_in_progress &get_n_databases
@@ -42,7 +41,8 @@ require DynaLoader;
 		 # depreciated
 		 qw(&set_transaction_priority &subscribe &unsubscribe
 		   ));
-    my @x_old = qw(&schema_dir &get_max_retries &set_max_retries);
+    my @x_old = qw(&schema_dir &get_max_retries &set_max_retries
+		   &fatal_exceptions);
     my @x_priv= qw($DEFAULT_OPEN_MODE %CLASSLOAD $CLASSLOAD $EXCEPTION
 		   &_PRIVATE_ROOT);
 
@@ -153,15 +153,6 @@ sub PoweredByOS {
     "$Config::Config{sitelib}/ObjStore/PoweredByOS.gif"; #give it a shot... XXX
 }
 
-my $FATAL_EXCEPTIONS = 1;   #happy default for newbies... (or my co-workers :-)
-sub fatal_exceptions {
-    my ($yes) = @_;
-    if (!$FATAL_EXCEPTIONS and $yes) {
-	confess "sorry, the cat's already out of the bag";
-    }
-    $FATAL_EXCEPTIONS = $yes;
-}
-
 sub begin {
     my $code = pop @_;
     croak "last argument must be CODE" if !ref $code eq 'CODE';
@@ -181,7 +172,6 @@ sub begin {
 	1;
     };
     ($ok and $txn->get_type !~ m'^abort') ? $txn->commit() : $txn->abort();
-    die if ($@ and $FATAL_EXCEPTIONS);
     if (!defined wantarray) { () } else { wantarray ? @result : $result[0]; }
 }
 
@@ -405,6 +395,11 @@ sub try_abort_only(&) {
     carp "try_abort_only is depreciated.  Use begin('abort_only', sub {...})";
     ObjStore::begin('abort_only', $_[0]); ();
 }
+sub fatal_exceptions {
+    my ($yes) = @_;
+    confess "sorry, the cat's already out of the bag"
+	if $yes;
+}
 *rethrow_exceptions = \&fatal_exceptions; # depreciated
 *ObjStore::disable_class_auto_loading = \&disable_auto_class_loading; #silly me
 
@@ -598,9 +593,12 @@ sub _versionof {
     $txn? &ObjStore::begin($x) : &$x;
 }
 
+my $is_evolved_warn=0;
 sub _is_evolved {
+    local $Carp::CarpLevel = $Carp::CarpLevel+1;
     my ($o, $txn) = @_;
-    warn "is_evolved might be depreciated";
+    carp "is_evolved might be depreciated"
+	if ++$is_evolved_warn < 5;
     croak("is_evolved($o) is only meaningful on real objects") if !ref $o;
     my $x = sub {
 	my $bs = $o->_blessto_slot;
@@ -610,7 +608,10 @@ sub _is_evolved {
 	no strict 'refs';
 	my $then = $bs->[4];
 	while (my ($c,$v) = each %$then) {
-	    return if ($ {"$c\::VERSION"} || '') gt $v;
+	    if (($ {"$c\::VERSION"} || '') gt $v) {
+		#warn $c;
+		return;
+	    }
 	}
 	1;
     };
@@ -1071,18 +1072,21 @@ sub get_database {
 }
 
 package ObjStore::UNIVERSAL;
-BEGIN { ObjStore::BRAHMA->import(); }
-use vars qw($VERSION);
-$VERSION = '1.00';
 use Carp;
-use overload ('""' => \&_pstringify,
-	      'bool' => sub () {1},
-	      '0+' => \&_pnumify,
-	      '+' => \&_pnumify,
-	      '==' => \&_peq,
-	      '!=' => \&_pneq,
-#	      'nomethod' => sub { croak "overload: ".join(' ',@_); }
-	     );
+use vars qw($VERSION @OVERLOAD);
+$VERSION = '1.01';
+BEGIN {
+    ObjStore::BRAHMA->import();
+    @OVERLOAD = ('""' => \&_pstringify,
+		 'bool' => sub () {1},
+		 '0+' => \&_pnumify,
+		 '+' => \&_pnumify,
+		 '==' => \&_peq,
+		 '!=' => \&_pneq,
+		 # 'nomethod' => sub { croak "overload: ".join(' ',@_); }
+		);
+}
+use overload @OVERLOAD; # make normal XXX
 
 for (qw(segment_of get_pointer_numbers HOLD)) {
     ObjStore::_mark_method($_)

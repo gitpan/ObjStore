@@ -43,4 +43,5 @@ for my $rep (10, 100) {
 
 	delete $john->{c};
     };
+    die if $@;
 };

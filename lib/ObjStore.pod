@@ -604,8 +604,6 @@ blindingly fast.
 
 =item * ObjStore::set_max_retries($oops);
 
-=item * ObjStore::fatal_exceptions($yes);
-
 =item * my $oops = ObjStore::get_max_retries();
 
 =item * my $yes = ObjStore::is_lock_contention();
@@ -820,29 +818,18 @@ speed.
 
 =over 4
 
-=item * RELAXING EXCEPTION SEVERITY
+=item * EXCEPTIONS & EVAL
 
-Transactions are always executed within an implicit C<eval>.  By
-default, ObjectStore exceptions are fatal (by demand of my
-co-workers).  If you do not want your program to become suicidal when
-an C<ObjectStore> exception occurs, you should declare that you want
-control:
-
-  ObjStore::fatal_exceptions(0);
-
-This is global to the whole process.  If you want control, however,
-then you must accept responsibility.  After a transaction you
-absolutely must remember to check the value of C<$@> to see if
-anything went wrong.
+Transactions are always executed within an implicit C<eval>.
+Therefore, after a transaction check C<$@> to see if anything went
+wrong:
 
   begin(sub {
      ...
   });
-  die if $@;    # Don't forget to remember!
+  die if $@;
 
-Is it recommended that any perl extensions explicitly check for
-errors, just in case exceptions are not automatically re-thrown.  I am
-already regretting that I added this mode to begin with.
+XXX explain how $@ is set up as a reference XXX
 
 =item * NESTING
 

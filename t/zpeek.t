@@ -44,6 +44,7 @@ begin sub {
     $count = $p->Coverage;
     print $fh "count = $count\n";
 };
+die if $@;
 $fh->close;
 
 # Also see module 'Test::Output'

@@ -23,6 +23,7 @@ begin 'update', sub {
     
     ok(! defined $john->{nest});
 };
+die if $@;
 
 sub zero {
     my $h = shift;
@@ -35,3 +36,4 @@ begin 'update', sub {
     zero($john);
 #    zero($john->{dict});  BROKEN XXX
 };
+die if $@;

@@ -37,3 +37,4 @@ begin 'update', sub {
     ## roots
     ok(tied %$john);
 };
+die if $@;

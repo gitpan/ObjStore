@@ -598,11 +598,17 @@ sub run {
     print "[set for \U$o->{ttype}]\n";
     while (1) {
 	my $input;
-	if ($o->{prompt} =~ m/^(.*\n)(.*)$/s) {
-	    print $1;
-	    $input = $term->readline("$2% ");
-	} else {
-	    $input = $term->readline("$o->{prompt}% ");
+	eval {
+	    if ($o->{prompt} =~ m/^(.*\n)(.*)$/s) {
+		print $1;
+		$input = $term->readline("$2% ");
+	    } else {
+		$input = $term->readline("$o->{prompt}% ");
+	    }
+	};
+	if ($@) {
+	    warn if $@ !~ /ABORT/;
+	    next;
 	}
 	last if (!defined $input or $input =~ m/^\s*exit\s*$/);
 

@@ -98,6 +98,7 @@ void osp_thr::boot()
 }
 
 osp_thr::osp_thr()
+  : ospv_freelist(0)
 {
   // Fortunately, only Digital UNIX requires this for threads.
   //   (Windows NT & threads unsupported)
@@ -107,14 +108,12 @@ osp_thr::osp_thr()
   signature = OSP_THR_SIGNATURE;
   debug = 0;
   report=0;
-  ospv_freelist = 0;
 }
 
 osp_thr::~osp_thr()
 {
-  while (ospv_freelist) {
-    ospv_bridge *br = ospv_freelist;
-    ospv_freelist = (ospv_bridge*) br->next;
+  while (!ospv_freelist.empty()) {
+    ospv_bridge *br = (ospv_bridge*) ospv_freelist.next->self;
     delete br;
   }
   // OS_END_FAULT_HANDLER;
@@ -124,12 +123,10 @@ osp_thr::~osp_thr()
 
 osp_txn::osp_txn(os_transaction::transaction_type_enum _tt,
 		 os_transaction::transaction_scope_enum scope_in)
-  : tt(_tt), ts(scope_in)
+  : tt(_tt), ts(scope_in), link(0)
 {
 //  serial = next_txn++;
   os = os_transaction::begin(tt, scope_in);
-  ring.next = &ring;
-  ring.prev = &ring;
 
   DEBUG_txn(warn("txn(%p)->new(%s, %s)", this,
 		 tt==os_transaction::read_only? "read":
@@ -166,11 +163,9 @@ void osp_txn::post_transaction()
 
   DEBUG_txn(warn("%p->post_transaction", this));
 
-  osp_bridge *br = (osp_bridge*) ring.next;
-  while (br != &ring) {
-    osp_bridge *next = (osp_bridge*) br->next;
+  osp_bridge *br;
+  while (br = (osp_bridge*) link.pop()) {
     br->leave_txn();
-    br = next;
   }
 }
 
@@ -212,7 +207,7 @@ void osp_txn::commit()
   os = 0;
   if (!copy) return;
   if (!copy->is_aborted()) {
-    assert(ring.next == &ring);
+    assert(link.empty());
     DEBUG_txn(warn("txn(%p)->commit", this));
     os_transaction::commit(copy);
   }
@@ -239,18 +234,22 @@ void osp_txn::checkpoint()
     croak("ObjStore: no transaction to checkpoint");
   if (os->is_aborted())
     croak("ObjStore: cannot checkpoint an aborted transaction");
-  assert(ring.next == &ring);
+  assert(link.empty());
   os_transaction::checkpoint(os);
 }
 
 /*--------------------------------------------- osp_bridge */
 
-void osp_bridge::init()
+osp_bridge::osp_bridge()
+  : link(this)
+{}
+
+void osp_bridge::init(dynacast_fn dcfn)
 {
+  dynacast = dcfn;
   detached = 0;
   holding = 0;
   manual_hold = 0;
-  next = prev = 0;
   refs = 1;
   txsv = 0;
 
@@ -280,11 +279,8 @@ void osp_bridge::enter_txn(osp_txn *txn)
 {
   mysv_lock(osp_thr::TXGV);
   // should be per-thread
-  assert(next==0);
-  next = txn->ring.next;
-  prev = &txn->ring;
-  prev->next = this;
-  next->prev = this;
+  assert(link.empty());
+  link.attach(&txn->link);
   ++refs;
 }
 
@@ -298,13 +294,11 @@ void osp_bridge::leave_txn()
 {
   if (!detached) {
     unref();
-    if (next) {
+    if (!link.empty()) {
       mysv_lock(osp_thr::TXGV);
       // should be per-thread
       --refs;
-      next->prev = prev;
-      prev->next = next;
-      next = prev = 0;
+      link.detach();
     }
     if (txsv) {
       SvREFCNT_dec(txsv);

@@ -3,7 +3,7 @@
 use Test 1.03;
 BEGIN {
     if ($] < 5.00450) { plan tests => 0; exit; }
-    else { plan tests => 9; }
+    else { plan tests => 9, todo => [3..5]; }
 }
 
 use lib "./t";

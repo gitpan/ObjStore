@@ -1,6 +1,5 @@
 # -*-perl-*- typemaps are confusing!
-use Test;
-BEGIN { plan test => 5, todo => [2] }
+use Test; plan test => 8, todo => [2];
 
 use strict;
 use ObjStore;
@@ -26,3 +25,12 @@ begin 'update', sub {
     # overload magic is not being used here! XXX
     ok $$h1{hash}{hash} != $$h2{hash}{hash}, 1, join(' != ', $ih1,$ih2);
 };
+die if $@;
+
+# maybe move to a different test XXX
+my $o = ObjStore::AV->new('transient');;
+ok !$o->DELETED;
+$o->DELETED(1);
+ok $o->DELETED;
+eval { $o->DELETED(0) };
+ok $@, '/undelete/';

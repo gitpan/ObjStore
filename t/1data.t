@@ -40,3 +40,4 @@ begin 'update', sub {
     $fatty->[0] = undef;
     ok(!defined $fatty->[0]);
 };
+die if $@;

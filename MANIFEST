@@ -9,11 +9,10 @@ API/osperl.c
 API/osperl.h
 API/txn.c
 API/typemap
-ChangeLog
+CHANGES
 INSTALL
 MANIFEST
 MANIFEST.SKIP
-MGBridge.h
 Main/Makefile.PL
 Main/ObjStore.xs
 Main/typemap
@@ -52,8 +51,6 @@ hints/dec_osf.pl
 hints/solaris_2.pl
 junk/2misc.t
 junk/4tindex.t
-junk/GENERIC.c
-junk/GENERIC.h
 junk/edit.c
 junk/osp_hack
 junk/posh2pod.pl

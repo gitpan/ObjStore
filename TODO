@@ -10,13 +10,19 @@ following in the body of your message:
 
 + IDEAS +
 
-ObjStore::ServerDB::Top
-  POSH_PEEK - maybe try to require stuff before UNLOADED can happen?
+sort tests into appropriate directories?
 
-bizarre bus error:
-  cd ~/tmp; perl fillanl.pl baskdesk2.lst
-  posh eqprod13:/export/brain/pkey/19980824
-  BF.B BFI BGE BGG BHI BK BKB
+MAKEMAKEROPT
+
+split ObjStore::Serve stuff into its own tarball
+  improve organization?
+  + better advertising
+  - annoying to install
+
+disable autoload per class via some API
+  depreciate _fake:: junk
+
+die with a ref!
 
 struct OSPV2 : os_virtual_behavior {
   int can_update(void *vptr);
@@ -101,6 +107,9 @@ results of open comes particularly to mind.
 
 
 + VAGUE POSSIBILITIES +
+
+ObjStore::ServerDB::Top
+  POSH_PEEK - maybe try to require stuff before UNLOADED can happen?
 
 more support for DLL schemas?
   generic scalar object typemap?  XPVMG abstraction?

@@ -100,6 +100,7 @@ begin 'update', sub {
     my $o = $db->root('John')->{obj};
     isa_test($o);
 };
+die if $@;
 
 begin sub {
     my $j = $db->root('John');
@@ -107,3 +108,4 @@ begin sub {
     ok(ref($o) eq 'PTest');
     ok($o->bonk);
 };
+die if $@;

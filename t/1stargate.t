@@ -27,6 +27,7 @@ begin 'update', sub {
 
     chk_refs($john->_refcnt, $refs+1); #3
 };
+die if $@;
 
 begin 'update', sub {
     my $john = $db->root('John');
@@ -34,3 +35,4 @@ begin 'update', sub {
     $john->DELETE('gated');
     chk_refs($john->_refcnt, $refs);
 };
+die if $@;

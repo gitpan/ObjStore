@@ -33,6 +33,7 @@ begin 'update', sub {
     }
     ok 1;
 };
+die if $@;
 
 package ObjStore::Index;
 

@@ -187,17 +187,22 @@ if ($Shutdown) {
 		 });
 }
 
-eval q[ END{ warn "exiting...\n"; } ];
+my $why;
+
+eval q[ END{ warn $why || 'exiting...'; } ];
 warn '@ARGV = '.join(' ',@ARGV)."\n";
 warn "Started!!\n";
 
-if ($Loop->can('Loop')) {
-    $Loop->Loop();
-} elsif ($Loop->can($LoopMeth)) {
-    $Loop->$LoopMeth()
-} else {
-    die "fatal: $Loop can't Loop or '$LoopMeth'";
-}
+eval {
+    if ($Loop->can('Loop')) {
+	$why = $Loop->Loop();
+    } elsif ($Loop->can($LoopMeth)) {
+	$why = $Loop->$LoopMeth()
+    } else {
+	die "fatal: $Loop can't Loop or '$LoopMeth'";
+    }
+};
+$why = $@ if $@;
 
 sub usage {
     print "

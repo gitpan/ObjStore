@@ -8,9 +8,8 @@ Like perl?  Sick of SQL?  Ready to try something new?  This extension
 implements databases that look exactly like normal perl.  The same can
 also be extended with arbitrary C++ objects (!).
 
-=head1 PREREQUISITES
 
-You will need:
+=head1 PREREQUISITES
 
 - ObjectStore 5.1 (see http://www.odi.com; evaluations are available!)
 
@@ -25,6 +24,26 @@ See http://www.perl.com/CPAN/authors/id/JPRIT/ !
 
 
 =head1 R!CENT CHANGES
+
+
+** 09-26-98 RELEASE 1.47
+
+- WARNING: the fatal_exceptions option is now always OFF.
+
+- Binary API changes are now detected at run-time.  This is more
+consistant with the rest of the perl world.
+
+- Fixed coredump when seeking to an incomplete key.
+
+- Add ObjStore::UNIVERSAL::DELETED method.  Use this flag to announce
+that an object is queued for unconditional destruction.
+
+- ObjStore::Mortician wasn't restarting properly.  Fixed.
+
+- Internal adjustments necessary for ObjStore::Lib::PDL.
+
+- Culled more statistics from ObjStore::Serve.  Switched to safe signal
+handling.
 
 
 ** 09-12-98 RELEASE 1.46
@@ -53,29 +72,16 @@ during global destruction" warnings (hopefully!).
 - Documentation corrections & updates.
 
 
-** 08-22-98 RELEASE 1.45
-
-- The == and != operators could give incorrect results in some cases.
-Fixed.
-
-- Fixed nested destruction of Tree::Fat representations.  (Cursors were
-being shared between levels!  Gack!)
-
-
 see ./INSTALL for hints on installation
 see ./UPGRADE if you are starting from a prior releases
 see ./TODO for a list of stuff in the tuit queue
 see ./CHANGES for a visionary perspective
 
 
-Perl-ObjectStore mailing list is waiting for your contribution--
+Send any questions or comments to perl-objectstore@parallax.co.uk.
 
-- If you're having trouble or if you've run into a bug.
-
-- Any job postings (as long as they relate to this extension.  FYI, I
-am not myself currently looking, but you never know...  :-)
-
-majordomo@parallax.co.uk   "subscribe perl-objectstore you@your.domain.org"
+If you'd like to subscribe to the mailing list, send email to
+majordomo@parallax.co.uk.  Thanks!
 
 -------------------------------------------------------------------------
 Copyright © 1997-1998 Joshua Nathaniel Pritikin.  All rights reserved.

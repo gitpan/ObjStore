@@ -24,6 +24,7 @@ begin 'update', sub {
     ok($r->get_value->[0], 1);
     $r->destroy;
 };
+die if $@;
 
 begin 'update', sub {
     $db->destroy_root('tripwire');
@@ -35,12 +36,14 @@ begin 'update', sub {
     $rt = $db->find_root('_osperl_private');
     ok(! $rt);
 };
+die if $@;
 
 begin 'update', sub {
     my $seg = $db->get_segment($sid);
     ok($seg->is_empty);
     $seg->destroy;
 };
+die if $@;
 
 begin 'update', sub {
     my $ok=1;
@@ -49,3 +52,4 @@ begin 'update', sub {
     }
     ok($ok);
 };
+die if $@;

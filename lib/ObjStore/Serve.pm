@@ -18,7 +18,9 @@ push @ISA, 'Exporter', 'osperlserver';
 %EXPORT_TAGS = (meld => [qw($LoopLevel $ExitLevel &init_signals
 			     )]);
 
-sub meter { ++ $METERS{ $_[$#_] }; }
+sub meter {
+#    ++ $METERS{ $_[$#_] };
+}
 use vars qw(@TXready @TXtodo);
 sub txretry {
     use attrs 'locked';
@@ -76,9 +78,23 @@ sub restart {
     my ($o) = @_;
 
     $SIG{__WARN__} =
-	sub { warn '['.localtime()."] $ObjStore::Server::EXE($$): $_[0]" };
+	sub { 
+	    my $me = "$ObjStore::Server::EXE($$)";
+	    if ($_[0] !~ m/\Q$me\E/) {
+		warn '['.localtime()."] $me: $_[0]"
+	    } else {
+		warn $_[0];
+	    }
+	};
     $SIG{__DIE__} =
-	sub { die '['.localtime()."] $ObjStore::Server::EXE($$): $_[0]" };
+	sub {
+	    my $me = "$ObjStore::Server::EXE($$)";
+	    if ($_[0] !~ m/\Q$me\E/) {
+		die '['.localtime()."] $me: $_[0]"
+	    } else {
+		die $_[0];
+	    }
+	};
 
     # If we made it here, our assumption is that the database
     # is not currently being serviced by a live server.
@@ -112,7 +128,8 @@ for (qw(read write)) { ObjStore::lock_timeout($_,15); }
 
 sub init_signals {
     for my $sig (qw(INT TERM)) {
-        $SIG{$sig} = sub { my $why = "SIG$sig\n"; exitloop($why); };
+	Event->signal(desc => "ObjStore::Serve $sig handler", signal => $sig,
+		      callback => sub { exitloop("SIG$sig\n"); });
     }
 }
 
@@ -143,21 +160,21 @@ sub before_checkpoint {
 	    for (@Commit) { $_->($o, $now) }
 
 	    my $r = $o->{history}[0];
-	    my $recent = $$r{recent};
-	    push @$recent, \%METERS;
-	    shift @$recent if @$recent > 10;
+#	    my $recent = $$r{recent};
+#	    push @$recent, \%METERS;
+#	    shift @$recent if @$recent > 10;
 
 	    do {
 		local $^W=0; #lexical warnings XXX
+#		while (my($k,$v) = each %METERS) { $tot->{$k} += $v; }
 		my $tot = $$r{total};
-		while (my($k,$v) = each %METERS) { $tot->{$k} += $v; }
 		if ($Aborts) { $tot->{aborts} += $Aborts; $Aborts = 0; }
 		if ($Commits) { $tot->{commits} += $Commits; $Commits = 0; }
 	    };
 	    $$r{mtime} = $now;
 	    
 	    $LoopTime = $$o{looptm} ||= 2;
-	    %METERS = ();
+#	    %METERS = ();
 	    $t->post_transaction(); #1
 	};
 	if ($@) { $t->abort; warn; }

@@ -1,3 +1,12 @@
+** 08-22-98 RELEASE 1.45
+
+- The == and != operators could give incorrect results in some cases.
+Fixed.
+
+- Fixed nested destruction of Tree::Fat representations.  (Cursors were
+being shared between levels!  Gack!)
+
+
 ** 08-05-98 RELEASE 1.44
 
 - Improved backward compatibility with respect to blessings in old
@@ -499,6 +508,6 @@ of 'large' can be customized (not yet).
 ** RELEASE 1.00
 
 - The first release, written during our 60 day evaluation.  I knew a
-perl - OS combination would be fantastic!  Apparently, it is my
-mission to save the world from the unspeakable torture of relational
-databases.
+Perl - ObjectStore combination would be fantastic!  Apparently it is
+my mission to save the world from the unspeakable torture of
+relational databases...I do it gladly. :-)

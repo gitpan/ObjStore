@@ -44,6 +44,7 @@ begin 'update', sub {
 #    $tbl->rebuild_indices;
     ok(! $tbl->iscorrupt(1)) or ObjStore::peek($tbl);
 };
+die if $@;
 
 begin 'update', sub {
     my $john = $db->root('John');
@@ -51,3 +52,4 @@ begin 'update', sub {
 
     delete $john->{table};
 };
+die if $@;
